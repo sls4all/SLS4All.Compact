@@ -1,0 +1,44 @@
+﻿@inherits AppComponent
+
+<span class="time__hours"><BrowserTime DateTime="_dateTime" Format="HH" /></span>
+<span class="time__min"><BrowserTime DateTime="_dateTime" Format="mm" /></span>
+<span class="time__sec"><BrowserTime DateTime="_dateTime" Format="ss" /></span>
+
+@code {
+    private DateTime _dateTime;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dateTime = DateTime.UtcNow;
+        _timer = new Timer(state =>
+        {
+            try
+            {
+                _ = InvokeAsync(() =>
+                {
+                    try
+                    {
+                        _dateTime = DateTime.UtcNow;
+                        StateHasChanged();
+                    }
+                    catch
+                    {
+                        // swallow
+                    }
+                });
+            }
+            catch
+            {
+                // swallow
+            }
+        }, null, 1000, 1000);
+        await base.OnInitializedAsync();
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        return base.DisposeAsync();
+    }
+}

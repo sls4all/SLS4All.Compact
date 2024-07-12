@@ -1,0 +1,315 @@
+@charset "UTF-8";
+
+:root {
+    color-scheme: light only;
+}
+
+body {
+    background-color: #000;
+    overscroll-behavior: none;
+}
+
+::-webkit-scrollbar {
+    width: 3px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: rgba(155, 155, 155, 0.5);
+    border-radius: 20px;
+    border: transparent;
+}
+
+@font-face {
+    font-family: 'AurulentSans';
+    font-style: normal;
+    font-weight: normal;
+    src: url("../ui/fonts/AurulentSans-Regular.otf") format("opentype");
+}
+
+@font-face {
+    font-family: 'Audiowide';
+    font-style: normal;
+    font-weight: normal;
+    src: url("../ui/fonts/Audiowide-Regular.ttf") format("opentype");
+}
+
+.app-component {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    min-height: 100%;
+}
+
+.page-title {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    align-items: center;
+}
+
+    .page-title .page-name-version {
+        line-height: 20px;
+        overflow-wrap: anywhere;
+    }
+
+    .page-title .page-name {
+        white-space: nowrap;
+    }
+
+    .page-title .page-version {
+        font-size: 14px;
+        font-family: AurulentSans;
+        font-style: italic;
+        white-space: nowrap;
+    }
+
+    .page-title i {
+        font-size: 2rem;
+        margin-right: 1.5rem;
+        position: relative;
+        top: -0.1rem;
+    }
+
+.top-nav {
+    white-space: nowrap;
+}
+
+.clock {
+    white-space: nowrap;
+}
+
+.value-editor-modal {
+}
+
+    .value-editor-modal > .modal-dialog {
+        max-width: 90vw;
+    }
+
+        .value-editor-modal > .modal-dialog > .modal-content {
+            background: rgba(0, 83, 100, 1);
+        }
+
+
+    .value-editor-modal.value-editor-modal-number > .modal-dialog {
+        max-width: 600px;
+    }
+
+    .value-editor-modal.value-editor-modal-boolean > .modal-dialog {
+        max-width: 600px;
+    }
+
+    .value-editor-modal.value-editor-modal-timespan > .modal-dialog {
+        max-width: 600px;
+    }
+
+    .value-editor-modal.value-editor-modal-full > .modal-dialog {
+        max-width: 1000px;
+    }
+
+    .value-editor-modal.value-editor-modal-choices > .modal-dialog {
+        max-width: 600px;
+    }
+
+.main-button-image {
+}
+
+.app-modal {
+}
+
+    .app-modal > .modal-dialog > .modal-content {
+        background: rgba(0, 83, 100, 1);
+        outline: 5px solid rgba(0, 40, 50, 0.25);
+    }
+
+        .app-modal > .modal-dialog > .modal-content > .modal-header > .modal-title {
+            font-size: 24px;
+        }
+
+        .app-modal > .modal-dialog > .modal-content > .modal-body {
+            font-size: 20px;
+        }
+
+        .app-modal > .modal-dialog > .modal-content > .modal-footer {
+        }
+
+            .app-modal > .modal-dialog > .modal-content > .modal-footer > .btn {
+                font-size: 17px;
+            }
+
+.file-browser-modal {
+}
+
+    .file-browser-modal > .modal-dialog {
+        max-width: calc(100% - 50px);
+        height: calc(100% - 50px);
+    }
+
+        .file-browser-modal > .modal-dialog > .modal-content {
+            background: rgba(0, 83, 100, 1);
+            height: 100%;
+        }
+
+            .file-browser-modal > .modal-dialog > .modal-content > .modal-body {
+                height: 100%;
+            }
+
+.slicing-preview-modal {
+}
+
+    .slicing-preview-modal > .modal-dialog {
+        max-width: calc(100% - 50px);
+        height: calc(100% - 50px);
+    }
+
+        .slicing-preview-modal > .modal-dialog > .modal-content {
+            background: rgba(0, 83, 100, 1);
+            height: 100%;
+        }
+
+            .slicing-preview-modal > .modal-dialog > .modal-content > .modal-body {
+                height: 100%;
+            }
+
+/* disable modal opacity animation */
+.modal.fade {
+    transition: opacity 0s !important;
+}
+
+/* progress animation */
+.lds-ellipsis {
+    display: inline-block;
+    position: relative;
+    width: 160px;
+    height: 92px;
+}
+
+    .lds-ellipsis div {
+        position: absolute;
+        top: 33px;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #fff;
+        animation-timing-function: cubic-bezier(0, 1, 1, 0);
+    }
+
+        .lds-ellipsis div:nth-child(1) {
+            left: 16px;
+            animation: lds-ellipsis1 0.6s infinite;
+        }
+
+        .lds-ellipsis div:nth-child(2) {
+            left: 16px;
+            animation: lds-ellipsis2 0.6s infinite;
+        }
+
+        .lds-ellipsis div:nth-child(3) {
+            left: 64px;
+            animation: lds-ellipsis2 0.6s infinite;
+        }
+
+        .lds-ellipsis div:nth-child(4) {
+            left: 112px;
+            animation: lds-ellipsis3 0.6s infinite;
+        }
+
+@keyframes lds-ellipsis1 {
+    0% {
+        transform: scale(0);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes lds-ellipsis3 {
+    0% {
+        transform: scale(1);
+    }
+
+    100% {
+        transform: scale(0);
+    }
+}
+
+@keyframes lds-ellipsis2 {
+    0% {
+        transform: translate(0, 0);
+    }
+
+    100% {
+        transform: translate(48px, 0);
+    }
+}
+
+#blazor-error-ui
+{
+    display: none;
+}
+
+#components-reconnect-modal {
+    display: none;
+}
+
+    #components-reconnect-modal.components-reconnect-show,
+    #components-reconnect-modal.components-reconnect-failed,
+    #components-reconnect-modal.components-reconnect-rejected {
+        display: block;
+    }
+
+.main-overlay-message {
+    display: flex;
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    height: 100vh;
+    width: 100vw;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    object-fit: none;
+    background: #7777;
+    -webkit-backdrop-filter: grayscale() blur(10px);
+    backdrop-filter: grayscale() blur(10px);
+}
+
+    .main-overlay-message .main-overlay-message-notification {
+        font-size: 20px;
+        width: 100%;
+        text-align: center;
+    }
+
+        .main-overlay-message .main-overlay-message-notification .btn {
+            font-size: 17px;
+        }
+
+.components-reconnect-show .reconnect-notification-failed {
+    display: none;
+}
+
+.components-reconnect-show .reconnect-notification-rejected {
+    display: none;
+}
+
+.components-reconnect-failed .reconnect-notification-failed {
+    display: block;
+}
+
+.components-reconnect-failed .reconnect-notification-rejected {
+    display: none;
+}
+
+.components-reconnect-rejected .reconnect-notification-rejected {
+    display: block;
+}
+
+.components-reconnect-rejected .reconnect-notification-failed {
+    display: none;
+}

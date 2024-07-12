@@ -1,0 +1,31 @@
+﻿.dummy {
+}
+
+.main-title-image {
+    height: 50px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    padding-left: 0px;
+    padding-right: 9px;
+}
+
+.main-title-icon {
+    font-size: 50px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    padding-left: 0px;
+    padding-right: 9px;
+    margin: 0px;
+}
+
+.navigation-trigger {
+    font-size: 40px;
+    width: 70px;
+}
+
+.top-nav > li > a:not(.header__nav__text) {
+    min-width: 70px;
+}
+.top-nav > li > a:not(.header__nav__text) > i {
+    font-size: 40px;
+}

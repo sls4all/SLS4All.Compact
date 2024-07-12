@@ -1,0 +1,109 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+	<Import Project="..\SharedProperties.props" />
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<NoWarn>TS2304;ASP0006;CS8981;BL0007</NoWarn>
+		<TypeScriptToolsVersion>latest</TypeScriptToolsVersion>
+		<RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
+		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+		<RootNamespace>SLS4All.Compact</RootNamespace>
+		<!--<GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>-->
+
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.TypeScript.MSBuild" Version="4.7.4">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.100.2.337-1.100.2"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.100.2.337-1.100.2"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.100.2.337-1.100.2"/>
+		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.6" />
+	</ItemGroup>
+
+	<!--<ItemGroup>
+		<EmbeddedResource Include="wwwroot_embedded\**\*" />
+	</ItemGroup>-->
+
+	<ItemGroup>
+		<TypeScriptCompile Remove="node_modules\**" />
+		<None Update="Pages\MovementPage.razor.css" CssScope="b-movement" />
+		<None Update="Pages\BackupsPage.razor.css" CssScope="b-backups" />
+		<None Update="Pages\MaintenancePage.razor.css" CssScope="b-maintenance" />
+		<None Update="Pages\Test2D.razor.css" CssScope="b-test2d" />
+		<None Update="Pages\PrintWizard.razor.css" CssScope="b-print-wizard" />
+		<None Update="Pages\PrinterStatus.razor.css" CssScope="b-printer-status" />
+		<None Update="Pages\PrinterSettings.razor.css" CssScope="b-printer-settings" />
+		<None Update="Pages\PrintProfiles.razor.css" CssScope="b-print-profiles" />
+		<None Update="Pages\SlicingPage.razor.css" CssScope="b-print-profiles" />
+		<None Update="Components\ValueEditor.razor.css" CssScope="b-value-editor" />
+		<None Update="Components\VideoCameraView.razor.css" CssScope="b-camera-view" />
+		<None Update="Components\ThermoCameraView.razor.css" CssScope="b-thermo-camera-view" />
+		<None Update="Components\PlotterView.razor.css" CssScope="b-plotter-view" />
+		<None Update="Components\Modal.razor.css" CssScope="b-modal" />
+		<None Update="Pages\MainLayout.razor.css" CssScope="b-main-layout" />
+		<None Update="Pages\ThermoCamera.razor.css" CssScope="b-thermo-camera" />
+		<None Update="Pages\Jobs.razor.css" CssScope="b-jobs" />
+		<None Update="Pages\CurrentJobAutomatic.razor.css" CssScope="b-jobs" />
+		<None Update="Pages\CurrentJobProfiling.razor.css" CssScope="b-jobs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<WebPackSource Include="package.json" />
+		<WebPackSource Include="webpack.config.js" />
+		<WebPackSource Include="$(OutputPath)/.npm-install-stamp" />
+		<WebPackSource Include="Scripts/*.ts" />
+		<WebPackSource Include="Scripts/*.js" />
+		<WebPackSource Include="Scripts/*.css" />
+		<None Remove="Components\CancelModal.razor.css" />
+		<Content Include="Components\CancelModal.razor.css" />
+		<EmbeddedResource Include="Temperature\BedMatrixGrabber.ttf" />
+		<EmbeddedResource Include="Helpers\ImageStreamingPlaceholder.gif" />
+		<EmbeddedResource Include="appsettings.storage-default.json" />
+		<WebPackTarget Include="wwwroot/bundles/bundle.js" />
+		<WebPackTarget Include="wwwroot/bundles/bundle.css" />
+		<WebPackTarget Include="$(OutputPath)\.npm-build-stamp" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Folder Include="wwwroot\bundles\" />
+	</ItemGroup>
+
+	<Target Name="NpmInstall" Inputs="package.json" Outputs="$(OutputPath)/.npm-install-stamp">
+		<Message Text="### NPM INSTALL ###" Importance="high" />
+		<Exec Command="npm ci" Condition="'$(RestorePackagesWithLockFile)' == 'true'" />
+		<Exec Command="npm install" Condition="'$(RestorePackagesWithLockFile)' != 'true'" />
+		<MakeDir Directories="$(OutputPath)" />
+		<Touch Files="$(OutputPath)/.npm-install-stamp" AlwaysCreate="true" />
+	</Target>
+
+	<Target Name="NpmBuild" Inputs="@(WebPackSource)" Outputs="@(WebPackTarget)" DependsOnTargets="NpmInstall">
+		<Message Text="### NPM RUN BUILD ###" Importance="high" />
+		<Error Condition="!Exists('Scripts/app.js')" Text="Missing TS compiled files!" />
+		<Delete Files="@(WebPackTarget)" />
+		<Exec Command="npm run build" />
+		<Touch Files="$(OutputPath)/.npm-build-stamp" AlwaysCreate="true" />
+	</Target>
+
+	<Target Name="CleanWebPack" BeforeTargets="BeforeClean">
+		<Delete Files="@(WebPackTarget)" />
+	</Target>
+
+	<Target Name="NpmTasks" BeforeTargets="BeforeBuild;BeforePublish" DependsOnTargets="NpmInstall;NpmBuild">
+	</Target>
+
+</Project>
+

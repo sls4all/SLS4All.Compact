@@ -1,0 +1,480 @@
+﻿@page "/test2d"
+@inherits AppPage
+@using System.Threading
+@using System.Linq
+@using SLS4All.Compact.Helpers;
+@using SLS4All.Compact.Movement;
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Power;
+@using SLS4All.Compact.Printer;
+@using SLS4All.Compact.Slicing;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Storage.PrinterSettings;
+@using SLS4All.Compact.Validation
+@using System.Reflection
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IPrinterSettingsStorage SettingsStorage
+@inject IPrinterClient Printer
+@inject IMovementClient Movement
+@inject IPowerClient Power
+@inject ValuesContainer Values
+@inject IBedProjection Projection
+@inject IHotspotCalculator HotspotCalculator
+@inject IToastProvider ToastProvider
+@inject ILogger<Test2D> Logger
+@inject IObjectFactory<IEmergencyHelper, object> EmergencyHelper
+
+<PrinterPageTitle IconClass="zwicon-play"/>
+
+@{
+    (string? Name, string Description)[] groups = [
+        (nameof(PrintHelper2D.DrawCircle), "Circle"),
+        (nameof(PrintHelper2D.DrawRectangle), "Rectangle"),
+        (nameof(PrintHelper2D.DrawCirclesSquaresTest), "Circles & squares"),
+        (nameof(PrintHelper2D.DrawCalibrationPattern), "Calibration pattern"),
+        (PowerGroup, "Power"),
+        (ProjectionGroup, "Projection"),
+        (null, "Common"),
+    ];
+}
+
+<div class="container properties-panel">
+    <div class="row">
+        <div class="col">
+            <ul class="nav nav-tabs">
+                @foreach (var group_ in groups)
+                {
+                    var group = group_;
+                    <li class="nav-item">
+                        <a class="nav-link @(Values.GroupName == group.Name ? "active" : "")" @onclick="() => Values.GroupName = group.Name">@group.Description</a>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <table class="table table-sm property-table">
+                <tbody>
+                    @RenderValue(nameof(ValuesContainer.CenterX))
+                    @RenderValue(nameof(ValuesContainer.CenterY))
+                    @RenderValue(nameof(ValuesContainer.Steps))
+                    @RenderValue(nameof(ValuesContainer.Radius))
+                    @RenderValue(nameof(ValuesContainer.Radius2))
+                    @RenderValue(nameof(ValuesContainer.RadiusInc))
+                    @RenderValue(nameof(ValuesContainer.RadiusStep))
+                    @RenderValue(nameof(ValuesContainer.RadiusMax))
+                    @RenderValue(nameof(ValuesContainer.CalibrationRadius))
+                    @RenderValue(nameof(ValuesContainer.CalibrationSteps))
+                    @RenderValue(nameof(ValuesContainer.CalibrationDensityStep))
+                    @RenderValue(nameof(ValuesContainer.Dwell))
+                    @RenderValue(nameof(ValuesContainer.CalibrationMargin))
+                    @RenderValue(nameof(ValuesContainer.Repeats))
+                    @RenderValue(nameof(ValuesContainer.DefaultSpeedA))
+                    @RenderValue(nameof(ValuesContainer.DefaultSpeedA2))
+                    @RenderValue(nameof(ValuesContainer.UseDefaultSpeed))
+                    @RenderValue(nameof(ValuesContainer.LaserOnSpeedXY))
+                    @RenderValue(nameof(ValuesContainer.LaserOffSpeedA))
+                    @RenderValue(nameof(ValuesContainer.Rotate))
+                    @RenderValue(nameof(ValuesContainer.FillSpacing))
+                    @RenderValue(nameof(ValuesContainer.FillSpacing2))
+                    @RenderValue(nameof(ValuesContainer.FlipFill))
+                    @RenderValue(nameof(ValuesContainer.Precision))
+                    @RenderValue(nameof(ValuesContainer.LaserOn))
+                    @RenderValue(nameof(ValuesContainer.XCorrectionPercent))
+                    @RenderValue(nameof(ValuesContainer.YCorrectionPercent))
+                    @RenderValue(nameof(ValuesContainer.LaserOnEnergyDensity))
+                    @RenderValue(nameof(ValuesContainer.IsDryRun))
+
+                    <tr>
+                        <td colspan="2" class="property-buttons">
+                            @if (Values.GroupName == nameof(PrintHelper2D.DrawCircle))
+                            {
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCircle(channel, setup))">Do the circle!</a>
+                            }
+                            @if (Values.GroupName == nameof(PrintHelper2D.DrawRectangle))
+                            {
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawRectangle(channel, setup))">Do the rectangle!</a>
+                            }
+                            @if (Values.GroupName == nameof(PrintHelper2D.DrawHeart))
+                            {
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawHeart(channel, setup))">Do the love!</a>
+                            }
+                            @if (Values.GroupName == nameof(PrintHelper2D.DrawCirclesSquaresTest))
+                            {
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCirclesSquaresTest(channel, setup))">Circles-squares test</a>
+                            }
+                            @if (Values.GroupName == nameof(PrintHelper2D.DrawCalibrationDots))
+                            {
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCalibrationDots(channel, setup))">Calibration dots</a>
+                            }
+                            @if (Values.GroupName == nameof(PrintHelper2D.DrawCalibrationPattern))
+                            {
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCalibrationPattern(channel, setup))">Calibration pattern</a>
+                            }
+                            <a class="btn btn-danger" @onclick="Cancel">Cancel</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col col-auto p-0">
+            @if (_info != null)
+            {
+                <div class="alert alert-info" role="alert">
+                    @_info
+                </div>
+            }
+            @if (_stats != null)
+            {
+                <div class="alert alert-secondary" role="alert">
+                    @_stats
+                </div>
+            }
+        </div>
+        <div class="col col-auto p-0">
+            <div class="page-loader__spinner @(_backroundCount > 0 ? "visible": "invisible")">
+                <svg viewBox="25 25 50 50">
+                    <circle cx="50" cy="50" r="20" fill="none" stroke-width="2" stroke-miterlimit="10"></circle>
+                </svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code{
+    private const string CssScope = "b-test2d";
+    private const string PowerGroup = nameof(PowerGroup);
+    private const string ProjectionGroup = nameof(ProjectionGroup);
+
+    [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
+    private sealed class GroupAttribute(string name) : Attribute
+    {
+        public string Name { get; } = name;
+    }
+
+    public class ValuesContainer
+    {
+        private static readonly ILookup<string, string> _operationLookup = typeof(ValuesContainer)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .SelectMany(x => x.GetCustomAttributes<GroupAttribute>(), (prop, att) => (prop, att))
+            .ToLookup(x => x.prop.Name, x => x.att.Name);
+
+        public static bool HasGroup(string propertyName, string? operationName)
+        {
+            var operations = _operationLookup[propertyName];
+            if (operationName == null)
+                return !operations.Any();
+            else
+                return operations.Contains(operationName);
+        }
+
+        public string? GroupName { get; set; } = nameof(PrintHelper2D.DrawCircle);
+        
+        [StorageName("Center X")]
+        [StorageDescription("Center X position")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(ProjectionGroup))]
+        public decimal CenterX { get; set; } = 0;
+        [StorageName("Center Y")]
+        [StorageDescription("Center Y position")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(ProjectionGroup))]
+        public decimal CenterY { get; set; } = 0;
+        [StorageName("X Correction")]
+        [StorageDescription("X projection scale")]
+        [StorageUnit(Units.Percent)]
+        [Group(nameof(ProjectionGroup))]
+        public decimal XCorrectionPercent { get; set; } = 100M;
+        [StorageName("Y Correction")]
+        [StorageDescription("Y projection scale")]
+        [StorageUnit(Units.Percent)]
+        [Group(nameof(ProjectionGroup))]
+        public decimal YCorrectionPercent { get; set; } = 100M;
+        [StorageName("Precision")]
+        [StorageDescription("Distance between segments of XY lines")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(ProjectionGroup))]
+        public decimal Precision { get; set; } = 1;
+        [StorageName("Roatate")]
+        [StorageDescription("Rotation of the shape.")]
+        [StorageUnit("deg")]
+        [Group(nameof(ProjectionGroup))]
+        public decimal Rotate { get; set; } = 0;
+
+        [StorageName("Radius")]
+        [StorageDescription("Radius (width/2)")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(PrintHelper2D.DrawCircle))]
+        [Group(nameof(PrintHelper2D.DrawRectangle))]
+        [Group(nameof(PrintHelper2D.DrawHeart))]
+        [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
+        public decimal Radius { get; set; } = 50;
+        [StorageName("Radius 2")]
+        [StorageDescription("Radius for Y axis (height/2). Set to zero for same as `Radius`.")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(PrintHelper2D.DrawRectangle))]
+        public decimal Radius2 { get; set; } = 0;
+        [StorageName("Radius increment")]
+        [StorageDescription("Increment of radius for each `Step` to make a spiral.")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(PrintHelper2D.DrawCircle))]
+        [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
+        public decimal RadiusInc { get; set; } = 0;
+        [StorageName("Radius step")]
+        [StorageDescription("Radius increment for next shape.")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
+        public decimal RadiusStep { get; set; } = 0;
+        [StorageName("Radius max")]
+        [StorageDescription("Maximum radius to draw.")]
+        [StorageUnit(Units.Millimeter)]
+        [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
+        public decimal RadiusMax { get; set; } = 0;
+        [StorageName("Calibration radius")]
+        [StorageDescription("Maximum radius to draw, in angular permille units.")]
+        [StorageUnit("‰")]
+        [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
+        [Group(nameof(PrintHelper2D.DrawCalibrationDots))]
+        public decimal CalibrationRadius { get; set; } = 231;
+        [StorageName("Calibration steps")]
+        [StorageDescription("How many horizontal/vertical lines should be drawn.")]
+        [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
+        public int CalibrationSteps { get; set; } = 42;
+        [StorageName("Calibration density")]
+        [StorageDescription("Distance between points on a line, in angular permille units.")]
+        [StorageUnit("‰")]
+        [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
+        public decimal CalibrationDensityStep { get; set; } = 5;
+        [StorageName("Calibration margin")]
+        [StorageDescription("Border margin for calibration circles, in angular permille units")]
+        [StorageUnit("‰")]
+        [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
+        public decimal CalibrationMargin { get; set; } = 5;
+        [StorageName("Dwell")]
+        [StorageDescription("Delay between shapes to help to clear up the smoke")]
+        [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
+        [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
+        public TimeSpan Dwell { get; set; } = TimeSpan.Zero;
+        [StorageName("Repeats")]
+        [StorageDescription("Number of repeats")]
+        public decimal Repeats { get; set; } = 1;
+        [StorageName("Steps")]
+        [StorageDescription("How many steps a circular shape should consist of.")]
+        [Group(nameof(PrintHelper2D.DrawCircle))]
+        [Group(nameof(PrintHelper2D.DrawHeart))]
+        [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
+        [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
+        public decimal Steps { get; set; } = 360;
+        [StorageName("Fill spacing")]
+        [StorageDescription("Spacing of fill lines.")]
+        [StorageUnit(Units.Millimeter)]
+        public decimal FillSpacing { get; set; } = 0;
+        [StorageName("Fill spacing 2")]
+        [StorageDescription("Spacing of fill lines for Y axis. Set to zero for sane as `Fill spacing`")]
+        [StorageUnit(Units.Millimeter)]
+        public decimal FillSpacing2 { get; set; } = 0;
+        [StorageName("Flip fill")]
+        [StorageDescription("Whether to flip the fill axis")]
+        public decimal FlipFill { get; set; } = 0;
+
+        [StorageName("Angular speed")]
+        [StorageDescription("Laser/galvo speed when printing")]
+        [StorageUnit("‰/sec")]
+        [Group(nameof(PowerGroup))]
+        public decimal DefaultSpeedA { get; set; } = 550000;
+        [StorageName("Secondary angular speed")]
+        [StorageDescription("Secondary angular speed to interploate to")]
+        [StorageUnit("‰/sec")]
+        [Group(nameof(PowerGroup))]
+        public decimal DefaultSpeedA2 { get; set; } = 0;
+        [StorageName("Use angular speed")]
+        [StorageDescription("Whether to use angular speed or `XY speed` or `Energy density`")]
+        [Group(nameof(PowerGroup))]
+        public bool UseDefaultSpeed { get; set; } = true;
+        [StorageName("Off angular speed")]
+        [StorageDescription("Laser/galvo speed when not printing")]
+        [StorageUnit("‰/sec")]
+        [Group(nameof(PowerGroup))]
+        public decimal LaserOffSpeedA { get; set; } = 0;
+        [StorageName("XY speed")]
+        [StorageDescription("Laser/galvo speed when printing. Used only if `Energy Density` is zero, otherwise speed is calculated from the energy density.")]
+        [StorageUnit("mm/sec")]
+        [Group(nameof(PowerGroup))]
+        public decimal LaserOnSpeedXY { get; set; } = 1000;
+        [StorageName("Laser on")]
+        [StorageDescription("Power for laser on")]
+        [StorageUnit(Units.Percent)]
+        [Group(nameof(PowerGroup))]
+        public decimal LaserOn { get; set; } = 100;
+        [StorageName("Energy density")]
+        [StorageDescription("Energy density when printing. Set to zero to use `XY speed` instead.")]
+        [StorageUnit("mJ/mm²")]
+        [Group(nameof(PowerGroup))]
+        public decimal LaserOnEnergyDensity { get; set; } = 0;
+
+        [StorageName("Dry run")]
+        [StorageDescription("Whether to print without enabled laser to just calculate statistics.")]
+        public bool IsDryRun { get; set; } = false;
+
+        public ValuesContainer(IBedProjection projection)
+        {
+            CenterX = (decimal)projection.Center.x;
+            CenterY = (decimal)projection.Center.y;
+        }
+    }
+
+    private string? _info = null;
+    private string? _stats = null;
+    private CancellationTokenSource _cancelSource = new();
+    private int _backroundCount;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    private void Cancel()
+    {
+        _cancelSource.Cancel();
+        _cancelSource = new();
+    }
+
+    private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
+    {
+        var context = ValidationContextFactory.CreateContext();
+        var powerSettings = SettingsStorage.GetPowerSettings();
+        var powerSettingsValidation = await powerSettings.Validate(context);
+        if (!powerSettingsValidation!.IsValid)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                HeaderText = "Invalid settings",
+                BodyText = "Printer power settings contain errors",
+                Type = ToastMessageType.Error,
+                Key = this,
+            });
+            return null;
+        }
+        return powerSettings;
+    }
+
+    private Task BackgroundTask(Func<PrintHelper2D, PrintHelper2D.Setup, PrinterStream> execute)
+    {
+        var cancel = _cancelSource.Token;
+        async Task Inner()
+        {
+            _backroundCount++;
+            System.Diagnostics.Stopwatch? watch = null;
+            PrintHelper2D? helper = null;
+            try
+            {
+                _info = null;
+                var printerSettings = await GetPrinterPowerSettings();
+                if (printerSettings == null)
+                    return;
+                var setup = new PrintHelper2D.Setup
+                {
+                    CenterX = (double)Values.CenterX,
+                    CenterY = (double)Values.CenterY,
+                    Radius = (double)Values.Radius,
+                    RadiusInc = (double)Values.RadiusInc,
+                    RadiusStep = (double)Values.RadiusStep,
+                    RadiusMax = (double)Values.RadiusMax,
+                    Radius2 = (double)(Values.Radius2 == 0 ? Values.Radius : Values.Radius2),
+                    CalibrationRadius = (double)Values.CalibrationRadius,
+                    CalibrationSteps = Values.CalibrationSteps,
+                    CalibrationDensityStep = (double)Values.CalibrationDensityStep,
+                    Dwell = Values.Dwell,
+                    CalibrationMargin = (double)Values.CalibrationMargin,
+                    Repeats = (double)Values.Repeats,
+                    DefaultSpeedA = (double)Values.DefaultSpeedA,
+                    DefaultSpeedA2 = (double)Values.DefaultSpeedA2,
+                    UseDefaultSpeed = Values.UseDefaultSpeed,
+                    LaserOffSpeedA = Values.LaserOffSpeedA != 0 ? (double)Values.LaserOffSpeedA : null,
+                    LaserOnSpeedXY = (double)Values.LaserOnSpeedXY,
+                    Steps = (int)Values.Steps,
+                    Rotate = (double)Values.Rotate / 180 * Math.PI,
+                    FillSpacing = (double)Values.FillSpacing,
+                    FillSpacing2 = (double)Values.FillSpacing2,
+                    FlipFill = Values.FlipFill != 0,
+                    Precision = (double)Values.Precision,
+                    LaserOnFactor = (double)Values.LaserOn / 100,
+                    LaserOffPower = 0,
+                    XCorrectionFactor = (double)Values.XCorrectionPercent / 100,
+                    YCorrectionFactor = (double)Values.YCorrectionPercent / 100,
+                    LaserOnEnergyDensity = Values.LaserOnEnergyDensity != 0 ? (double)Values.LaserOnEnergyDensity : null,
+                    LaserWattage = (double)printerSettings.LaserWattage,
+                };
+                helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
+
+                StateHasChanged();
+                await Task.Yield();
+
+                var script = execute(helper, setup);
+                PrinterStream closedScript = async (channel, cancel) =>
+                {
+                    await script(channel, cancel);
+                    await helper.Close(channel, setup);
+                };
+
+                watch = System.Diagnostics.Stopwatch.StartNew();
+                if (Values.IsDryRun)
+                    await closedScript.Consume(cancel);
+                else
+                    await Printer.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                _stats = $"Time = {watch.Elapsed}, A = {helper.MinAngle.a} ~ {helper.MaxAngle.a}, B = {helper.MinAngle.b} ~ {helper.MaxAngle.b}, L = {helper.Length.min} ~ {helper.Length.max}, SpeedA = {helper.MinMaxSpeedA.min} ~ {helper.MinMaxSpeedA.max}, SpeedXY = {helper.MinMaxSpeedXY.min} ~ {helper.MinMaxSpeedXY.max}, Area = {helper.MinMaxArea.min} ~ {helper.MinMaxArea.max}, FillAccel = {helper.FillSpacingAcceleration}";
+            }
+            catch (Exception ex)
+            {
+                await EmergencyHelper.CreateAndCall(x => x.EmergencyPowerOffLaser());
+                _stats = watch?.Elapsed.ToString();
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    HeaderText = "Error during Test2D",
+                    BodyText = ex.Message,
+                    Key = this,
+                    Exception = ex,
+                });
+            }
+            finally
+            {
+                _backroundCount--;
+            }
+            StateHasChanged();
+        }
+        var task = Inner();
+        return Task.CompletedTask;
+    }
+
+    private RenderFragment? RenderValue(
+        string path)
+    {
+        if (!ValuesContainer.HasGroup(path, Values.GroupName))
+            return null;
+
+        return builder =>
+        {
+            var values = Values;
+            var value = StorageValue.Create(values, path);
+            int seq = 1;
+            builder.OpenElement(seq++, "tr");
+            builder.AddAttribute(seq++, CssScope);
+            builder.OpenElement(seq++, "td");
+            builder.AddAttribute(seq++, CssScope);
+            builder.AddAttribute(seq++, "class", $"col-1 property-name");
+            builder.AddContent(seq++, value.Name.Name);
+            builder.CloseElement();
+            builder.OpenElement(seq++, "td");
+            builder.AddAttribute(seq++, CssScope);
+            builder.AddAttribute(seq++, "class", $"col-4 property-value");
+            builder.AddContent(seq++, value.RenderValueEditor(null, values, valueEntered: EventCallback.Factory.Create(this, StateHasChanged)));
+            builder.CloseElement();
+            builder.CloseElement();
+        };
+    }
+}

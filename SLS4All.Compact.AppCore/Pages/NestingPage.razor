@@ -1,0 +1,42 @@
+﻿@inherits AppPage
+@page "/nesting"
+
+<PrinterPageTitle IconClass="zwicon-shape-cube" IsFullPage="true"/>
+
+<div style="position: relative; display: block; width:100%; height:100%">
+    <canvas @ref="_canvas" style="position: absolute; width:100%; height:100%"></canvas>
+    <button @onclick="MoveClick" style="position: relative">Move</button>
+    <button @onclick="ScaleClick" style="position: relative">Scale</button>
+    <button @onclick="RotateClick" style="position: relative">Rotate</button>
+    <button @onclick="RemoveClick" style="position: relative">Remove</button>
+    <button @onclick="ClearClick" style="position: relative">Clear</button>
+    <label style="position: relative">Local mode <input type="checkbox" @bind="IsGizmoLocalMode" /></label>
+    <button @onclick="StartDoNest" style="position: relative">Nest</button>
+    <button @onclick="StartDoSlice" style="position: relative">Slice</button>
+    <label style="position: relative">Aggressive <input type="checkbox" style="position: relative" @bind="Aggressive" /></label> 
+    <input type="number" placeholder="Scale" style="position: relative" @bind="Scale" />
+    <input type="number" placeholder="Quantity" style="position: relative" @bind="Quantity" />
+    <InputFile OnChange="LoadFiles" style="position: relative" multiple />
+    @{
+        var status = Nesting.BackgroundTask.Status;
+        @if (status != null && !status.IsCompleted)
+        {
+            <b style="position: relative">Processing @status.Progress.ToString("0")%...</b>
+        }
+        else if (status != null)
+        {
+            if (status.Exception != null)
+            {
+                <i style="position: relative" class="text-danger">Failed @status.Elapsed, @status.Exception.Message</i>
+            }
+            else
+            {
+                <i style="position: relative">Done @status.Elapsed</i>
+                @if (_nestingStats != null)
+                {
+                    <b style="position: relative; left:1em">Density @((_nestingStats.Density * 100).ToString("0.00"))%, @(_nestingStats.ZMax.ToString("0.00"))mm</b>
+                }
+            }
+        }
+    }
+</div>

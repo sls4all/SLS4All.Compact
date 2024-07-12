@@ -1,0 +1,39 @@
+﻿.dummy {
+}
+
+p {
+    font-size: 20px;
+}
+
+button {
+    font-size: 20px;
+    margin-right: 3px;
+    margin-bottom: 3px;
+}
+
+.card {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.card-header {
+    font-size: 20px;
+}
+
+.badge.badge-danger {
+    background-color: rgba(220, 53, 69, 0.4)
+}
+
+.issue {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.5s ease-in-out, margin-bottom 0.5s ease-in-out;
+}
+
+    .issue.issue-inactive {
+        margin-bottom: 0px;
+    }
+
+    .issue.issue-active {
+        max-height: 300px;
+    }
+

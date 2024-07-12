@@ -1,0 +1,2138 @@
+﻿@page "/printer-settings"
+@page "/printer-settings/{TabIndexName}"
+@using System.Diagnostics
+@using System.Net
+@using System.Diagnostics.CodeAnalysis
+@using System.Globalization
+@using Microsoft.AspNetCore.WebUtilities
+@using SLS4All.Compact.Helpers
+@using SLS4All.Compact.Network
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Threading
+@using SLS4All.Compact.UpdateModel
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Printing
+@inherits AppPage
+@inject IPrinterCultureManager PrinterCulture
+@inject IPrinterTimeManager PrinterTime
+@inject IPrinterSettingsStorage Storage
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IApplicationUpdate ApplicationUpdate
+@inject IToastProvider ToastProvider
+@inject INetworkManager NetworkManager
+@inject IMemberManager MemberManager
+@inject IPrinterAuthentication PrinterAuthentication
+@inject IPrinterClient PrinterClient
+@inject ILogger<PrinterSettings> Logger
+@inject IPrinterSettingsStorage SettingsStorage
+@inject IPrintProfileStorage ProfileStorage
+@inject ICurrentPrintingParamsProvider PrintingParamsProvider
+@inject IPrintingService PrintingGlobal
+
+@{
+    var isPrinting = PrintingGlobal.IsPrinting;
+}
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_analyseHeatingModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Pick the parameters for surface analysis
+            </h5>
+        </div>
+         <div class="modal-body">
+            <p>
+                Analysis will be saved using name: <ValueEditor Title="Analysis name" @bind-Value="_analyseHeatingJobName" />
+            </p>
+            <p>
+                Select printing profile for the target temperatures (only valid profiles are shown):
+            </p>
+            <div class="list-group">
+                @foreach (var __profile in _profiles)
+                {
+                    var profile = __profile;
+                    <a class="list-group-item list-group-item-action print-profile"
+                       @onclick="() => DoAnalyseHeating(profile)">
+                        <img src="/_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" width="40" height="40" />
+                        @profile.Name
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_updateModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Update printer software
+            </h5>
+        </div>
+         <div class="modal-body">
+            Do you really want to update this printer software to version <b>@_updateSelected?.Identity.VersionString</b> in channel <b>@_updateSelected?.Identity.Channel</b>?
+            @if (!string.IsNullOrEmpty(_updateSelected?.ReleaseNotesUrl))
+            {
+                <text><a href="@_updateSelected?.ReleaseNotesUrl">Click here</a> to display release notes.</text>
+            }
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => UpdateToVersion(_updateSelected!, true)" class="btn btn-danger">Update software!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_watchdogDisableModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Disable Watch Dog
+            </h5>
+        </div>
+        <div class="modal-body">
+            Do you really want to disable the Watch Dog? Disabling it will <span class="text-danger">stop it from protecting</span> from printer failures that can be <span class="text-danger">dangerous</span> to you or our property! Watch dog should be disabled only if needed during sw/hw development.
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => WatchDogSaveSettings(true)" class="btn btn-danger">Disable the Watch Dog</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_networkModal" class="fade app-modal" Context="modal">
+    @{
+        var isSsid = _networkSelected?.WirelessNetwork != null;
+    }
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                @if (isSsid)
+                {
+                    <text>
+                        Connect to network
+                        <b>@_networkSelected?.WirelessNetwork!.Network.NameOrAddress</b>
+                        @if (_networkSelected?.WirelessNetwork!.Network.IsVisible == false)
+                        {
+                            <i>(hidden network)</i>
+                        }
+                        on device
+                        <b>@_networkSelected?.Item.Device.Name</b>
+                    </text>
+                }
+                else
+                {
+                    <text>Configure network device <b>@_networkSelected?.Item.Device.Name</b></text>
+                }
+            </h5>
+        </div>
+         <div class="modal-body">
+            @if (_networkSelected != null)
+            {
+                <table class="table table-sm">
+                    <tbody>
+                        @if (_networkSelected.WirelessNetwork?.Network.IsSecure == true)
+                        {
+                            <tr>
+                                <td class="col-4">
+                                    Password
+                                </td>
+                                <td class="col">
+                                    <ValueEditor Title="Wireless network password" @bind-Value="_networkSelected.Password" Placeholder="not set / keep value" IsPassword="true" />
+                                </td>
+                            </tr>
+                        }
+                        <tr>
+                            <td class="col" colspan="2">
+                                <label><input type="checkbox" @bind="_networkSelected.IsStaticIP" /> Static IP configuration</label>
+                            </td>
+                        </tr>
+                        @if (_networkSelected.IsStaticIP)
+                        {
+                            <tr>
+                                <td class="col-5">
+                                    IP Address
+                                </td>
+                                <td class="col">
+                                    <ValueEditor Title="IP Address" @bind-Value="_networkSelected.IPAddress" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="col-5">
+                                    Prefix
+                                </td>
+                                <td class="col">
+                                    <ValueEditor Title="Prefix" Subtitle="E.g. 24 for IPv4 255.255.255.0" @bind-Value="_networkSelected.Prefix" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="col-5">
+                                    Gateway
+                                </td>
+                                <td class="col">
+                                    <ValueEditor Title="Gateway" @bind-Value="_networkSelected.Gateway" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="col-5">
+                                    Primary DNS
+                                </td>
+                                <td class="col">
+                                    <ValueEditor Title="Primary DNS" @bind-Value="_networkSelected.DnsPrimary" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="col-5">
+                                    Secondary DNS
+                                </td>
+                                <td class="col">
+                                    <ValueEditor Title="Secondary DNS" @bind-Value="_networkSelected.DnsSecondary" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="modal-footer">
+            @if (isSsid || _networkSelected?.Item.Device is not IWirelessNetworkDevice) // wireless devices need to connect to specific network/ssid, otherwise it will fail
+            {
+                <button @onclick="FromNetworkModal" class="btn btn-primary">Connect</button>
+            }
+            @if (!isSsid || _networkSelected?.WirelessNetwork?.Network.Identifier == _networkSelected?.Item.CurrentWirelessNetwork?.Network.Identifier)
+            {
+                <button @onclick="DisconnectFromModal" class="btn btn-warning">Disconnect</button>
+            }
+            @if (_networkSelected?.WirelessNetwork?.CanForget == true)
+            {
+                <button @onclick="ForgetFromModal" class="btn btn-warning">Forget</button>
+            }
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Go back</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_memberIdModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Set Member Id
+            </h5>
+        </div>
+         <div class="modal-body">
+            <p>
+                Please set a Member Id. It can be freely obtained by registering at <a class="link-primary" href="@(!MainLayout!.IsLocalSession ? "https://sls4all.com" : "javascript:void(0)")">sls4all.com</a>. We use the Member Ids to track how many SLS4All printers are in the world. It is the only thing we ask of you for using our software. No other data is being collected.
+            </p>
+            <p>
+                Current Member Id: <ValueEditor 
+                    Title="Member Id" 
+                    Subtitle="Enter a Member Id in format XXXXX-XXXXX-XXXXX-XXXXX" 
+                    @bind-Value="_currentMemberId" 
+                    Traits="MemberIdTraits.Instance" 
+                    Placeholder="not set" 
+                    Validator="@(() => MemberManager.ValidateMemberId(_currentMemberId ?? "") ? Task.FromResult<string?>(null) : Task.FromResult<string?>("Value appears to be invalid or mistyped"))"
+                    ValueEntered="() => SetMemberId(true)" />
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" @onclick="() => SetMemberId(true)" disabled="@(!MemberManager.ValidateMemberId(_currentMemberId ?? ""))">Set Member Id</button>
+            <button class="btn btn-secondary" @onclick="() => modal.Close()">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_systemPasswordModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Set system passwords
+            </h5>
+        </div>
+         <div class="modal-body">
+            <p>
+                Please set the system passwords for SSH, VNC and possibly other access. 
+            </p>
+            <p>
+                Password: <ValueEditor Title="System password" @bind-Value="_currentPassword" Placeholder="unchanged" />
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" @onclick="() => SetSystemPassword(true)">Set system passwords</button>
+            <button class="btn btn-secondary" @onclick="() => modal.Close()">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_resetPrinterFirmwareModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Reset printing firmware
+            </h5>
+        </div>
+         <div class="modal-body">
+            @if (isPrinting)
+            {
+                <span class="text-danger">Printing is in progress, printer firmware cannot be reset at this time.</span>
+            }
+            else
+            {
+                <p>Confirming this will reset printer firmware to the state as is the printer has been powered up from off state. Note that is should normally not be necessary to do this and if you are doing this, something is not working properly.</p>
+                <p class="badge badge-warning text-wrap">This will forcefully interrupt any processes running on the hardware.</p>
+            }
+        </div>
+        <div class="modal-footer">
+            @if (!isPrinting)
+            {
+                @if (!_doubleConfirmed)
+                {
+                    <button class="btn btn-danger" @onclick="() => _doubleConfirmed = true">Reset printer firmware</button>
+                }
+                else
+                {
+                    <button class="btn btn-danger" style="font-weight: bold" @onclick="() => ResetFirmware(true)">Really reset printer firmware!</button>
+                }
+            }
+            <button class="btn btn-secondary" @onclick="() => modal.Close()">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_enableDeveloperModeModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Enable developer mode
+            </h5>
+        </div>
+         <div class="modal-body">
+            <p>
+                Displays additional menus and pages that are useful for development and debugging. Please note that these features were not designed with touch controls in mind and require 
+                mouse and keyboard controls. 
+            </p>
+            <p class="badge badge-warning text-wrap">
+                These features are also currently sparsely documented and incorrect usage can cause damage to the printer or even the user. You have been warned.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger" @onclick="() => SetDeveloperMode(true, true)">Enable developer mode</button>
+            <button class="btn btn-secondary" @onclick="() => modal.Close()">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+@{
+    var power = _power?.Settings ?? new();
+    var temperature = _temperature?.Settings ?? new();
+    var watchDog = _watchDog?.Settings ?? new();
+    var localization = _localization?.Settings ?? new();
+    var updateStatus = ApplicationUpdate.BackgroundTask.Status;
+    var updateCurrent = ApplicationUpdate.CurrentInfo;
+    var updateReport = ApplicationUpdate.LastReport;
+    var updateRunning = updateStatus?.IsCompleted == false;
+    var updatePercent = updateStatus?.Progress ?? 0;
+    var updatePercentInt = (int)updatePercent;
+    var updatePrepared = ApplicationUpdate.PreparedUpdate;
+}
+
+<CascadingValue IsFixed="true" Value="Validate">
+    <div class="container d-flex flex-column h-100 py-3 properties-panel">
+        <div class="row">
+            <div class="col">
+                <ul class="nav nav-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link @(_tabIndex is TabIndex.Miscellaneous or TabIndex.MemberId or TabIndex.SystemPassword ? "active" : "")" @onclick="() => SelectTab(TabIndex.Miscellaneous)">Miscellaneous</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_tabIndex is TabIndex.Network ? "active" : "")" @onclick="() => SelectTab(TabIndex.Network)">Network</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_tabIndex is TabIndex.Software ? "active" : "")" @onclick="() => SelectTab(TabIndex.Software)">Software</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_tabIndex is TabIndex.Data ? "active" : "")" @onclick="() => SelectTab(TabIndex.Data)">Data</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_tabIndex is TabIndex.Advanced or TabIndex.Testing ? "active" : "")" @onclick="() => SelectTab(TabIndex.Advanced)">Advanced</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="row flex-grow-1 properties-content">
+            <div class="col">
+                <form class="property-container h-100">
+                    <table class="table table-sm @(_tabIndex == TabIndex.Network ? "table-hover" : "") property-table h-100">
+                        <tbody>
+                            @if (_tabIndex is TabIndex.Miscellaneous or TabIndex.MemberId or TabIndex.SystemPassword)
+                            {
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            REGISTRATION
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => SetMemberId()">Set Member Id</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Sets the Member Id associated with the printer. It can be freely obtained by registering at <a class="link-primary" href="@(!MainLayout!.IsLocalSession ? "https://sls4all.com" : "javascript:void(0)")">sls4all.com</a>. 
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            SYSTEM PASSWORDS
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => SetSystemPassword()">Set system passwords</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Sets the system passwords for SSH, VNC and possibly other access. 
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            APPEARANCE SETTINGS
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" data-sa-action="aside-open" data-sa-target=".themes">Change theme</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Changes the overall appearance of the user interface.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            TIME &amp; LANGUAGE
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="property-name">
+                                        Locale
+                                    </td>
+                                    <td colspan="3" class="property-value property-value-left">
+                                        <ValueEditor Title="Printer locale" Subtitle="Language/region the printer is located at. Has effect on value formatting presented locally on printer display." @bind-Value="_culture" Traits="CultureTraits.Instance" ValueEntered="OnCultureEntered" />
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="property-name">
+                                        Time zone
+                                    </td>
+                                    <td colspan="3" class="property-value property-value-left">
+                                        <ValueEditor Title="Printer time zone" Subtitle="Time zone the printer is located at. Has effect on date time values presented locally on printer display." @bind-Value="_timeZone" Traits="TimeZoneTraits.Instance" ValueEntered="OnTimeZoneEntered" />
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="property-name">
+                                        Preferred units
+                                    </td>
+                                    <td colspan="3" class="property-value property-value-left">
+                                        <ValueEditor Title="Preferred units" Subtitle="Selects displayed units, for cases where values with units are displayed and are not editable." @bind-Value="localization.PreferredUnits" Traits="GetPrinterUnitsTraits()" />
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="property-name">
+                                        Preferred temperature
+                                    </td>
+                                    <td colspan="3" class="property-value property-value-left">
+                                        <ValueEditor Title="Preferred temperature" Subtitle="Selects displayed units, for cases where values with units are displayed and are not editable." @bind-Value="localization.PreferredTemperatureUnits" Traits="GetPrinterTemperatureTraits()" />
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="property-name">
+                                        Date and time
+                                    </td>
+                                    <td colspan="3" class="property-value property-value-left">
+                                        <ValueEditor Title="Printer date and time" @bind-Value="_dateTime" Placeholder="Click to change" Traits="_dateTimeTraits" ValueEntered="OnDateTimeEntered" Subtitle="Enter date and time to be set as current."/>
+                                    </td>
+                                </tr>
+                            }
+                            else if (_tabIndex == TabIndex.Network)
+                            {
+                                if (_networkItems == null)
+                                {
+                                    <tr>
+                                        <td class="col-4 align-middle">
+                                            <div class="update-progress">
+                                                <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+                                            </div>
+                                        </td>
+                                        <td class="col pl-3 align-middle">
+                                            <p class="m-0">
+                                                Checking networks...
+                                            </p>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    foreach (var __item in _networkItems)
+                                    {
+                                        var item = __item;
+                                        <tr @onclick="() => ConfigureNetwork(item, null)">
+                                            <td class="col-4 align-middle network-name">
+                                                @if (item.Device is IWirelessNetworkDevice)
+                                                {
+                                                    <i class="bi bi-wifi"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-ethernet"></i>
+                                                }
+                                                <span>@item.Device.Name</span>
+                                            </td>
+                                            <td class="col pl-3 align-middle">
+                                                <p class="m-0 network-attributes">
+                                                    @if (!item.IsConnected || item.AssignedAddress == null || item.AssignedAddress.Addresses.Length == 0)
+                                                    {
+                                                        <span class="text-danger"><i class="bi bi-x-circle"></i> <i>Disconnected</i></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        var assigned = item.AssignedAddress.Addresses[0];
+                                                        <span class="text-success"><i class="bi bi-check-circle-fill"></i></span>
+                                                        <span><small>IP: </small>@assigned.IPAddress / @assigned.Prefix</span>
+                                                        <span><small>Gateway: </small>@assigned.Gateway</span>
+                                                    }
+                                                </p>
+                                            </td>
+                                        </tr>
+                                        @if (item.IsWorking)
+                                        {
+                                            <tr>
+                                                <td class="col-4 align-middle">
+                                                    <div class="update-progress">
+                                                        <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+                                                    </div>
+                                                </td>
+                                                <td class="col pl-3 align-middle">
+                                                    <p class="m-0 configuring-para">
+                                                        Configuring network...
+
+                                                        <a class="btn btn-danger btn-lg" @onclick="() => item.CancelSource?.Cancel()">Cancel</a>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            if (item.Exception != null)
+                                            {
+                                                <tr>
+                                                    <td class="align-middle" colspan="2">
+                                                        <span class="badge badge-danger text-wrap">
+                                                            Failed to update: <i>
+                                                                @item.Exception.Message
+                                                            </i>
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                            if (item.AvailableWirelessNetworks != null || item.CurrentWirelessNetwork != null)
+                                            {
+                                                var availableNetworks = new List<AvailableWirelessNetwork>();
+                                                if (item.AvailableWirelessNetworks != null)
+                                                    availableNetworks.AddRange(item.AvailableWirelessNetworks.OrderByDescending(x => x.Network.Network.SignalPercent));
+                                                <tr>
+                                                    <td colspan="2">
+                                                        <p class="list-header">
+                                                            AVAILABLE WIRELESS NETWORKS <i>(@item.Device.Name)</i>
+                                                        </p>
+                                                        @if (availableNetworks.Count > 0)
+                                                        {
+                                                            <div class="listview listview--hover listview--bordered wireless-network-list">
+                                                                @foreach (var __available in availableNetworks)
+                                                                {
+                                                                    var available = __available;
+                                                                    <div class="listview__item" @onclick="() => ConfigureNetwork(item, available.Network, available.Parameters)">
+                                                                        <div class="listview__content">
+                                                                            <div class="listview__heading">
+                                                                                <span class="wireless-network-name">
+                                                                                    @if (available.Network.Network.Identifier == item.CurrentWirelessNetwork?.Network.Identifier)
+                                                                                    {
+                                                                                        <i class="bi bi-check-square"></i>
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        <i class="bi bi-square"></i>
+                                                                                    }
+                                                                                    <i>@available.Network.Network.NameOrAddress</i>
+                                                                                    @if (!available.Network.Network.IsVisible)
+                                                                                    {
+                                                                                        <small>(hidden network)</small>
+                                                                                    }
+                                                                                </span>
+                                                                                <span class="float-right wireless-network-attributes">
+                                                                                    @if (available.Network.CanForget)
+                                                                                    {
+                                                                                        <i class="bi bi-star"></i>
+                                                                                    }
+                                                                                    @if (available.Network.Network.IsSecure)
+                                                                                    {
+                                                                                        <i class="bi bi-lock-fill"></i>
+                                                                                    }
+                                                                                    @if (available.Network.Network.SignalPercent < 12.5)
+                                                                                    {
+                                                                                        <i class="bi bi-reception-0"></i>
+                                                                                    }
+                                                                                    else if (available.Network.Network.SignalPercent < 37.5)
+                                                                                    {
+                                                                                        <i class="bi bi-reception-1"></i>
+                                                                                    }
+                                                                                    else if (available.Network.Network.SignalPercent < 62.5)
+                                                                                    {
+                                                                                        <i class="bi bi-reception-2"></i>
+                                                                                    }
+                                                                                    else if (available.Network.Network.SignalPercent < 87.5)
+                                                                                    {
+                                                                                        <i class="bi bi-reception-3"></i>
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        <i class="bi bi-reception-4"></i>
+                                                                                    }
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i>No wireless networks were found.</i>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else if (_tabIndex == TabIndex.Software)
+                            {
+                                if (updateCurrent != null)
+                                {
+                                    <tr>
+                                        <td colspan="2" class="col align-middle update-current">
+                                            <span><small>Current version:</small> @updateCurrent.Identity.VersionString</span>
+                                            <span><small>Channel:</small> @updateCurrent.Identity.Channel</span>
+                                            <span><small>Published At:</small> <BrowserTime DateTime="@updateCurrent.PublishedAt.UtcDateTime" /></span>
+                                            <span><small>Architecture:</small> @updateCurrent.Identity.Architecture</span>
+                                            <span><small>Platform:</small> @updateCurrent.Identity.Platform</span>
+                                        </td>
+                                    </tr>
+                                }
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="CheckForUpdates" disabled="@updateRunning">Check for updates</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle">
+                                        <p class="m-0">
+                                            Printer must be connected to network to be able to reach the internet.
+                                        </p>
+                                    </td>
+                                </tr>
+                                @if (updatePrepared != null)
+                                {
+                                    <tr>
+                                        <td class="col-4 align-middle">
+                                            <a class="btn btn-warning btn-lg w-100" role="button" @onclick="ApplyUpdate" disabled="@updateRunning">Restart and apply update</a>
+                                        </td>
+                                        <td class="col pl-3 align-middle">
+                                            <p class="m-0">
+                                                Printer software will restart and apply the version <b>@updatePrepared.Identity.VersionString (@updatePrepared.Identity.Channel)</b>
+                                            </p>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (updateRunning)
+                                {
+                                    <tr>
+                                        <td class="col-4 align-middle">
+                                            <div class="update-progress">
+                                                <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+                                            </div>
+                                        </td>
+                                        <td class="col pl-3 align-middle">
+                                            <p class="m-0 update-para">
+                                                @switch (updateStatus?.ProgressStatus?.Phase)
+                                                {
+                                                    case ApplicationUpdatePhase.DownloadingUpdate:
+                                                        if (updatePercent > 0)
+                                                        {
+                                                            <span class="update-status update-progress" style="background: linear-gradient(to right, rgba(128,255,255,0.15) @updatePercentInt%, rgba(128,255,255,0.05) @updatePercentInt%)">
+                                                                Downloading update @updatePercentInt%
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="update-status">Downloading update...</span>
+                                                        }
+                                                        break;
+                                                    case ApplicationUpdatePhase.CheckingForUpdates:
+                                                        <span class="update-status">Checkling for updates...</span>
+                                                        break;
+                                                    default:
+                                                        <span class="update-status">Working...</span>
+                                                        break;
+                                                }
+                                                <a class="btn btn-danger btn-lg" @onclick="() => ApplicationUpdate.BackgroundTask.Cancel()">Cancel</a>
+                                            </p>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (updateStatus?.Exception != null && updateStatus.Exception is not OperationCanceledException)
+                                {
+                                    <tr>
+                                        <td class="align-middle" colspan="2">
+                                            <span class="badge badge-danger text-wrap">
+                                                Failed to update: <i>
+                                                    @updateStatus.Exception.Message
+                                                </i>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    var shownUpdates = (_showAllApplicableVersions ? updateReport?.ApplicableInfos : updateReport?.NewerInfos) ?? Array.Empty<ApplicationInfo>();
+                                    <tr>
+                                        <td class="col-4 align-middle text-center">
+                                            <label><input type="checkbox" @bind="_showAllApplicableVersions" /> Show all versions</label>
+                                        </td>
+                                        <td class="col pl-3 align-middle">
+                                            <p class="m-0">
+                                                Enabling this option will show all applicable versions, not just those newer than current version and in the same channel.
+                                            </p>
+                                        </td>
+                                    </tr>
+                                    if (updateReport?.HadForbidden == true)
+                                    {
+                                        <tr>
+                                            <td class="align-middle" colspan="2">
+                                                <span class="badge badge-warning text-wrap">
+                                                    Some update sources had returned <i>Forbidden</i> status code which may indicate that the currenty set <i>Member Id</i> is not valid.
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                    if (shownUpdates.Length > 0)
+                                    {
+                                        var shownUpdatesOrdered = shownUpdates.OrderByDescending(x => x.PublishedAt.UtcDateTime).ToArray();
+                                        <tr class="h-100">
+                                            <td class="align-middle" colspan="2">
+                                                <div class="listview listview--hover listview--bordered update-list">
+                                                    <Virtualize Items="shownUpdatesOrdered" Context="info">
+                                                        <div class="listview__item" @onclick="() => UpdateToVersion(info)">
+                                                            <div class="listview__content">
+                                                                <div class="listview__heading">
+                                                                    Version: @info.Identity.VersionString
+                                                                    @if (info.Identity == updateCurrent?.Identity)
+                                                                    {
+                                                                        <span class="float-right badge badge-pill badge-success">Current</span>
+                                                                    }
+                                                                    else if (info.PublishedAt < updateCurrent?.PublishedAt)
+                                                                    {
+                                                                        <span class="float-right badge badge-pill badge-warning">Older</span>
+                                                                    }
+                                                                    else if (info.PublishedAt > updateCurrent?.PublishedAt)
+                                                                    {
+                                                                        <span class="float-right badge badge-pill badge-primary">Newer</span>
+                                                                    }
+                                                                    <span class="float-right badge badge-pill @(info.Identity.Channel != updateCurrent?.Identity.Channel ? "badge-secondary" : "badge-info") text-wrap">Channel: @info.Identity.Channel</span>
+                                                                </div>
+                                                                <p>Published At: <BrowserTime DateTime="@info.PublishedAt.UtcDateTime" /></p>
+                                                            </div>
+                                                        </div>
+                                                    </Virtualize>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td class="align-middle" colspan="2">
+                                                @if (!MemberManager.HasMemberId)
+                                                {
+                                                    <i>No updates available, <i>Member Id</i> is not set</i>
+                                                }
+                                                else
+                                                {
+                                                    <i>No updates available</i>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            }
+                            else if (_tabIndex == TabIndex.Data)
+                            {
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            FILESYSTEM
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => MainLayout!.BrowseFiles()">Browse files</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Allows you to browse and manipulate files stored in the printer.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => NavigationManager.NavigateTo(BackupsPage.SelfPath)">Backup &amp restore data</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Backups or restores user/your content stored in SLS4All data directory. This includes all <b>profiles</b>, <b>jobs</b>, <b>objects</b> and <b>configuration</b>.
+                                        </p>
+                                    </td>
+                                </tr>
+                            }
+                            else if (_tabIndex is TabIndex.Advanced or TabIndex.Testing)
+                            {
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            POWER SETTINGS
+                                        </p>
+                                    </td>
+                                </tr>
+                                @RenderValues(
+                                    power,
+                                    power,
+                                    valueEntered: EventCallback.Factory.Create(this, SaveSettings),
+                                    nameof(power.LaserWattage),
+                                    nameof(power.MaxWattage)
+                                )
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            TEMPERATURE SETTINGS
+                                        </p>
+                                    </td>
+                                </tr>
+                                @RenderValues(
+                                    temperature,
+                                    temperature,
+                                    valueEntered: EventCallback.Factory.Create(this, SaveSettings),
+                                    nameof(temperature.SurfaceOffset1),
+                                    nameof(temperature.SurfaceTemperature1),
+                                    nameof(temperature.SurfaceOffset2),
+                                    nameof(temperature.SurfaceTemperature2)
+                                )
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            SAFETY SETTINGS
+                                        </p>
+                                    </td>
+                                </tr>
+                                @RenderValues(
+                                    watchDog,
+                                    watchDog,
+                                    valueEntered: EventCallback.Factory.Create(this, () => WatchDogSaveSettings(false)),
+                                    nameof(watchDog.IsWatchDogEnabled)
+                                )
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            TESTING
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.OpticalSetup?ReturnAddress=@SelfPath/@TabIndex.Testing">Optical setup</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Guides trough setting up printer optical path.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@SelfPath/@TabIndex.Testing">Homing and motor check</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Checks whether roller, powder chamber and print chamber stepper motors work correctly.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@SelfPath/@TabIndex.Testing">Halogen heater check</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Checks whether halogen heaters that heat the print chamber surface work correctly.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.ChamberHeaterCheck?ReturnAddress=@SelfPath/@TabIndex.Testing">Chamber heaters check</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Checks whether chamber heaters that heat work and are paired correctly with temperature sensors.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => DoAnalyseHeating()">Analyse surface heating</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Runs Soft Surface Heater analysis job for selected profile. Resulting file may be assigned to the profile for precise surface heating.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@MovementPage.SelfPath">Movement testing controls</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Allows to directly control the galvo and stepper motors.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4">
+                                        <p class="list-header">
+                                            DEBUGGING
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-danger btn-lg w-100" role="button" @onclick="() => ResetFirmware()">Reset printing firmware</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Resets internal printing firmware if there has been an issue. This should normally not be necessary.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        @if (!MainLayout!.IsDeveloperMode)
+                                        {
+                                            <a class="btn btn-danger btn-lg w-100" role="button" @onclick="() => SetDeveloperMode(true)">Enable developer mode</a>
+                                        }
+                                        else
+                                        {
+                                            <a class="btn btn-danger btn-lg w-100" role="button" @onclick="() => SetDeveloperMode(false)">Disable developer mode</a>
+                                        }
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Displays additional menus and pages that are useful for development and debugging.
+                                        </p>
+                                    </td>
+                                </tr>
+                            }
+                            <tr class="h-100" />
+                        </tbody>
+                    </table>
+                </form>
+            </div>
+        </div>
+    </div>
+</CascadingValue>
+
+@code {
+    public enum TabIndex
+    {
+        NotSet = 0,
+        MemberId,
+        Miscellaneous,
+        Software,
+        Data,
+        Network,
+        Advanced,
+        Testing,
+        SystemPassword
+    }
+
+    private sealed class Item<T> 
+        where T : class, IStorageObject, new()
+    {
+        public T Settings { get; set; } = new();
+        public T Original { get; set; } = new();
+        public bool IsDefault { get; set; }
+        public bool IsChanged => !Settings.Equals(Original);
+    }
+
+    private sealed class AvailableWirelessNetwork
+    {
+        public required WirelessNetworkInfo Network { get; set; }
+        public required WirelessConnectParameters Parameters { get; set; }
+    }
+
+    private sealed class NetworkDeviceItem
+    {
+        public INetworkDevice Device { get; set; } = default!;
+        public bool IsConnected { get; set; }
+        public NetworkAddressSetup? AssignedAddress { get; set; }
+        public NetworkAddressSettings? AddressSettings { get; set; }
+        public WirelessNetworkInfo? CurrentWirelessNetwork { get; set; } = default!;
+        public AvailableWirelessNetwork[]? AvailableWirelessNetworks { get; set; } = default!;
+        public Exception? UpdateException { get; set; }
+        public Exception? Exception { get; set; }
+        public int WorkingCount { get; set; }
+        public CancellationTokenSource? CancelSource { get; set; }
+        public bool IsWorking => WorkingCount > 0;
+    }
+
+    private sealed class NetworkSelected
+    {
+        public required NetworkDeviceItem Item { get; set; }
+        public WirelessNetworkInfo? WirelessNetwork { get; set; }
+        public string Password { get; set; } = "";
+        public bool IsStaticIP { get; set; }
+        public IPAddress? IPAddress { get; set; }
+        public int? Prefix { get; set; }
+        public IPAddress? Gateway { get; set; }
+        public IPAddress? DnsPrimary { get; set; }
+        public IPAddress? DnsSecondary { get; set; }
+        public bool IsValid
+        {
+            get
+            {
+                if (!IsStaticIP)
+                    return true;
+                else
+                {
+                    if (IPAddress == null ||
+                        Prefix == null)
+                        return false;
+                    var family = IPAddress.AddressFamily;
+                    if (Gateway != null && family != Gateway.AddressFamily)
+                        return false;
+                    if (DnsPrimary != null && family != DnsPrimary.AddressFamily)
+                        return false;
+                    if (DnsSecondary != null && family != DnsSecondary.AddressFamily)
+                        return false;
+                    if (family == System.Net.Sockets.AddressFamily.InterNetwork)
+                    {
+                        if (!(Prefix >= 0 && Prefix < 32))
+                            return false;
+                    }
+                    else if (family == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                    {
+                        if (!(Prefix >= 0 && Prefix < 128))
+                            return false;
+                    }
+                    else
+                        return false;
+                    return true;
+                }
+            }
+        }
+
+        public NetworkAddressSettings GetAddressSettings()
+        {
+            NetworkAddressSettings? settings;
+            if (IsStaticIP)
+            {
+                settings = new NetworkAddressSettingsStatic
+                    {
+                        Setup = new NetworkAddressSetup
+                        {
+                            Addresses = new[]
+                            {
+                            new NetworkAddressTriple
+                            {
+                                IPAddress = IPAddress!,
+                                Prefix = Prefix!.Value,
+                                Gateway = Gateway!,
+                            },
+                        },
+                            Dns = new[] { DnsPrimary, DnsSecondary }
+                                .Where(x => x != null)
+                                .ToArray()!,
+                        },
+                    };
+            }
+            else
+            {
+                settings = new NetworkAddressSettingsDhcp();
+            }
+            return settings;
+        }
+    }
+
+    private readonly struct CultureChoice : IEquatable<CultureChoice>
+    {
+        public required CultureInfo? Culture { get; init; }
+
+        public override string ToString()
+        {
+            if (Culture == null)
+                return "System Default";
+            else
+                return Culture.DisplayName;
+        }
+
+        public bool Equals(CultureChoice other)
+            => Culture?.Name == other.Culture?.Name;
+
+        public override bool Equals(object? obj)
+            => obj is CultureChoice other && Equals(other);
+
+        public override int GetHashCode()
+            => Culture?.Name.GetHashCode() ?? 0;
+    }
+
+    private readonly struct TimeZoneChoice : IEquatable<TimeZoneChoice>
+    {
+        public required TimeZoneInfo? TimeZone { get; init; }
+
+        public override string ToString()
+        {
+            if (TimeZone == null)
+                return "System Default";
+            else
+                return TimeZone.DisplayName;
+        }
+
+        public bool Equals(TimeZoneChoice other)
+            => TimeZone?.Id == other.TimeZone?.Id;
+
+        public override bool Equals(object? obj)
+            => obj is TimeZoneChoice other && Equals(other);
+
+        public override int GetHashCode()
+            => TimeZone?.Id.GetHashCode() ?? 0;
+    }
+
+    private sealed class CultureTraits : IInputValueTraits
+    {
+        private static readonly Task<object?[]> m_choicesTask;
+        public Type Type => typeof(CultureChoice);
+
+        public object?[]? Choices => m_choicesTask.GetAwaiter().GetResult();
+
+        public static readonly CultureTraits Instance = new();
+
+        static CultureTraits()
+        {
+            // NOTE: run in background
+            m_choicesTask = Task.Run(() =>
+            {
+                var system = CultureInfo.GetCultures(CultureTypes.AllCultures)
+                    .OrderBy(x => x.DisplayName)
+                    .ToArray();
+                var res = new object?[system.Length + 1];
+                res[0] = new CultureChoice { Culture = null };
+                for (int i = 0; i < system.Length; i++)
+                    res[i + 1] = new CultureChoice { Culture = system[i] };
+                return res;
+            });
+        }
+
+        public object StringToValue(string text)
+            => new CultureChoice { Culture = (CultureInfo?)Choices!.FirstOrDefault(x => ((CultureInfo)x!).DisplayName.Equals(text, StringComparison.InvariantCultureIgnoreCase)) };
+
+        public string ValueToString(object? value)
+        {
+            var t = (CultureChoice)value!;
+            return t.Culture?.DisplayName ?? "System default";
+        }
+
+        public string ValueToEditableString(object? value)
+            => ValueToString(value);
+    }
+
+    private sealed class TimeZoneTraits : IInputValueTraits
+    {
+        private static readonly Task<object?[]> m_choicesTask;
+        public Type Type => typeof(TimeZoneChoice);
+
+        public object?[]? Choices => m_choicesTask.GetAwaiter().GetResult();
+
+        public static readonly TimeZoneTraits Instance = new();
+
+        static TimeZoneTraits()
+        {
+            // NOTE: run in background
+            m_choicesTask = Task.Run(() =>
+            {
+                var system = TimeZoneInfo.GetSystemTimeZones()
+                .OrderBy(x => x.BaseUtcOffset)
+                .ThenBy(x => x.DisplayName)
+                .ToArray();
+                var res = new object?[system.Length + 1];
+                res[0] = new TimeZoneChoice { TimeZone = null };
+                for (int i = 0; i < system.Length; i++)
+                    res[i + 1] = new TimeZoneChoice { TimeZone = system[i] };
+                return res;
+            });
+        }
+
+        public object StringToValue(string text)
+            => new TimeZoneChoice { TimeZone = PrinterTimeManager.TryGetTimeZone(text) };
+
+        public string ValueToString(object? value)
+        {
+            var t = (TimeZoneChoice)value!;
+            return t.TimeZone?.DisplayName ?? "System default";
+        }
+
+        public string ValueToEditableString(object? value)
+            => ValueToString(value);
+    }
+
+    private sealed class DateTimeTraits(PrinterSettings owner) : IInputValueTraits
+    {
+        private readonly PrinterSettings _owner = owner;
+
+        public Type Type => typeof(DateTime?);
+        public object? InitialValueOverride
+            => TimeZoneInfo.ConvertTimeFromUtc(System.DateTime.UtcNow, _owner._timeZone.TimeZone ?? TimeZoneInfo.Local);
+
+        public object StringToValue(string text)
+            => DateTime.Parse(text);
+
+        public string? ValueToString(object? value)
+        {
+            var t = (DateTime?)value;
+            return t != null ? t.Value.ToString("G", CultureInfo.CurrentCulture) : null;
+        }
+
+        public string? ValueToEditableString(object? value)
+            => ValueToString(value);
+    }
+
+    private sealed class MemberIdTraits : IInputValueTraits
+    {
+        public Type Type => typeof(string);
+
+        public bool IsUpperAlphanumeric => true;
+
+        public static readonly MemberIdTraits Instance = new();
+
+        public object StringToValue(string text)
+            => text;
+
+        public string ValueToString(object? value)
+            => value?.ToString() ?? "";
+
+        public string ValueToEditableString(object? value)
+            => ValueToString(value);
+    }
+
+    public const string SelfPath = "/printer-settings";
+    private const string CssScope = "b-printer-settings";
+    private const int _minRows = 1;
+
+    private readonly BackgroundTask _updateNetworksCollapse = new();
+    private readonly static TimeSpan _updateNetworksPeriod = TimeSpan.FromSeconds(5);
+    private Timer? _updateNetworksTimer;
+    private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
+    private TabIndex _tabIndex = TabIndex.Miscellaneous;
+    private Item<PrinterPowerSettings> _power = default!;
+    private Item<PrinterTemperatureSettings> _temperature = default!;
+    private Item<PrinterWatchDogSettings> _watchDog = default!;
+    private Item<PrinterLocalizationSettings> _localization = default!;
+    private IDisposable? _locationChangingSubscription;
+    private bool _showAllApplicableVersions;
+    private ModalWrapper? _analyseHeatingModal;
+    private ModalWrapper? _updateModal;
+    private ModalWrapper? _watchdogDisableModal;
+    private ModalWrapper? _memberIdModal;
+    private ModalWrapper? _systemPasswordModal;
+    private ModalWrapper? _resetPrinterFirmwareModal;
+    private ModalWrapper? _networkModal;
+    private ModalWrapper? _enableDeveloperModeModal;
+    private ApplicationInfo? _updateSelected;
+    private NetworkDeviceItem[]? _networkItems;
+    private NetworkSelected? _networkSelected;
+    private CultureChoice _culture;
+    private TimeZoneChoice _timeZone;
+    private DateTime? _dateTime;
+    private readonly IInputValueTraits _dateTimeTraits;
+    private string? _currentMemberId;
+    private string? _currentPassword;
+    private bool _doubleConfirmed;
+    private string _analyseHeatingJobName = "";
+    private PrintProfile[] _profiles = [];
+
+    [Parameter]
+    public string TabIndexName
+    {
+        get => _tabIndex.ToString();
+        set
+        {
+            if (Enum.TryParse<TabIndex>(value, true, out var tabIndex))
+                _tabIndex = tabIndex;
+        }
+    }
+
+    public PrinterSettings()
+    {
+        _dateTimeTraits = new DateTimeTraits(this);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        ApplicationUpdate.BackgroundTask.StateChanged.AddHandler(TryInvokeStateHasChangedAsync);
+        Storage.SettingsChanged.AddHandler(OnSettingsChanged);
+        _locationChangingSubscription = NavigationManager.RegisterLocationChangingHandler(OnLocationChanging);
+        _updateNetworksCollapse.StateChanged.AddHandler(TryInvokeStateHasChangedAsync);
+        _updateNetworksCollapse.ExceptionHandler.AddHandler((ex, cancel) =>
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    HeaderText = "Failed to update networks",
+                    BodyText = ex.Message,
+                    Exception = ex,
+                    Silent = true, // this is unnecessary backround task, no need for beeping
+                });
+            return Task.CompletedTask;
+        });
+        _timeZone = new TimeZoneChoice { TimeZone = await PrinterTime.GetTimeZone(true) };
+        _culture = new CultureChoice { Culture = await PrinterCulture.GetPrinterCulture() };
+
+        // ensure there is anything to show
+        if (ApplicationUpdate.LastReport == null)
+            await ApplicationUpdate.CheckForUpdatesBackground();
+
+        await CollapseUpdateNetworks();
+        _updateNetworksTimer = new Timer(state =>
+        {
+            try
+            {
+                _ = InvokeAsync(CollapseUpdateNetworks);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, $"Failed to update networks in timer");
+            }
+        }, null, _updateNetworksPeriod, _updateNetworksPeriod);
+
+        await ReloadSettings();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await SaveSettings();
+        ApplicationUpdate.BackgroundTask.StateChanged.RemoveHandler(TryInvokeStateHasChangedAsync);
+        _locationChangingSubscription?.Dispose();
+        _updateNetworksCollapse.StateChanged.RemoveHandler(TryInvokeStateHasChangedAsync);
+        Storage.SettingsChanged.RemoveHandler(OnSettingsChanged);
+        await base.DisposeAsync();
+    }
+
+    private async ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        await SaveSettings();
+    }
+
+    private Task OnSettingsChanged(CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged(async () =>
+        {
+            await ReloadSettings();
+            StateHasChanged();
+        }, cancel);
+        return Task.CompletedTask;
+    }
+
+    private static Item<T> UpdateItem<T>(Item<T>? oldValue, T settings)
+        where T : class, IStorageObject, new()
+    {
+        var res = oldValue;
+        if (res == null)
+        {
+            res = new Item<T>
+                {
+                    Original = (T)settings.Clone(),
+                    Settings = settings,
+                };
+        }
+        else if (!res.IsChanged)
+        {
+            res.Original = (T)settings.Clone();
+            res.Settings = settings;
+        }
+        else
+        {
+            // keep current changes
+        }
+        return res;
+    }
+
+    private async Task ReloadSettings()
+    {
+        var power = Storage.GetPowerSettings();
+        var temperature = Storage.GetTemperatureSettings();
+        var watchDog = Storage.GetWatchDogSettings();
+        var localization = Storage.GetLocalizationSettings();
+        _power = UpdateItem(_power, power);
+        _temperature = UpdateItem(_temperature, temperature);
+        _watchDog = UpdateItem(_watchDog, watchDog);
+        _localization = UpdateItem(_localization, localization);
+        await ValidateInner();
+    }
+
+    private async Task WatchDogSaveSettings(bool forceDisable)
+    {
+        if (_watchDog.IsChanged || forceDisable)
+        {
+            if (!_watchDog.Settings.IsWatchDogEnabled && !forceDisable)
+            {
+                _watchDog.Settings.IsWatchDogEnabled = true;
+                await _watchdogDisableModal!.Show();
+                return;
+            }
+            else if (forceDisable)
+            {
+                _watchDog.Settings.IsWatchDogEnabled = false;
+            }
+            await _watchdogDisableModal!.Close();
+            await Storage.SetWatchDogSettings(_watchDog.Settings);
+            _watchDog.Original = _watchDog.Settings.Clone();
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        if (_power.IsChanged)
+        {
+            await Storage.SetPowerSettings(_power.Settings);
+            _power.Original = _power.Settings.Clone();
+        }
+        if (_temperature.IsChanged)
+        {
+            await Storage.SetTemperatureSettings(_temperature.Settings);
+            _temperature.Original = _temperature.Settings.Clone();
+        }
+        if (_watchDog.IsChanged)
+        {
+            await Storage.SetWatchDogSettings(_watchDog.Settings);
+            _watchDog.Original = _watchDog.Settings.Clone();
+        }
+        if (_localization.IsChanged)
+        {
+            await Storage.SetLocalizationSettings(_localization.Settings);
+            _localization.Original = _localization.Settings.Clone();
+        }
+    }
+
+    private async Task ValidateInner()
+    {
+        var power = _power.Settings;
+        var temperature = _power.Settings;
+        var localization = _localization.Settings;
+        var watchDog = _watchDog.Settings;
+        var validationContext = ValidationContextFactory.CreateContext();
+        var helper = await power.Validate(validationContext);
+        var helper2 = await temperature.Validate(validationContext);
+        var helper3 = await localization.Validate(validationContext);
+        var helper4 = await watchDog.Validate(validationContext);
+        helper.ValidationErrors.AddRange(helper2.ValidationErrors);
+        helper.ValidationErrors.AddRange(helper3.ValidationErrors);
+        helper.ValidationErrors.AddRange(helper4.ValidationErrors);
+        _validationErrors = helper.ToDictionary();
+    }
+
+    private async Task<string?> Validate(object obj, string name)
+    {
+        await ValidateInner();
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, name), out var value))
+            return value.Message; // not valid
+        else
+        {
+            StateHasChanged();
+            return null;
+        }
+    }
+
+    private string? GetError(object obj, string path)
+    {
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, path), out var value))
+            return value.Message;
+        else
+            return null;
+    }
+
+    private static IInputValueTraits? GetTraits(StorageValue value)
+    {
+        if (value.Type == typeof(PrinterUnits))
+            return GetPrinterUnitsTraits(); 
+        else if (value.Type == typeof(PrinterTemperatureUnits))
+            return GetPrinterTemperatureTraits(); 
+        else
+            return null;
+    }
+
+    private static IInputValueTraits GetPrinterUnitsTraits()
+    {
+        var choices = new object[] { PrinterUnits.Metric, PrinterUnits.Imperial };
+        var traits = new DelegatedInputValueTraits(typeof(PrinterUnits),
+            input => input switch
+            {
+                PrinterUnits.NotSet => "Default",
+                PrinterUnits.Metric => "Metric",
+                PrinterUnits.Imperial => "Imperial",
+                _ => "Other",
+            },
+            input => PrintProfileShrinkageCorrectionType.NotSet,
+            choices: choices);
+        return traits;
+    }
+
+    private static IInputValueTraits GetPrinterTemperatureTraits()
+    {
+        var choices = new object[] { PrinterTemperatureUnits.Celsius, PrinterTemperatureUnits.Fahrenheit };
+        var traits = new DelegatedInputValueTraits(typeof(PrinterTemperatureUnits),
+            input => input switch
+            {
+                PrinterTemperatureUnits.NotSet => "Default",
+                PrinterTemperatureUnits.Celsius => "Celsius",
+                PrinterTemperatureUnits.Fahrenheit => "Fahrenheit",
+                _ => "Other",
+            },
+            input => PrinterTemperatureUnits.NotSet,
+            choices: choices);
+        return traits;
+    }
+
+    private RenderFragment RenderValues(
+        object profile,
+        object profileDefault,
+        params string?[] paths)
+        => RenderValues(profile, profileDefault, default, paths);
+
+    private RenderFragment RenderValues(
+        object profile,
+        object profileDefault,
+        EventCallback valueEntered,
+        params string?[] paths)
+    {
+        return builder =>
+        {
+            var seq = 1;
+            var rows = Math.Max((paths.Length + 1) / 2, _minRows);
+            var col1 = 0;
+            var col2 = rows;
+            for (int row = 0; row < rows; row++)
+            {
+                var firstPath = col1 < paths.Length ? paths[col1++] : null;
+                var secondPath = col2 < paths.Length ? paths[col2++] : null;
+                builder.OpenElement(seq++, "tr");
+                builder.AddAttribute(seq++, CssScope);
+                if (row == 0)
+                    builder.AddAttribute(seq++, "class", "hide-top-line");
+                if (firstPath != null)
+                {
+                    var value = StorageValue.Create(profile, firstPath);
+                    var valueDefault = profileDefault != profile ? StorageValue.Create(profileDefault, firstPath) : null;
+                    IInputValueTraits? traits = GetTraits(value);
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-1 property-name");
+                    builder.AddContent(seq++, value.Name.Name);
+                    builder.CloseElement();
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-4 property-value pr-4");
+                    builder.AddContent(seq++, value.RenderValueEditor(valueDefault, profile, validationError: GetError(profile, value.Path), cssScope: CssScope, valueEntered: valueEntered, traits: traits));
+                    builder.CloseElement();
+                }
+                else
+                {
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-1 property-name");
+                    builder.CloseElement();
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-4 property-value pr-4");
+                    builder.CloseElement();
+                }
+                if (secondPath != null)
+                {
+                    var value = StorageValue.Create(profile, secondPath);
+                    var valueDefault = profileDefault != profile ? StorageValue.Create(profileDefault, secondPath) : null;
+                    IInputValueTraits? traits = GetTraits(value);
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-1 property-name pl-4");
+                    builder.AddContent(seq++, value.Name.Name);
+                    builder.CloseElement();
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-4 property-value");
+                    builder.AddContent(seq++, value.RenderValueEditor(valueDefault, profile, validationError: GetError(profile, value.Path), cssScope: CssScope, valueEntered: valueEntered, traits: traits));
+                    builder.CloseElement();
+                }
+                else
+                {
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-1 property-name pl-4");
+                    builder.CloseElement();
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, CssScope);
+                    builder.AddAttribute(seq++, "class", "col-4 property-value");
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+            }
+        };
+    }
+
+    private void SelectTab(TabIndex tab)
+    {
+        _tabIndex = tab;
+        UpdateUri();
+    }
+
+    private void UpdateUri()
+    {
+        NavigationManager.NavigateTo($"{SelfPath}/{TabIndexName}", new NavigationOptions { ReplaceHistoryEntry = true });
+    }
+
+    private async Task CheckForUpdates()
+    {
+        await ApplicationUpdate.CheckForUpdatesBackground();
+    }
+
+    private async Task UpdateToVersion(ApplicationInfo info, bool force = false)
+    {
+        if (!force)
+        {
+            _updateSelected = info;
+            await _updateModal!.Show();
+        }
+        else
+        {
+            await _updateModal!.Close();
+            await ApplicationUpdate.PrepareUpdate(info);
+        }
+    }
+
+    private async Task ApplyUpdate()
+    {
+        try
+        {
+            await ApplicationUpdate.ApplyUpdate();
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    HeaderText = "Failed to apply the update",
+                    BodyText = ex.Message,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+        }
+    }
+
+    private async Task CollapseUpdateNetworks()
+    {
+        await _updateNetworksCollapse.StartTask(null, UpdateNetworksInternal);
+    }
+
+    private async Task UpdateNetworksInternal(CancellationToken cancel)
+    {
+        var items = new List<NetworkDeviceItem>();
+        var devices = await NetworkManager.GetAllDevices(cancel);
+        foreach (var device in devices)
+        {
+            var item = _networkItems?.FirstOrDefault(x => x.Device.Name == device.Name) ?? new NetworkDeviceItem();
+            try
+            {
+                item.Device = device;
+                item.IsConnected = await device.GetIsConnected(cancel);
+                item.AssignedAddress = await device.GetAssignedAddress(cancel);
+                item.AddressSettings = await device.GetAddressSettings(cancel);
+                if (device is IWirelessNetworkDevice wireless)
+                {
+                    item.CurrentWirelessNetwork = await wireless.GetCurrentNetwork(cancel);
+                    var wirelessNetworks = new List<AvailableWirelessNetwork>();
+                    foreach (var network in await wireless.GetAvailableNetworks(cancel))
+                    {
+                        var parameters = await wireless.GetConnectParameters(network.Network, cancel);
+                        wirelessNetworks.Add(new AvailableWirelessNetwork
+                            {
+                                Network = network,
+                                Parameters = parameters,
+                            });
+                    }
+                    item.AvailableWirelessNetworks = wirelessNetworks.ToArray();
+                }
+            }
+            catch (Exception ex)
+            {
+                item.Exception = ex;
+            }
+            items.Add(item);
+        }
+        _networkItems = items.ToArray();
+        StateHasChanged();
+    }
+
+    private NetworkSelected CreateNetworkItemSelected(NetworkDeviceItem item, WirelessNetworkInfo? network, WirelessConnectParameters? args)
+    {
+        var res = new NetworkSelected
+            {
+                Item = item,
+                WirelessNetwork = network,
+                Password = args?.Password ?? "",
+            };
+        var address = args?.Address ?? item.AddressSettings;
+        if (address is NetworkAddressSettingsStatic staticIP &&
+            staticIP.Setup.Addresses.Length > 0)
+        {
+            var first = staticIP.Setup.Addresses[0];
+            res.IsStaticIP = true;
+            res.IPAddress = first.IPAddress;
+            res.Prefix = first.Prefix;
+            res.Gateway = first.Gateway;
+            res.DnsPrimary = staticIP.Setup.Dns.Length >= 1 ? staticIP.Setup.Dns[0] : null;
+            res.DnsSecondary = staticIP.Setup.Dns.Length >= 2 ? staticIP.Setup.Dns[1] : null;
+        }
+        return res;
+    }
+
+    private async Task DoNetworkStuff(NetworkDeviceItem item, string errorHeaderText, Func<CancellationToken, Task> func)
+    {
+        try
+        {
+            if (item.WorkingCount++ == 0)
+                item.CancelSource = new();
+            StateHasChanged();
+            await func(item.CancelSource!.Token);
+            await UpdateNetworksInternal(item.CancelSource.Token);
+        }
+        catch (Exception ex)
+        {
+            if (item.CancelSource?.IsCancellationRequested != true)
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Error,
+                    HeaderText = errorHeaderText,
+                    BodyText = ex.Message,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+        }
+        finally
+        {
+            if (--item.WorkingCount == 0)
+                item.CancelSource = null;
+        }
+    }
+
+    private async Task ConfigureNetwork(NetworkDeviceItem item, WirelessNetworkInfo? wirelessNetwork, WirelessConnectParameters? args = null, bool force = false)
+    {
+        if (!force || args == null)
+        {
+            _networkSelected = CreateNetworkItemSelected(item, wirelessNetwork, args);
+            await _networkModal!.Show();
+            return;
+        }
+        if (wirelessNetwork != null)
+        {
+            await DoNetworkStuff(
+                item,
+                "Failed to connect to wireless network",
+                async (cancel) =>
+                {
+                    var device = (IWirelessNetworkDevice)item.Device;
+                    await device.ConnectToNetwork(wirelessNetwork.Network, args, cancel);
+                });
+        }
+        else if (args.Address != null)
+        {
+            await DoNetworkStuff(
+                item,
+                "Failed to configure network device",
+                async (cancel) =>
+                {
+                    var device = item.Device;
+                    await device.SetAddressSettings(args.Address, cancel);
+                });
+        }
+    }
+
+    private async Task FromNetworkModal()
+    {
+        var selected = _networkSelected;
+        if (selected == null || !selected.IsValid)
+            return;
+        await _networkModal!.Close();
+
+        await ConfigureNetwork(selected.Item, selected.WirelessNetwork, new WirelessConnectParameters
+            {
+                Password = selected.Password,
+                Address = selected.GetAddressSettings(),
+            }, true);
+    }
+
+    private async Task DisconnectFromModal()
+    {
+        var selected = _networkSelected;
+        if (selected == null)
+            return;
+        await _networkModal!.Close();
+
+        var item = selected.Item;
+        await DoNetworkStuff(
+            item,
+            "Failed to disconnect network device",
+            async (cancel) =>
+            {
+                await item.Device.Disconnect(cancel);
+            });
+    }
+
+    private async Task ForgetFromModal()
+    {
+        var selected = _networkSelected;
+        if (selected == null || selected.WirelessNetwork == null)
+            return;
+        await _networkModal!.Close();
+
+        var item = selected.Item;
+        var network = selected.WirelessNetwork;
+        await DoNetworkStuff(
+            item,
+            "Failed to forget network",
+            async (cancel) =>
+            {
+                await ((IWirelessNetworkDevice)item.Device).ForgetNetwork(network.Network, cancel);
+            });
+    }
+
+    private async Task OnCultureEntered()
+    {
+        try
+        {
+            await PrinterCulture.SetPrinterCulture(_culture.Culture, default);
+            if (MainLayout!.IsLocalSession)
+                NavigationManager.Reload(MainLayout!);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                Key = this,
+                HeaderText = "Failed to set printer culture",
+                BodyText = ex.Message,
+                Exception = ex,
+                Silent = true, // user is interacting, no need for beeping
+            });
+        }
+    }
+
+    private async Task OnTimeZoneEntered()
+    {
+        try
+        {
+            await PrinterTime.SetPrinterTimeZone(_timeZone.TimeZone, default);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Key = this,
+                HeaderText = "Failed to set printer time zone",
+                BodyText = ex.Message,
+                Type = ToastMessageType.Error,
+                Exception = ex,
+                Silent = true, // user is interacting, no need for beeping
+            });
+        }
+    }
+
+    private async Task OnDateTimeEntered()
+    {
+        if (_dateTime == null)
+            return;
+        try
+        {
+            var timeZoneUtc = TimeZoneInfo.ConvertTimeToUtc(_dateTime.Value, _timeZone.TimeZone ?? TimeZoneInfo.Local);
+            if (!await PrinterTime.TrySetPrinterDateTimeUtc(timeZoneUtc))
+                throw new ApplicationException("System call to change date/time failed");
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    HeaderText = "Failed to set printer date and time",
+                    BodyText = ex.Message,
+                    Type = ToastMessageType.Error,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+        }
+        finally
+        {
+            _dateTime = null;
+        }
+    }
+
+    private async Task SetMemberId(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            _currentMemberId = await MemberManager.GetCurrentMemberId();
+            await _memberIdModal!.Show();
+        }
+        else
+        {
+            await _memberIdModal!.Close();
+            if (await MemberManager.TrySetMemberId(_currentMemberId))
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Member Id",
+                    BodyText = "Member Id has been successfully set!",
+                    Type = ToastMessageType.Information,
+                    Key = this,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+            else
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Member Id",
+                    BodyText = "Member Id is not valid.",
+                    Type = ToastMessageType.Information,
+                    Key = this,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+        }
+    }
+
+    private async Task SetSystemPassword(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            _currentPassword = "";
+            await _systemPasswordModal!.Show();
+        }
+        else
+        {
+            await _systemPasswordModal!.Close();
+            try
+            {
+                if (_currentPassword != null)
+                {
+                    await PrinterAuthentication.SetSystemPasswords(_currentPassword);
+                    ToastProvider.Show(new ToastMessage
+                        {
+                            Type = ToastMessageType.Information,
+                            Key = this,
+                            HeaderText = "Passwords set",
+                            BodyText = "System passwords have been successfully set, some changes might require printer restart to take an effect.",
+                            TargetUri = ShutdownPage.SelfPath,
+                            Silent = true, // user is interacting, no need for beeping
+                        });
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    HeaderText = "Failed to set system passwords",
+                    BodyText = ex.Message,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+        }
+    }
+
+    private async Task ResetFirmware(bool fromModal = false)
+    {
+        if (!fromModal || PrintingGlobal.IsPrinting)
+        {
+            _doubleConfirmed = false;
+            await _resetPrinterFirmwareModal!.Show();
+        }
+        else
+        {
+            await _resetPrinterFirmwareModal!.Close();
+            try
+            {
+                await PrinterClient.Restart(PrinterClientRestartFlags.FirmwareRestart, default);
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Information,
+                    Key = this,
+                    HeaderText = "Reset successful",
+                    BodyText = "Printer firmware has been successfully reset",
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    HeaderText = "Failed to reset printer firmware",
+                    BodyText = ex.Message,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+        }
+    }
+
+    private async Task SetDeveloperMode(bool enable, bool fromModal = false)
+    {
+        if (!fromModal && enable)
+        {
+            await _enableDeveloperModeModal!.Show();
+        }
+        else
+        {
+            await _enableDeveloperModeModal!.Close();
+            MainLayout!.IsDeveloperMode = enable;
+        }
+    }
+
+    private async Task Backup(bool fromModal = false)
+    {
+        await Task.CompletedTask;
+    }
+
+    private async Task Restore(bool fromModal = false)
+    {
+        await Task.CompletedTask;
+    }
+
+    private async Task<PrintingParameters?> TryGetParametersBeforeAnalyseHeating(PrintProfile profile)
+    {
+        var context = ValidationContextFactory.CreateContext();
+        var powerSettings = SettingsStorage.GetPowerSettings();
+        var powerSettingsValidation = await powerSettings.Validate(context);
+        if (!powerSettingsValidation!.IsValid)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Invalid settings",
+                    BodyText = "Printer power settings contain errors",
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            return default;
+        }
+        var setup = await PrintingGlobal.CreateSetup(profile, powerSettings);
+        setup.SoftHeaterFilename = null; // NOTE: do not confuse wizard with soft heater filename, it will not be used
+        return new PrintingParameters(
+            powerSettings,
+            profile,
+            [],
+            false,
+            setup,
+            new AnalyseJob
+            {
+                Name = _analyseHeatingJobName,
+                PrintProfile = new PrintProfileReference(profile.Id),
+            });
+    }
+
+    public async Task DoAnalyseHeating(PrintProfile? profile = null)
+    {
+        if (profile == null || string.IsNullOrWhiteSpace(_analyseHeatingJobName))
+        {
+            var validationContext = ValidationContextFactory.CreateContext();
+
+            var profiles = new List<PrintProfile>();
+            foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
+            {
+                var isValid = await item.profile.Validate(validationContext);
+                if (isValid.IsValid)
+                    profiles.Add(item.profile);
+            }
+            _profiles = profiles.ToArray();
+            _analyseHeatingJobName = $"analyse_heating_{DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture)}";
+            await _analyseHeatingModal!.Show();
+        }
+        else
+        {
+            await _analyseHeatingModal!.Close();
+            var printingParameters = await TryGetParametersBeforeAnalyseHeating(profile);
+            if (printingParameters == null)
+                return;
+            if (PrintingGlobal.BackgroundTask.Status?.IsCompleted == false)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Cannot start job",
+                        BodyText = "Job is already in progress.",
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Silent = true, // user is interacting, no need for beeping
+                    });
+                return;
+            }
+            PrintingParamsProvider.PrintingParams = printingParameters;
+            NavigationManager.NavigateTo(PrintWizard.SelfPath);
+        }
+    }
+}

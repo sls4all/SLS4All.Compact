@@ -1,0 +1,58 @@
+﻿.dummy {
+}
+
+.title-row {
+    margin-left: 0px;
+    margin-right: 0px;
+}
+
+.title-row .col-auto {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: 0px;
+    padding-right: 0px;
+}
+
+.main-button {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 17px;
+    border: 1px solid rgba(0, 0, 0, 0);
+    border-radius: 2px;
+    cursor: pointer;
+    user-select: none;
+    color: inherit;
+    background: #7773;
+    -webkit-box-shadow: 0 0 15px #0007;
+    box-shadow: 0 0 15px #0007;
+    height: 100%;
+}
+
+    .main-button .no-button-border {
+        border: 0px;
+    }
+
+    .main-button:focus {
+        border: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    .main-button.disabled-button {
+        opacity: 25%;
+        cursor: inherit;
+    }
+
+.profile-button {
+    font-size: 20px;
+    padding: 5px 5px 5px 5px;
+}
+
+@media (hover: hover) {
+    .main-button:hover:not(.disabled-button) {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: #7774;
+    }
+}
+
+.main-button:active:not(.disabled-button) {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.1);
+}

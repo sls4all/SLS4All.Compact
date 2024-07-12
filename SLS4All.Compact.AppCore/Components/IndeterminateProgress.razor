@@ -1,0 +1,71 @@
+﻿@if (_count != 0)
+{
+    @ChildContent
+}
+
+@code {
+    private sealed class Helper : IDisposable
+    {
+        private readonly IndeterminateProgress _owner;
+        private bool _enabled;
+
+        public Helper(IndeterminateProgress owner)
+        {
+            _owner = owner;
+            _enabled = true;
+            owner.Increment();
+        }
+
+        public void Dispose()
+        {
+            if (_enabled)
+            {
+                _enabled = false;
+                _owner.Decrement();
+            }
+        }
+    }
+
+    private int _count;
+    private bool _enabled;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value)
+                return;
+            _enabled = value;
+            if (value)
+                _count++;
+            else
+                _count--;
+        }
+    }
+
+    public IDisposable BeginWork()
+        => new Helper(this);
+
+    private void Increment()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_count++ == 0)
+                StateHasChanged();
+        });
+    }
+
+    private void Decrement()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (--_count == 0)
+                StateHasChanged();
+        });
+    }
+}

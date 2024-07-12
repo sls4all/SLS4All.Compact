@@ -1,0 +1,43 @@
+﻿.dummy {
+}
+
+.root-container {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: 100%;
+    padding: 0px;
+}
+
+    .root-container .container-flex {
+        height: 100%;
+    }
+
+        .root-container .container-flex .row {
+            height: 100%;
+        }
+
+.temperature-table {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 20px;
+}
+
+    .temperature-table th {
+    }
+
+    .temperature-table .hide-top-line td, .temperature-table .hide-top-line th {
+        border-top: none;
+    }
+
+.temperature-value {
+    color: #03b4da;
+    text-align: right;
+}
+
+.camera-view .video-image-container {
+    height: auto;
+}
+
+    .camera-view .video-image-container .video-image {
+        width: 100%;
+        height: auto;
+    }

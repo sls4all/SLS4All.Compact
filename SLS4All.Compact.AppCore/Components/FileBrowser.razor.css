@@ -1,0 +1,125 @@
+﻿.browser-container {
+    font-size: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.header-row {
+    padding-bottom: 10px;
+}
+
+    .header-row .btn {
+        font-size: 20px;
+        color: white;
+    }
+
+    .header-row .col-auto {
+        padding-left: 5px;
+        padding-right: 5px;
+        margin-top: auto;
+        margin-bottom: auto;
+    }
+
+    .header-row .col {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .header-row .current-directory {
+        text-align: left;
+        color: white;
+    }
+
+    .header-row .dropdown-menu {
+        background-color: rgba(0, 48, 57, 0.96);
+    }
+
+        .header-row .dropdown-menu .dropdown-item {
+            font-size: 20px;
+        }
+
+.content-row {
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.table-empty {
+    text-align: center;
+    padding-top: 50px;
+    padding-bottom: 50px;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+    .table-empty p {
+        margin-bottom: 0px;
+    }
+
+.table-entry {
+    text-align: center;
+    padding: 5px;
+    display: flex;
+    flex-flow: row;
+    align-items: center;
+    background: transparent;
+    background-color: none;
+    border: none;
+}
+    .table-entry > a {
+        color: white;
+    }
+
+.table-entry-icon {
+    display: flex;
+    font-size: 35px;
+    color: #fff9;
+    height: 100%;
+    padding-right: 5px;
+    align-items: center;
+}
+
+    .table-entry-icon > i {
+    }
+
+.table-entry-name {
+    display: flex;
+    text-align: left;
+    border-radius: 5px;
+    padding: 5px;
+    height: 100%;
+    width: 100%;
+    align-items: center;
+}
+
+    .table-entry-name > span {
+        overflow-wrap: anywhere;
+        text-wrap: wrap;
+    }
+
+.table-entry-file .table-entry-name {
+    background: #00000015;
+}
+
+.table-entry-selected .table-entry-icon {
+    color: #fff;
+}
+
+.table-entry-name {
+    background: #00000015;
+}
+
+.table-entry-selectable.table-entry-selected .table-entry-name {
+    background: #00000050;
+}
+
+.table-entry-directory .table-entry-icon {
+    color: yellow;
+}
+
+.table-entry-package .table-entry-icon {
+    color: lawngreen;
+}

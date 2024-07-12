@@ -1,0 +1,190 @@
+﻿.dummy {
+}
+
+.root-container {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: 100%;
+    padding-bottom: 30px;
+}
+
+@media (max-width: 576px) {
+    .status-icon {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+.status-panel {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 20px;
+    line-height: 1.75;
+}
+
+    .status-panel td.col, .status-panel td.col-auto {
+        padding-top: 0px;
+        padding-bottom: 0px;
+    }
+
+    .status-panel .status-progress {
+        font-size: 17px;
+        opacity: 75%;
+    }
+
+    .status-panel .status-estimate-absolute {
+        font-size: 17px;
+        opacity: 75%;
+    }
+
+    .status-panel .monitor-container-cell {
+        padding: 0px;
+    }
+
+        .status-panel .monitor-container-cell .monitor-container {
+            padding: 0rem 1rem;
+            background: #fff1;
+            -webkit-box-shadow: 0 0 15px #0007;
+            box-shadow: 0 0 15px #0007;
+            border-radius: 3px;
+        }
+
+    .status-panel .value-table td, .status-panel .value-table th {
+        padding: 0px;
+        font-weight: inherit;
+        line-height: 38px;
+    }
+
+    .status-panel .hide-top-line > td, .status-panel .hide-top-line > th, .hide-top-line {
+        border-top: none;
+    }
+
+    .status-panel .show-right-line {
+        border-right: 1px solid rgba(255, 255, 255, 0.125);
+    }
+
+    .status-panel .status-text {
+        color: #ffffff;
+        text-align: left;
+        font-size: 17px;
+        vertical-align: middle;
+    }
+
+    .status-panel .status-value {
+        color: #03b4da;
+        text-align: right;
+        vertical-align: middle;
+    }
+
+    .status-panel .connection-status {
+        font-size: 15px;
+        vertical-align: top;
+        line-height: 20px;
+    }
+
+        .status-panel .connection-status .badge {
+            font-size: 15px;
+        }
+
+        .status-panel .connection-status .badge {
+            font-size: 15px;
+        }
+
+    .status-panel .status-value .laser-status {
+        display: inline-block;
+        width: 3em;
+        text-align: right;
+    }
+
+    .status-panel .status-value .halogen-status {
+        display: inline-block;
+        width: 3em;
+    }
+
+    .status-panel .status-value-prefix {
+        color: #03b4da;
+        text-align: right;
+        font-size: 15px;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .status-panel .status-value-suffix {
+        color: #03b4da;
+        text-align: left;
+        font-size: 15px;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .status-panel .status-value-left {
+        color: #03b4da;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .status-panel .status-image-container {
+        padding: 3px 3px 0px 3px;
+    }
+
+.print-controls {
+    margin-left: -8px;
+    margin-right: -8px;
+}
+
+    .print-controls > div {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .print-controls .print-controls-button {
+        padding-top: 12px;
+    }
+
+        .print-controls .print-controls-button.status-plot-camera-tab {
+            /*            padding-top: 27px;
+            margin-top: -15px;
+*/
+        }
+
+
+.status-plot-camera-container {
+    display: grid;
+}
+
+    .status-plot-camera-container .status-any-view {
+        grid-area: 1 / 1;
+        width: 100%;
+        height: 100%;
+        transition: opacity 0.2s linear;
+    }
+
+        .status-plot-camera-container .status-any-view.status-plot-view {
+            border: 1px solid #fff1;
+            float: right;
+            -webkit-box-shadow: 0 0 15px #0007;
+            box-shadow: 0 0 15px #0007;
+        }
+
+        .status-plot-camera-container .status-any-view.status-thermo-view {
+        }
+
+            .status-plot-camera-container .status-any-view.status-thermo-view .video-image-container {
+            }
+
+                .status-plot-camera-container .status-any-view.status-thermo-view .video-image-container img {
+                    border: 1px solid #fff1;
+                    width: 100%;
+                    height: 100%;
+                }
+
+        .status-plot-camera-container .status-any-view.status-camera-view {
+        }
+
+            .status-plot-camera-container .status-any-view.status-camera-view .video-image-container {
+            }
+
+                .status-plot-camera-container .status-any-view.status-camera-view .video-image-container img {
+                    border: 1px solid #fff1;
+                    width: 100%;
+                    height: 100%;
+                }

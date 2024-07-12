@@ -1,0 +1,629 @@
+﻿[Logging.LogLevel]
+"SLS4All.Compact.Printer.McuRunnerOutput" = "Debug"
+"SLS4All.Compact.Printer.McuFirmwareUpdaterOutput" = "Debug"
+
+[McuAliases]
+
+    [McuAliases.Aliases.mcu.Expressions]
+    BTB-1_4T = "/dev/serial/by-id/usb-Klipper_lpc1769_*-if*@4000000"
+
+    [McuAliases.Aliases.zero1.Expressions]
+    NANO-OLD = "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_*-if*-port*@250000"
+    NANO-V3 = "/dev/serial/by-id/usb-*_USB*Serial-if*-port*@250000"
+
+[McuPrinterClient]
+
+[McuHalogenClient]
+
+[McuTemperatureClient]
+LowFrequencyPeriod = "0:0:1"
+FakeCurrentTemperatures = false
+FakeBedMatrix = false
+
+  [McuTemperatureClient.SurfaceSensors.1-1]
+  Id = "quadrant1"
+  Description = "Surface Quadrant 1"
+
+  [McuTemperatureClient.SurfaceSensors.1-2]
+  Id = "quadrant2"
+  Description = "Surface Quadrant 2"
+
+  [McuTemperatureClient.SurfaceSensors.1-3]
+  Id = "quadrant3"
+  Description = "Surface Quadrant 3"
+
+  [McuTemperatureClient.SurfaceSensors.1-4]
+  Id = "quadrant4"
+  Description = "Surface Quadrant 4"
+
+  [McuTemperatureClient.ExtraSurfaceSensorIds.1-1]
+  Id = "surfaceMax"
+  Description = "Surface Max"
+
+  [McuTemperatureClient.ExtraSurfaceSensorIds.1-2]
+  Id = "surfaceMin"
+  Description = "Surface Min"
+
+[McuMovementClient] # [monitored]"
+MaxXY = 1_000
+StepXYDistance = 0.0152590218966964
+#ZPreHomingEnable = true
+#ZPreHomingDistance = 2000
+ZPostHomingEnable = true
+ZPostHomingDistance = 10000
+RPostHomingEnable = true
+RPostHomingDistance = 10
+CompensatePwmLatency = true
+CollectGarbageOnFinishMovement = true
+CollectGarbageOnFinishMovementMinPeriod = "0:1:0"
+# Number of steps at stepper critical speed to get a minimum duration for laser-off movement, to ensure that the MCU is not overloaded with too many commands.
+# Value should correspond to how many times is CPU duration of loading new stepper command and executing it in one step - is larger than - average CPU duration of single step.
+LaserOffMinDurationSteps = 30
+
+    [McuMovementClient.XYLQueue]
+    CompressFlushPeriod = "0:0:0.05"
+    XYMovesPerSecond = 4300
+    LMovesPerSecond = 2600
+    CompressionFactor = 1.0
+    ParallelFlush = true # lot of commands per second will be faster processed in parallel
+
+[McuPowerClient]
+LaserId = "laser"
+LaserMinimumVisibleFactor = 0.02
+
+[McuInputClient]
+
+	[McuInputClient.Inputs]
+	1-1 = "SAFE_BUTTON"
+
+[McuHostRunner] # [monitored]
+IsEnabled = true
+Executable = "Firmware/linux_host_RaspberryPi5.sh"
+Args = ""
+
+[PipedMcuProxyRunner] # [monitored]
+IsEnabled = true
+Executable = "Firmware/linux_mcuapp_RaspberryPi5.sh"
+Args = ""
+LogOutput = false
+
+[McuStepperGlobal]
+QueueAheadDuration = "0:0:1.0"
+SendAheadDuration = "0:0:0.15"
+UnderflowDuration = "0:0:0.1"
+
+[McuManager]
+KeepaliveEnablePins = [ "io-en" ]
+KeepaliveEnablePeriod = "0:0:1"
+KeepaliveEnableMaxDuraton = "0:0:5"
+
+    [McuManager.Mcus.1-1]
+    Name = "mcu"
+    RequestedMoveCount = 2400 # ~calculated from steppers: (0.15[SendAheadDuration] + 0.05[CompressFlushPeriod]) * (4300[X] + 4300[Y] + 2600[L]) = 2240
+
+        [McuManager.Mcus.1-1.FirmwareUpdate.Aliases.BTB-1_4T]
+        FirmwareFilename = "Firmware/lpc1769.bin"
+        SdCard.Bus = "ssp1"
+        SdCard.CsPin = "P0.6"
+
+    [McuManager.Mcus.1-2]
+    Name = "zero1"
+
+        [McuManager.Mcus.1-2.FirmwareUpdate.Aliases.NANO-OLD]
+        FirmwareFilename = "Firmware/atmega328p.elf.hex"
+        ShellCommand.Executable = "/bin/sh"
+        ShellCommand.Args = "-c \"avrdude -v -p atmega328p -c arduino -P {{DeviceEndpoint}} -b 115200 -D -U flash:w:{{FirmwareFile}}:i\""
+
+        [McuManager.Mcus.1-2.FirmwareUpdate.Aliases.NANO-V3]
+        FirmwareFilename = "Firmware/atmega328p.elf.hex"
+        ShellCommand.Executable = "/bin/sh"
+        ShellCommand.Args = "-c \"avrdude -v -p atmega328p -c arduino -P {{DeviceEndpoint}} -b 57600 -D -U flash:w:{{FirmwareFile}}:i\""
+
+    [McuManager.Mcus.1-3]
+    Name = "host"
+    Device.Path = "/tmp/klipper_host_mcu"
+
+    [McuManager.DimmerSensorPin]
+    Type = "DimmerSensor"
+    Pin = "zero1:PC0"
+
+    [McuManager.PowerManager]
+    BaseConsumption = 200
+    MaxConsumption = 0 # initial, before it is overriden by user settings
+
+    # GALVOS NOTE:
+    # BTB has actual critical velocity of single axis movemement around 4000
+
+    # Galvo-X
+    [McuManager.Steppers.x.Stepper]
+    DirPin = "PDAC.0"
+    StepPin = "PDAC.1"
+    EndstopPin = "PDAC.2"
+    FullStepDistance = 0.0152590218966964
+    MinVelocity = 0
+    #MaxVelocity = 150_000 # 150Hz (300Hz galvo max / 2)
+    MaxVelocity = 28_000 # ~5000mm/sec (5000/175*1000) - value that is tested that together with CriticalVelocity does not cause timer errors.
+    #MaxVelocity = 56_000 # ~10000mm/sec (10000/175*1000) - value that is tested that together with CriticalVelocity does not cause timer errors.
+    #MaxVelocity = 75_000 # 75Hz (300Hz galvo max / 4)
+    CriticalVelocity = 750 # TODO: increase?
+    NoDelay = true
+    IntervalPrecision = 8
+
+    # Galvo-Y
+    [McuManager.Steppers.y.Stepper]
+    DirPin = "PDAC.3"
+    StepPin = "PDAC.4"
+    EndstopPin = "PDAC.5"
+    FullStepDistance = 0.0152590218966964
+    MinVelocity = 0
+    #MaxVelocity = 150_000 # 150Hz (300Hz galvo max / 2)
+    MaxVelocity = 28_000 # ~5000mm/sec (5000/175*1000) - value that is tested that together with CriticalVelocity does not cause timer errors.
+    #MaxVelocity = 56_000 # ~10000mm/sec (10000/175*1000) - value that is tested that together with CriticalVelocity does not cause timer errors.
+    #MaxVelocity = 75_000 # 75Hz (300Hz galvo max / 4)
+    CriticalVelocity = 750
+    NoDelay = true
+    IntervalPrecision = 8
+
+    # Laser-pwm "stepper"
+    [McuManager.Steppers.laser.PwmPin]
+    Type = "HardPwm"
+    Pin = "P2.0" # BTB_SERVO
+    CycleTime = 0.0002 # 5kHz
+    #CycleTime = 0.000222 # 4.5kHz
+
+    # Z1, connected to BTB-X
+    [McuManager.Steppers.z1.Stepper]
+    DirPin = "!P2.6"
+    StepPin = "P2.2"
+    EnablePin = "!P2.1"
+    EndstopPin = "P1.29"
+    FullStepDistance = 20.0 # 20um
+    MinVelocity = 10
+    MaxVelocity = 15_000
+
+    [McuManager.Steppers.z1.Tmc2209Driver]
+    UartPin = "P1.10"
+    Fields.SGTHRS = 95
+    RunCurrent = 1.5
+    HoldCurrent = 0.5
+    Microsteps = 64
+
+    # Z2, connected to BTB-Y
+    [McuManager.Steppers.z2.Stepper]
+    DirPin = "!P0.20"
+    StepPin = "P0.19"
+    EnablePin = "!P2.8"
+    EndstopPin = "P1.28"
+    FullStepDistance = 20.0 # 20um
+    MinVelocity = 10
+    MaxVelocity = 15_000
+
+    [McuManager.Steppers.z2.Tmc2209Driver]
+    UartPin = "P1.9"
+    Fields.SGTHRS = 95
+    RunCurrent = 1.5
+    HoldCurrent = 0.5
+    Microsteps = 64
+
+    # Recoater, connected to BTB-Z
+    [McuManager.Steppers.r.Stepper]
+    DirPin = "P2.11"
+    StepPin = "P0.22"
+    EnablePin = "!P0.21"
+    EndstopPin = "P1.27"
+    FullStepDistance = 0.2
+    MinVelocity = 0.25
+    MaxVelocity = 200
+
+    [McuManager.Steppers.r.Tmc2209Driver]
+    UartPin = "P1.8"
+    Fields.SGTHRS = 85
+    RunCurrent = 1.0
+    HoldCurrent = 0.001
+    Microsteps = 64
+
+    # powderChamber1 heater
+    [McuManager.Heaters.powderChamber1.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio17" # SSR1
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+        
+        [McuManager.Heaters.powderChamber1.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 0
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.powderChamber1.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.powderChamber1.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # powderChamber2 heater
+    [McuManager.Heaters.powderChamber2.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio18" # SSR2
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.powderChamber2.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 1
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.powderChamber2.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.powderChamber2.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # powderChamber3 heater
+    [McuManager.Heaters.powderChamber3.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio27" # SSR3
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.powderChamber3.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 2
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.powderChamber3.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.powderChamber3.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+    
+    # powderChamber4 heater
+    [McuManager.Heaters.powderChamber4.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio22" # SSR4
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.powderChamber4.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 3
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.powderChamber4.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.powderChamber4.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # printChamber1 heater
+    [McuManager.Heaters.printChamber1.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio23" # SSR5
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.printChamber1.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 4
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.printChamber1.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.printChamber1.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # printChamber2 heater
+    [McuManager.Heaters.printChamber2.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio25" # SSR6
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.printChamber2.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 5
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.printChamber2.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.printChamber2.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # printChamber3 heater
+    [McuManager.Heaters.printChamber3.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio5" # SSR7
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.printChamber3.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 6
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.printChamber3.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.printChamber3.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # printChamber4 heater
+    [McuManager.Heaters.printChamber4.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio6" # SSR8
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 200
+
+        [McuManager.Heaters.printChamber4.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.22"
+        Channel = 7
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.printChamber4.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.printChamber4.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # powderBed heater
+    [McuManager.Heaters.powderBed.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio13" # SSR9
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 140
+
+        [McuManager.Heaters.powderBed.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.20"
+        Channel = 0
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.powderBed.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.powderBed.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # printBed heater
+    [McuManager.Heaters.printBed.Hysteresis]
+    HeaterPin = "host:gpiochip4/gpio19" # SSR10
+    MaxDelta = 0.0
+    SetCycleFrequency = 4.0
+    PowerConsumption = 140
+
+        [McuManager.Heaters.printBed.Sensor.InovaGate1]
+        Bus = "ssp0"
+        CsPin = "P1.20"
+        Channel = 1
+        SpiSpeed = 15_000_000
+
+        [McuManager.Heaters.printBed.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 200
+
+        [McuManager.Heaters.printBed.VerifyHeater]
+        MaxError = 4000
+        CheckGainTime = "0:1:0"
+        HeatingGain = 2
+
+    # testTemp1 sensor
+    [McuManager.TemperatureSensors.testTemp1.InovaGate1]
+    Bus = "ssp0"
+    CsPin = "P1.20"
+    Channel = 2
+    SpiSpeed = 15_000_000
+
+    # surface heater
+    [McuManager.Heaters.surface.InovaSurface]
+    TriangleMode = "Avg"
+    SmallerTriangles = false
+    AverageCount = 1
+    KeepWarmCount = 1
+    SlowingDownCount = 3
+    OverDelta = 1.0
+    UnderDelta = 3.0
+    TopBottomFactor = 1.0
+    LeftRightFactor = 1.0
+    Mode = "PercMax"
+    ModePercValue = 0.85
+    ModePercMaxValue = 5.0
+    MinPwm = 0.20
+    MaxPwm = 1.00
+    FactorMinPwm = 0.20
+    FactorMaxPwm = 1.00
+    FactorPwm = 0.40
+    TargetReachedTolerance = 1.0
+    PwmCycleFrequency = 50
+    PinType = "Dimmer"
+    DimmerSensorPin = "zero1:PC0"
+    LightsPwm = 0.25
+    LightsPins = [ "zero1:PC1", "zero1:PC2", "zero1:PC3", "zero1:PC4" ]
+    PowerConsumptionPerLight = 200
+    PowerManagerPriority = 10 # any value larger that default 0 (default on other heaters)
+
+        [McuManager.Heaters.surface.InovaSurface.Quadrant1]
+        HeaterPins = [ "zero1:PC4", "zero1:PC1" ]
+        MinX = 10
+        MinY = 8
+        MaxX = 16
+        MaxY = 15
+
+        [McuManager.Heaters.surface.InovaSurface.Quadrant2]
+        HeaterPins = [ "zero1:PC1", "zero1:PC2" ] 
+        MinX = 17
+        MinY = 8
+        MaxX = 23
+        MaxY = 15
+
+        [McuManager.Heaters.surface.InovaSurface.Quadrant3]
+        HeaterPins = [ "zero1:PC2", "zero1:PC3" ] 
+        MinX = 17
+        MinY = 16
+        MaxX = 23
+        MaxY = 21
+
+        [McuManager.Heaters.surface.InovaSurface.Quadrant4]
+        HeaterPins = [ "zero1:PC3", "zero1:PC4" ]
+        MinX = 10
+        MinY = 16
+        MaxX = 16
+        MaxY = 21
+
+        [McuManager.Heaters.surface.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    # surface sensors
+    [McuManager.TemperatureSensors.surfaceAvg.InovaSurfaceBox]
+    MinX = 10
+    MinY = 8
+    MaxX = 16
+    MaxY = 15
+    Mode = "Avg"
+
+        [McuManager.TemperatureSensors.surfaceAvg.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = true
+
+    [McuManager.TemperatureSensors.quadrant1.InovaSurfaceBox]
+    MinX = 10
+    MinY = 8
+    MaxX = 16
+    MaxY = 15
+    Mode = "Max"
+
+        [McuManager.TemperatureSensors.quadrant1.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    [McuManager.TemperatureSensors.quadrant2.InovaSurfaceBox]
+    MinX = 17
+    MinY = 8
+    MaxX = 23
+    MaxY = 15
+    Mode = "Max"
+
+        [McuManager.TemperatureSensors.quadrant2.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    [McuManager.TemperatureSensors.quadrant3.InovaSurfaceBox]
+    MinX = 17
+    MinY = 16
+    MaxX = 23
+    MaxY = 21
+    Mode = "Max"
+
+        [McuManager.TemperatureSensors.quadrant3.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    [McuManager.TemperatureSensors.quadrant4.InovaSurfaceBox]
+    MinX = 10
+    MinY = 16
+    MaxX = 16
+    MaxY = 21
+    Mode = "Max"
+
+        [McuManager.TemperatureSensors.quadrant4.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    [McuManager.TemperatureSensors.surfaceMax.InovaSurfaceBox]
+    MinX = 10
+    MinY = 8
+    MaxX = 23
+    MaxY = 21
+    Mode = "Max"
+
+        [McuManager.TemperatureSensors.surfaceMax.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    [McuManager.TemperatureSensors.surfaceMin.InovaSurfaceBox]
+    # ~one step smaller than overall rectangle to not to include potentially "colder" corners
+    MinX = 11
+    MinY = 10
+    MaxX = 22
+    MaxY = 20
+    Mode = "Min"
+
+        [McuManager.TemperatureSensors.surfaceMin.VerifySensor]
+        MinTemperature = 0
+        MaxTemperature = 250
+        ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
+
+    [McuManager.Buttons.safe]
+        
+        [McuManager.Buttons.safe.Pins.1-1]
+        Pin = "host:gpiochip4/gpio24"
+
+    [McuManager.OutputPins.fanGalvo]
+    Type = "SoftPwm"
+    Pin = "P2.3" # BTB_FAN0
+    CycleTime = 0.1
+
+    [McuManager.OutputPins.buzzer]
+    Type = "Digital"
+    Pin = "P2.7" # BTB_HE0
+    AllowInShutdown = true # should be true, otherwise we wont be able to beep in shutdown (including just when shutdown happens)
+    
+    [McuManager.OutputPins.io-en]
+    Type = "Digital"
+    Pin = "P1.31"
+
+    # watchdog pins
+    [McuManager.OutputPins.wd-en]
+    Type = "Digital"
+    Pin = "!P1.23"
+    StartValue = 0
+    ShutdownValue = 0
+    AllowInShutdown = true
+    
+    [McuManager.OutputPins.wd-in]
+    Type = "Digital"
+    Pin = "P1.21"
+    AllowInShutdown = true

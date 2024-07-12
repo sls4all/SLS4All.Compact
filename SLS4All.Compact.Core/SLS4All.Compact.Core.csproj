@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  	<Import Project="..\SharedProperties.props" />
+    <PropertyGroup>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+		<PackageId>SLS4All.Compact.Core</PackageId>
+        <RootNamespace>SLS4All.Compact</RootNamespace>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Remove="Movement\IRollerGrill.cs" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Remove="Camera\FakeCameraImage.jpg" />
+        <None Remove="Camera\FakeCameraImage2.jpg" />
+        <None Remove="IO\FatFirmwareImageTemplate.img.gz" />
+    </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Camera\FakeCameraImage.jpg" />
+        <EmbeddedResource Include="Camera\FakeCameraImage2.jpg" />
+        <EmbeddedResource Include="IO\FatFirmwareImageTemplate.img.gz" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Lexical.FileProvider" Version="0.14.4" />
+        <PackageReference Include="Lexical.FileSystem" Version="0.22.0.1" />
+        <PackageReference Include="MediatR" Version="12.3.0" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\SLS4All.Compact\SLS4All.Compact.csproj" />
+    </ItemGroup>
+</Project>

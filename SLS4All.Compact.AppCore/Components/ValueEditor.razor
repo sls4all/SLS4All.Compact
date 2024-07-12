@@ -1,0 +1,1190 @@
+﻿@using System.Diagnostics
+@using System.Globalization
+@using System.Text.Json.Serialization
+@using SLS4All.Compact.Helpers;
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Printer
+@typeparam T
+@inherits AppComponent
+@implements IValueEditor
+@inject IJSRuntime JSRuntime
+@inject IClipboardProvider Clipboard
+@inject IUnitConverter UnitConverter
+
+@if (_renderModal)
+{
+    bool hasPagedChoices = false;
+    var modalClass = "fade value-editor-modal ";
+    if (_choices != null && IsEditable)
+    {
+        if (_choices.Length > _maxChoicesToScroll)
+        {
+            hasPagedChoices = true;
+            modalClass += "value-editor-modal-choices";
+        }
+        else
+            modalClass += "value-editor-modal-choices";
+    }
+    else if (Traits.IsNumber)
+        modalClass += "value-editor-modal-number";
+    else if (Traits.IsBoolean)
+        modalClass += "value-editor-modal-boolean";
+    else if (Traits.IsTimeSpan)
+        modalClass += "value-editor-modal-timespan";
+    else
+        modalClass += "value-editor-modal-full";
+
+    <FileBrowserModal 
+        @ref="_fileBrowser" 
+        MaxSelectedCount="1" 
+        Masks="@Traits.FilenameMasks" 
+        Directory="@Traits.Directory" 
+        AllowSelectDirectories="false" 
+        AllowSelectFilesOutsideMask="false" 
+        OpenClicked="selection => OnFileSelected(selection)"
+        Closed="OnEditorClosed" />
+
+    <Modal @ref="_modal" class="@modalClass" Opened="OnEditorOpened" Closed="OnEditorClosed">
+        <div class="modal-content">
+            <div class="modal-body">
+                <CascadingValue Value="State">
+                    <div class="container value-container">
+                        <div class="row value-title">
+                            @Title
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Subtitle))
+                        {
+                            <div class="row value-subtitle">
+                                @Subtitle
+                                @if (!string.IsNullOrWhiteSpace(Unit) && !Subtitle.EndsWith($"[{Unit}]"))
+                                {
+                                    <text> [@Unit]</text>
+                                }
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(Unit))
+                        {
+                            <div class="row value-subtitle">
+                                [@Unit]
+                            </div>
+                        }
+                        <div class="row">
+                            <form @onsubmit="OnEnter" class="value-form">
+                                @if (_choices != null && _choicesChunks != null && IsEditable)
+                                {
+                                    if (hasPagedChoices)
+                                    {
+                                        if (_chunkIndex >= _choicesChunks.Length)
+                                            _chunkIndex = 0;
+                                        <div class="container-fluid">
+                                            <div class="row">
+                                                <div class="col">
+                                                    <ul class="nav nav-tabs">
+                                                        @for (int c_ = 0; c_ < _choicesChunks.Length; c_++)
+                                                        {
+                                                            var c = c_;
+                                                            <li class="nav-item">
+                                                                <a class="nav-link @(_chunkIndex == c ? "active" : "")" @onclick="() => _chunkIndex = c">@(c + 1)</a>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                @foreach (var choice_ in _choicesChunks[_chunkIndex])
+                                                {
+                                                    var choice = choice_;
+                                                    var choiceText = Traits.ValueToEditableString(choice.Value);
+                                                    <a @ref="choice.Element" class="list-group-item list-group-item-action value-choices-item @(Equals(Value, choice.Value) ? "active" : "")" @onclick="() => OnChoice((T?)choice.Value)">
+                                                        @if (choiceText != null)
+                                                        {
+                                                            @choiceText
+                                                        }
+                                                        else
+                                                        {
+                                                            <i>@PlaceholderInternal</i>
+                                                        }
+                                                    </a>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <ul @ref="_input" class="list-group value-choices">
+                                            @foreach (var choice_ in _choices)
+                                            {
+                                                var choice = choice_;
+                                                var choiceText = Traits.ValueToEditableString(choice.Value);
+                                                <a @ref="choice.Element" class="list-group-item list-group-item-action value-choices-item @(Equals(Value, choice.Value) ? "active" : "")" @onclick="() => OnChoice((T?)choice.Value)">
+                                                    @if (choiceText != null)
+                                                    {
+                                                        @choiceText
+                                                    }
+                                                    else
+                                                    {
+                                                        <i>@PlaceholderInternal</i>
+                                                    }
+                                                </a>
+                                            }
+                                        </ul>
+                                    }
+                                }
+                                else if (Traits.IsBoolean && IsEditable)
+                                {
+                                    <ul @ref="_input" class="list-group value-choices">
+                                        @if (Traits.IsNullable)
+                                        {
+                                            <a class="list-group-item list-group-item-action value-choices-item @(Equals(Value, null) ? "active" : "")" @onclick="() => OnChoice((T?)(object?)null)">
+                                                @if (!string.IsNullOrEmpty(DefaultValueText))
+                                                {
+                                                    <i>@DefaultValueText (default value)</i>
+                                                }
+                                                else
+                                                {
+                                                    <i>@PlaceholderInternal</i>
+                                                }
+                                            </a>
+                                        }
+                                        <a class="list-group-item list-group-item-action value-choices-item @(Equals(Value, true) ? "active" : "")" @onclick="() => OnChoice((T?)(object)true)">
+                                            <i class="bi bi-check2-square"></i> @InputValueTraits.TrueText
+                                        </a>
+                                        <a class="list-group-item list-group-item-action value-choices-item @(Equals(Value, false) ? "active" : "")" @onclick="() => OnChoice((T?)(object)false)">
+                                            <i class="bi bi-x-square"></i> @InputValueTraits.FalseText
+                                        </a>
+                                    </ul>
+                                }
+                                else
+                                {
+                                    if (!Traits.IsBoolean && IsEditable)
+                                    {
+                                        <input @ref="_input" type="text" class="form-control box-input" @bind="ValueText" @bind:event="oninput" placeholder="@(!string.IsNullOrEmpty(DefaultValueText) ? $"{DefaultValueText} (default value)" : PlaceholderInternal)" />
+                                    }
+                                    else if (string.IsNullOrEmpty(ValueText))
+                                    {
+                                        <input @ref="_input" readonly type="text" class="form-control box-input" @bind="ValueText" @bind:event="oninput" placeholder="@(!string.IsNullOrEmpty(DefaultValueText) ? $"{DefaultValueText} (default value)" : PlaceholderInternal)" />
+                                    }
+                                    else
+                                    {
+                                        <span @ref="_input" class="box-input box-readonly-input">@(ValueText.Trim())</span>
+                                    }
+                                    if (!Traits.IsBoolean && Increment != null && IsEditable)
+                                    {
+                                        <ValueEditorKey IsSpecial="true" class="key-offset" Clicked="(_) => OffsetValue(+1)">+</ValueEditorKey>
+                                        <ValueEditorKey IsSpecial="true" class="key-offset" Clicked="(_) => OffsetValue(-1)">-</ValueEditorKey>
+                                    }
+                                    <ValueEditorKey IsSpecial="true" class="key-offset" Clicked="(_) => Copy()">
+                                        <i class="bi bi-copy"></i>
+                                    </ValueEditorKey>
+                                    if (IsEditable)
+                                    {
+                                        <ValueEditorKey IsSpecial="true" class="key-offset" Clicked="(_) => Paste()">
+                                            <i class="bi bi-clipboard2"></i>
+                                        </ValueEditorKey>
+                                    }
+                                }
+                            </form>
+                        </div>
+                        @if (Traits.IsNumber && (!string.IsNullOrWhiteSpace(ValueText) || !string.IsNullOrWhiteSpace(DefaultValueText)) && !string.IsNullOrWhiteSpace(Unit))
+                        {
+                            var valueText = !string.IsNullOrWhiteSpace(ValueText) ? ValueText : DefaultValueText!;
+                            var value = Convert.ToDecimal(valueText);
+                            var alternateUnits = UnitConverter.TryGetAlternateUnits(value, Unit);
+                            if (alternateUnits.Length > 0)
+                            {
+                                <div class="row pb-1">
+                                    <span class="badge badge-pill badge-info">
+                                        <text>@valueText <i>@Unit</i></text>
+                                        @foreach (var item in alternateUnits)
+                                        {
+                                            <text> = </text>
+                                            <text>@item.Value <i>@item.Unit</i></text>
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        }
+                        @if (IsEditable && _choices == null && !Traits.IsBoolean && !Traits.HasStringToValue)
+                        {
+                            <div class="d-flex">
+                                <ValueEditorKey class="key-space invisible" Value=" "></ValueEditorKey>
+                                <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnClearEnter">
+                                    Clear
+                                </ValueEditorKey>
+                                <ValueEditorKey class="key-special key-action" Value="Cancel" IsRepeat="false" IsSpecial="true" Clicked="OnCancel">
+                                    Cancel
+                                </ValueEditorKey>
+                                <ValueEditorKey class="key-space invisible" Value=" "></ValueEditorKey>
+                            </div>
+                        }
+                        else if (IsEditable && _choices == null && !Traits.IsBoolean && Traits.HasStringToValue)
+                        {
+                            if (Traits.IsNumber)
+                            {
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="7" />
+                                    <ValueEditorKey class="key-small" Value="8" />
+                                    <ValueEditorKey class="key-small" Value="9" />
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnDelete">
+                                        <i class="bi bi-backspace-reverse"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnBackspace">
+                                        <i class="bi bi-backspace"></i>
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="4" />
+                                    <ValueEditorKey class="key-small" Value="5" />
+                                    <ValueEditorKey class="key-small" Value="6" />
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnLeft">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnRight">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="1" />
+                                    <ValueEditorKey class="key-small" Value="2" />
+                                    <ValueEditorKey class="key-small" Value="3" />
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnClear">
+                                        Clear
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special key-action" Value="Cancel" IsRepeat="false" IsSpecial="true" Clicked="OnCancel">
+                                        Cancel
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="0" />
+                                    <ValueEditorKey class="key-small" Value="@(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator)" />
+                                    <ValueEditorKey class="key-small" Value="-" />
+                                    <ValueEditorKey class="key-special2 key-action" IsRepeat="false" IsSpecial="true" Clicked="OnEnter">
+                                        Enter
+                                    </ValueEditorKey>
+                                </div>
+                            }
+                            else if (Traits.IsTimeSpan)
+                            {
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="7" />
+                                    <ValueEditorKey class="key-small" Value="8" />
+                                    <ValueEditorKey class="key-small" Value="9" />
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnDelete">
+                                        <i class="bi bi-backspace-reverse"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnBackspace">
+                                        <i class="bi bi-backspace"></i>
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="4" />
+                                    <ValueEditorKey class="key-small" Value="5" />
+                                    <ValueEditorKey class="key-small" Value="6" />
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnLeft">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnRight">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="1" />
+                                    <ValueEditorKey class="key-small" Value="2" />
+                                    <ValueEditorKey class="key-small" Value="3" />
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnClear">
+                                        Clear
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special key-action" Value="Cancel" IsRepeat="false" IsSpecial="true" Clicked="OnCancel">
+                                        Cancel
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="0" />
+                                    <ValueEditorKey class="key-small" Value="@(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator)" />
+                                    <ValueEditorKey class="key-small" Value="-" />
+                                    <ValueEditorKey class="key-small" Value=":" />
+                                    <ValueEditorKey class="key-special2 key-action" IsRepeat="false" IsSpecial="true" Clicked="OnEnter">
+                                        Enter
+                                    </ValueEditorKey>
+                                </div>
+                            }
+                            else if (Traits.IsUpperAlphanumeric)
+                            {
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="1" />
+                                    <ValueEditorKey class="key-small" Value="2" />
+                                    <ValueEditorKey class="key-small" Value="3" />
+                                    <ValueEditorKey class="key-small" Value="4" />
+                                    <ValueEditorKey class="key-small" Value="5" />
+                                    <ValueEditorKey class="key-small" Value="6" />
+                                    <ValueEditorKey class="key-small" Value="7" />
+                                    <ValueEditorKey class="key-small" Value="8" />
+                                    <ValueEditorKey class="key-small" Value="9" />
+                                    <ValueEditorKey class="key-small" Value="0" />
+                                    <ValueEditorKey class="key-small" Value="-" />
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnBackspace">
+                                        <i class="bi bi-backspace"></i>
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="Q" />
+                                    <ValueEditorKey class="key-small" Value="W" />
+                                    <ValueEditorKey class="key-small" Value="E" />
+                                    <ValueEditorKey class="key-small" Value="R" />
+                                    <ValueEditorKey class="key-small" Value="T" />
+                                    <ValueEditorKey class="key-small" Value="Y" />
+                                    <ValueEditorKey class="key-small" Value="U" />
+                                    <ValueEditorKey class="key-small" Value="I" />
+                                    <ValueEditorKey class="key-small" Value="O" />
+                                    <ValueEditorKey class="key-small" Value="P" />
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="A" />
+                                    <ValueEditorKey class="key-small" Value="S" />
+                                    <ValueEditorKey class="key-small" Value="D" />
+                                    <ValueEditorKey class="key-small" Value="F" />
+                                    <ValueEditorKey class="key-small" Value="G" />
+                                    <ValueEditorKey class="key-small" Value="H" />
+                                    <ValueEditorKey class="key-small" Value="J" />
+                                    <ValueEditorKey class="key-small" Value="K" />
+                                    <ValueEditorKey class="key-small" Value="L" />
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnEnter">
+                                        Enter
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="Z" />
+                                    <ValueEditorKey class="key-small" Value="X" />
+                                    <ValueEditorKey class="key-small" Value="C" />
+                                    <ValueEditorKey class="key-small" Value="V" />
+                                    <ValueEditorKey class="key-small" Value="B" />
+                                    <ValueEditorKey class="key-small" Value="N" />
+                                    <ValueEditorKey class="key-small" Value="M" />
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnDelete">
+                                        <i class="bi bi-backspace-reverse"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-space" Value=" "></ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnLeft">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnRight">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnClear">
+                                        Clear
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnCancel">
+                                        Cancel
+                                    </ValueEditorKey>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="`" Upper="~" />
+                                    <ValueEditorKey class="key-small" Value="1" Upper="!" />
+                                    <ValueEditorKey class="key-small" Value="2" Upper="@("@")" />
+                                    <ValueEditorKey class="key-small" Value="3" Upper="!" />
+                                    <ValueEditorKey class="key-small" Value="4" Upper="$" />
+                                    <ValueEditorKey class="key-small" Value="5" Upper="%" />
+                                    <ValueEditorKey class="key-small" Value="6" Upper="^" />
+                                    <ValueEditorKey class="key-small" Value="7" Upper="&" />
+                                    <ValueEditorKey class="key-small" Value="8" Upper="*" />
+                                    <ValueEditorKey class="key-small" Value="9" Upper="(" />
+                                    <ValueEditorKey class="key-small" Value="0" Upper=")" />
+                                    <ValueEditorKey class="key-small" Value="-" Upper="_" />
+                                    <ValueEditorKey class="key-small" Value="=" Upper="+" />
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnBackspace">
+                                        <i class="bi bi-backspace"></i>
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="q" />
+                                    <ValueEditorKey class="key-small" Value="w" />
+                                    <ValueEditorKey class="key-small" Value="e" />
+                                    <ValueEditorKey class="key-small" Value="r" />
+                                    <ValueEditorKey class="key-small" Value="t" />
+                                    <ValueEditorKey class="key-small" Value="y" />
+                                    <ValueEditorKey class="key-small" Value="u" />
+                                    <ValueEditorKey class="key-small" Value="i" />
+                                    <ValueEditorKey class="key-small" Value="o" />
+                                    <ValueEditorKey class="key-small" Value="p" />
+                                    <ValueEditorKey class="key-small" Value="[" Upper="{" />
+                                    <ValueEditorKey class="key-small" Value="]" Upper="}" />
+                                    <ValueEditorKey class="key-small" Value="\" Upper="|" />
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-small" Value="a" />
+                                    <ValueEditorKey class="key-small" Value="s" />
+                                    <ValueEditorKey class="key-small" Value="d" />
+                                    <ValueEditorKey class="key-small" Value="f" />
+                                    <ValueEditorKey class="key-small" Value="g" />
+                                    <ValueEditorKey class="key-small" Value="h" />
+                                    <ValueEditorKey class="key-small" Value="j" />
+                                    <ValueEditorKey class="key-small" Value="k" />
+                                    <ValueEditorKey class="key-small" Value="l" />
+                                    <ValueEditorKey class="key-small" Value=";" Upper=":" />
+                                    <ValueEditorKey class="key-small" Value="'" Upper="@("\"")" />
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnEnter">
+                                        Enter
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-special" IsRepeat="false" IsSpecial="true" Up="OnShiftUp" Down="OnShiftDown">
+                                        @if (_hasCaps)
+                                        {
+                                            <i class="bi bi-capslock-fill"></i>
+                                        }
+                                        else if (_hasShift)
+                                        {
+                                            <i class="bi bi-shift-fill"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-shift"></i>
+                                        }
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-small" Value="z" />
+                                    <ValueEditorKey class="key-small" Value="x" />
+                                    <ValueEditorKey class="key-small" Value="c" />
+                                    <ValueEditorKey class="key-small" Value="v" />
+                                    <ValueEditorKey class="key-small" Value="b" />
+                                    <ValueEditorKey class="key-small" Value="n" />
+                                    <ValueEditorKey class="key-small" Value="m" />
+                                    <ValueEditorKey class="key-small" Value="," Upper="<" />
+                                    <ValueEditorKey class="key-small" Value="." Upper=">" />
+                                    <ValueEditorKey class="key-small" Value="/" Upper="?" />
+                                    <ValueEditorKey class="key-special" IsRepeat="false" IsSpecial="true" Up="OnShiftUp" Down="OnShiftDown">
+                                        @if (_hasCaps)
+                                        {
+                                            <i class="bi bi-capslock-fill"></i>
+                                        }
+                                        else if (_hasShift)
+                                        {
+                                            <i class="bi bi-shift-fill"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-shift"></i>
+                                        }
+                                    </ValueEditorKey>
+                                </div>
+                                <div class="d-flex">
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnDelete">
+                                        <i class="bi bi-backspace-reverse"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-space" Value=" "></ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnLeft">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special" IsSpecial="true" Clicked="OnRight">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnClear">
+                                        Clear
+                                    </ValueEditorKey>
+                                    <ValueEditorKey class="key-special key-action" IsRepeat="false" IsSpecial="true" Clicked="OnCancel">
+                                        Cancel
+                                    </ValueEditorKey>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="d-flex">
+                                <ValueEditorKey class="key-space invisible" Value=" "></ValueEditorKey>
+                                @foreach (var action_ in Traits.Actions ?? [])
+                                {
+                                    var action = action_;
+                                    <ValueEditorKey class="key-special" IsRepeat="false" IsSpecial="true" Clicked="() => OnAction(action)">
+                                        @action.Name
+                                    </ValueEditorKey>
+                                }
+                                <ValueEditorKey class="key-special" IsRepeat="false" IsSpecial="true" Clicked="OnCancel">
+                                    Close
+                                </ValueEditorKey>
+                                <ValueEditorKey class="key-space invisible" Value=" "></ValueEditorKey>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_error))
+                        {
+                            <span class="row badge badge-danger value-error text-wrap">
+                                <i class="bi bi-exclamation-octagon" />&nbsp;@_error
+                            </span>
+                        }
+                    </div>
+                </CascadingValue>
+            </div>
+        </div>
+    </Modal>
+}
+
+<button type="button" @ref="@ElementRef" id="@ElementId" class="editor-content @(ValidationError != null ? "editor-content-error" : "") @ClassNames" style="@StyleNames" @attributes="@AttributesWithCssScope" oncontextmenu="return false;" @onclick="Show">
+    @if (ChildContent != null)
+    {
+        @ChildContent
+    }
+    else
+    {
+        var value = _traits.ValueToString(_value ?? _defaultValue);
+        if (!string.IsNullOrEmpty(value))
+        {
+            if (IsPassword)
+            {
+                value = ToPassword(value);
+            }
+            @value
+            if (Unit != null)
+            {
+                <small class="editor-unit" @attributes="@JustAttributesWithCssScope">@Unit</small>
+            }
+        }
+        else
+        {
+            <i @attributes="@JustAttributesWithCssScope">@PlaceholderInternal</i>
+        }
+    }
+</button>
+
+@code {
+    private sealed class SelectionRange
+    {
+        [JsonPropertyName("start")]
+        public int Start { get; set; }
+        [JsonPropertyName("end")]
+        public int End { get; set; }
+    }
+
+    private sealed class ChoiceItem
+    {
+        public ElementReference Element;
+        public object? Value;
+    }
+
+    public const string CssScope = "b-value-editor";
+    private const int _maxChoicesToScroll = 15;
+    private const int _pageCount = 10;
+    private static IInputValueTraits s_defaultTraits = InputValueTraits.Create(typeof(T));
+    private IInputValueTraits _traits = s_defaultTraits;
+    private bool _renderModal;
+    private bool _shown;
+    private bool _scrolled;
+    private ElementReference _input;
+    private FileBrowserModal? _fileBrowser;
+    private Modal? _modal;
+    private T? _value = default(T);
+    private T? _defaultValue = default(T);
+    private bool _hasShift;
+    private bool _hasCaps;
+    private bool _hasShiftDown;
+    private bool _hasShiftCombination;
+    private string? _valueText;
+    private int? _overrideCaretPos;
+    private bool _selectAll;
+    private string? _error;
+    private int _chunkIndex;
+    private ChoiceItem[]? _choices;
+    private ChoiceItem[][]? _choicesChunks;
+
+    [Parameter]
+    public IInputValueTraits Traits
+    {
+        get => _traits;
+        set => _traits = value ?? s_defaultTraits;
+    }
+
+    [Parameter]
+    public T? Increment { get; set; }
+
+    private string ShiftText
+    {
+        get
+        {
+            if (_hasCaps)
+                return "CAPS";
+            if (_hasShift)
+                return "SHIFT";
+            return "Shift";
+        }
+    }
+
+    public bool HasShift => _hasShift;
+    public bool HasCaps => _hasCaps;
+    public bool HasUpper => _hasCaps || _hasShift;
+
+    public ValueEditorState State => new ValueEditorState(this, HasUpper);
+    public Action<ValueEditorState>? StateChanged { get; set; }
+
+    [Parameter]
+    public object? Obj { get; set; }
+
+    [Parameter]
+    public string? Path { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string Subtitle { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? ValidationError { get; set; }
+
+    protected string ValueText
+    {
+        get => _valueText ?? "";
+        set
+        {
+            _valueText = value;
+            Apply();
+        }
+    }
+
+    [Parameter]
+    public bool IsPassword { get; set; }
+
+    private string? DefaultValueText =>
+        Traits.ValueToString(_defaultValue);
+
+    [Parameter]
+    public T? Value
+    {
+        get => _value;
+        set
+        {
+            if (EqualityComparer<T>.Default.Equals(_value, value))
+                return;
+            _value = value;
+            ValueChanged?.Invoke(value);
+            ValueObjectChanged?.Invoke(value);
+        }
+    }
+
+    [Parameter]
+    public T? DefaultValue
+    {
+        get => _defaultValue;
+        set => _defaultValue = value;
+    }
+
+    [Parameter]
+    public string? Unit { get; set; }
+
+    [Parameter]
+    public Action<T?>? ValueChanged { get; set; }
+
+    [Parameter]
+    public Action<object?>? ValueObjectChanged { get; set; }
+
+    [Parameter]
+    public bool IsEditable { get; set; } = true;
+
+    [CascadingParameter]
+    public Func<object, string, Task<string?>>? CascadingValidator { get; set; }
+
+    [Parameter]
+    public Func<Task<string?>>? Validator { get; set; }
+
+    [Parameter]
+    public EventCallback ValueEntered { get; set; }
+
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    [Parameter]
+    public EventCallback OpenEditor { get; set; }
+
+    [Parameter]
+    public EventCallback CloseEditor { get; set; }
+
+    private string PlaceholderInternal
+        => Placeholder ?? "not set";
+
+    public ValueEditor()
+    {
+        if (Traits.IsNumber)
+            Increment = (T)Traits.StringToValue("1")!;
+        else if (Traits.IsTimeSpan)
+            Increment = (T)(object)TimeSpan.FromSeconds(1);
+    }
+
+    public Task Show()
+    {
+        if (_shown)
+            return Task.CompletedTask;
+        _renderModal = true;
+        _shown = false;
+        _choices = Traits.Choices?.Select(x => new ChoiceItem { Value = x }).ToArray();
+        _choicesChunks = null;
+        if (_choices != null)
+        {
+            var choicesPerPage = (_choices.Length + _pageCount - 1) / _pageCount;
+            _choicesChunks = _choices.Chunk(choicesPerPage).ToArray();
+            for (int i = 0; i < _choices.Length; i++)
+            {
+                if (Equals(_choices[i].Value, Value))
+                {
+                    _chunkIndex = i / choicesPerPage;
+                    break;
+                }
+            }
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task DoOpenEditor()
+    {
+        if (OpenEditor.HasDelegate)
+            await OpenEditor.InvokeAsync();
+        else if (Traits.FilenameMasks?.Length > 0)
+            await _fileBrowser!.Show(_traits.ValueToEditableString(Value ?? DefaultValue));
+        else
+            await _modal!.Show(focus: false);
+    }
+
+    private async Task DoCloseEditor()
+    {
+        if (CloseEditor.HasDelegate)
+        {
+            await CloseEditor.InvokeAsync();
+            await OnEditorClosed();
+        }
+        else if (Traits.FilenameMasks?.Length > 0)
+            await _fileBrowser!.Close();
+        else
+            await _modal!.Close();
+    }
+
+    private async Task OnEditorOpened()
+    {
+        var overrideCaretPos = _overrideCaretPos;
+        if (overrideCaretPos != null)
+        {
+            _overrideCaretPos = null;
+            await SetCaret(overrideCaretPos.Value);
+        }
+        if (_selectAll && Traits.Choices == null)
+        {
+            _selectAll = false;
+            await SelectAll();
+            await _input.TryFocusAsync();
+        }
+        if (_choices != null && !_scrolled)
+        {
+            var activeChoiceElement = _choices.SingleOrDefault(x => Equals(x.Value, Value) && x.Element.Id != null);
+            if (activeChoiceElement != null)
+            {
+                _scrolled = true;
+                await Task.Delay(100); // make HTML appear
+                await activeChoiceElement.Element.TryScrollIntoView(JSRuntime);
+            }
+        }
+        else
+            await _input.TryFocusAsync();
+    }
+
+    public async Task OnEditorClosed()
+    {
+        _scrolled = false;
+        _shown = false;
+        _renderModal = false;
+        await ValidateInner(); // revalidate, to clean any in-editing errors after cancel
+        StateHasChanged();
+    }
+
+    private Task OffsetValue(int direction)
+    {
+        try
+        {
+            dynamic? value = Traits.StringToValue(ValueText);
+            if (value == null)
+                value = (dynamic)Increment! * 0;
+            else
+                value += (dynamic)Increment! * direction;
+            _valueText = Traits.ValueToEditableString(value);
+            _error = null;
+        }
+        catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is OverflowException)
+        {
+            _error = ex.Message;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task<string?> ValidateInner()
+    {
+        if (Validator != null)
+        {
+            var error = await Validator();
+            if (error != null)
+                return error;
+        }
+        if (CascadingValidator != null && Obj != null && Path != null)
+        {
+            var error = await CascadingValidator(Obj, Path);
+            if (error != null)
+                return error;
+        }
+        return null;
+    }
+
+    private async Task OnEnter()
+    {
+        var original = Value;
+        try
+        {
+            Value = (T?)Traits.StringToValue(ValueText);
+            var error = await ValidateInner();
+            if (error != null)
+                throw new ApplicationException(error);
+        }
+        catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is OverflowException || ex is ApplicationException)
+        {
+            Value = original;
+            _error = ex.Message;
+
+            // revalidate to clear any issues in parent component
+            await ValidateInner();
+
+            StateHasChanged();
+            return;
+        }
+        await DoCloseEditor();
+        if (ValueEntered.HasDelegate)
+            await ValueEntered.InvokeAsync();
+    }
+
+    private async Task OnAction(InputValueTraitsAction action)
+    {
+        await DoCloseEditor();
+        await action.Callback(Value ?? DefaultValue, this);
+    }
+
+    private async Task OnCancel()
+    {
+        await DoCloseEditor();
+    }
+
+    private void Apply()
+    {
+        _error = null;
+    }
+
+    private async Task<SelectionRange> GetCaret()
+    {
+        var range = await JSRuntime.InvokeAsync<SelectionRange>("AppHelpersInvoke", "getCaret", _input);
+        var valueText = ValueText;
+        if (range.Start > valueText.Length)
+            range.Start = valueText.Length;
+        if (range.End > valueText.Length)
+            range.End = valueText.Length;
+        return range;
+    }
+
+    private async Task<SelectionRange> SetCaret(int value)
+    {
+        var range = await JSRuntime.InvokeAsync<SelectionRange>("AppHelpersInvoke", "setCaret", _input, value);
+        var valueText = ValueText;
+        if (range.Start > valueText.Length)
+            range.Start = valueText.Length;
+        if (range.End > valueText.Length)
+            range.End = valueText.Length;
+        return range;
+    }
+
+    private async Task SelectAll()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "selectAll", _input);
+        }
+        catch (JSException)
+        {
+            // swallow
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (_renderModal)
+        {
+            if (!_shown)
+            {
+                _shown = true;
+                _error = ValidationError; // use validation error message as initial, removed after first change
+                var value = _value;
+                var valueOverride = Traits.InitialValueOverride;
+                if (valueOverride != null)
+                    value = (T?)valueOverride;
+                _valueText = Traits.ValueToEditableString(value);
+                if (!Traits.IsBoolean)
+                    _selectAll = true;
+                StateHasChanged();
+                await DoOpenEditor();
+            }
+            await OnEditorOpened();
+        }
+    }
+
+    private bool DeleteSelection(SelectionRange range)
+    {
+        var valueText = ValueText;
+        if (range.End > range.Start)
+        {
+            _valueText = valueText.Remove(range.Start, range.End - range.Start);
+            return true;
+        }
+        else
+            return false;
+    }
+
+    private async Task OnBackspace()
+    {
+        var pos = await GetCaret();
+        if (DeleteSelection(pos))
+            _overrideCaretPos = pos.Start;
+        else if (pos.Start > 0)
+        {
+            _valueText = ValueText.Remove(pos.Start - 1, 1);
+            _overrideCaretPos = pos.Start - 1;
+        }
+        Apply();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+    }
+
+    private async Task OnTrue()
+    {
+        _valueText = InputValueTraits.TrueText;
+        Apply();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+        await OnEnter();
+    }
+
+    private async Task OnChoice(T? value)
+    {
+        var original = Value;
+        try
+        {
+            Value = value;
+            var error = await ValidateInner();
+            if (error != null)
+                throw new ApplicationException(error);
+        }
+        catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is OverflowException || ex is ApplicationException)
+        {
+            Value = original;
+            _error = ex.Message;
+            StateHasChanged();
+            return;
+        }
+        await DoCloseEditor();
+        if (ValueEntered.HasDelegate)
+            await ValueEntered.InvokeAsync();
+    }
+
+    private async Task OnFalse()
+    {
+        _valueText = InputValueTraits.FalseText;
+        Apply();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+        await OnEnter();
+    }
+
+    private async Task OnDelete()
+    {
+        var pos = await GetCaret();
+        var valueText = ValueText;
+        if (DeleteSelection(pos))
+            _overrideCaretPos = pos.Start;
+        else if (_valueText?.Length > pos.Start)
+        {
+            _valueText = valueText.Remove(pos.Start, 1);
+            _overrideCaretPos = pos.Start;
+        }
+        Apply();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+    }
+
+    private async Task OnClear()
+    {
+        _valueText = "";
+        Apply();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+    }
+
+    private async Task OnClearEnter()
+    {
+        await OnClear();
+        await OnEnter();
+    }
+
+    private async Task OnLeft()
+    {
+        var pos = (await GetCaret()).Start;
+        var valueText = ValueText;
+        if (pos > 0)
+            pos--;
+        else if (pos > valueText.Length)
+            pos = valueText.Length;
+
+        await SetCaret(pos);
+        await _input.TryFocusAsync();
+    }
+
+    private async Task OnRight()
+    {
+        var pos = (await GetCaret()).End;
+        var valueText = ValueText;
+        if (pos >= valueText.Length)
+            pos = valueText.Length;
+        else
+            pos++;
+        await SetCaret(pos);
+        await _input.TryFocusAsync();
+    }
+
+    public async Task Insert(string value)
+    {
+        if (_hasShift)
+        {
+            if (_hasShiftDown)
+                _hasShiftCombination = true;
+            else
+                _hasShift = false;
+        }
+        var pos = await GetCaret();
+        DeleteSelection(pos);
+        _valueText = ValueText.Insert(pos.Start, value);
+        _overrideCaretPos = pos.Start + value.Length;
+        Apply();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+    }
+
+    private async Task OnShiftDown()
+    {
+        if (_hasCaps)
+            _hasCaps = false;
+        else if (!_hasShift)
+            _hasShift = true;
+        else if (!_hasCaps)
+        {
+            _hasShift = false;
+            _hasCaps = true;
+        }
+        _hasShiftDown = true;
+        _hasShiftCombination = false;
+        OnStateChanged();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+    }
+
+    private async Task OnShiftUp()
+    {
+        if (_hasShiftCombination && _hasShift && _hasShiftDown)
+            _hasShift = false;
+        _hasShiftDown = false;
+        OnStateChanged();
+        StateHasChanged();
+        await _input.TryFocusAsync();
+    }
+
+    private void OnStateChanged() => StateChanged?.Invoke(State);
+
+    private static string ToPassword(string str)
+        => new string('•', str.Length);
+
+    private async Task Copy()
+    {
+        object? value = _value;
+        if (Traits.HasStringToValue)
+        {
+            try
+            {
+                value = Traits.StringToValue(ValueText);
+            }
+            catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is OverflowException)
+            {
+                _error = ex.Message;
+                return;
+            }
+        }
+        await Clipboard.Copy(value, ValueText);
+    }
+
+    private async Task Paste()
+    {
+        var original = Value;
+        try
+        {
+            var res = await Clipboard.Paste(typeof(T?));
+            if (res.Succeeded)
+            {
+                Value = (T?)res.Value;
+                var error = await ValidateInner();
+                if (error != null)
+                    throw new ApplicationException(error);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is OverflowException || ex is ApplicationException)
+        {
+            Value = original;
+            _error = ex.Message;
+
+            // revalidate to clear any issues in parent component
+            await ValidateInner();
+
+            StateHasChanged();
+            return;
+        }
+        await DoCloseEditor();
+        if (ValueEntered.HasDelegate)
+            await ValueEntered.InvokeAsync();
+    }
+
+    private async Task OnFileSelected(string[]? selection = null)
+    {
+        if (selection?.Length == 1)
+            await TrySetValue(selection[0]);
+    }
+
+    public async Task<bool> TrySetValue(object? value)
+    {
+        var original = Value;
+        try
+        {
+            Value = (T?)value;
+            var error = await ValidateInner();
+            if (error != null)
+                throw new ApplicationException(error);
+        }
+        catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is OverflowException || ex is ApplicationException)
+        {
+            Value = original;
+            _error = ex.Message;
+
+            // revalidate to clear any issues in parent component
+            await ValidateInner();
+
+            StateHasChanged();
+            return false;
+        }
+        await DoCloseEditor();
+        if (ValueEntered.HasDelegate)
+            await ValueEntered.InvokeAsync();
+        return true;
+    }
+}

@@ -1,0 +1,74 @@
+﻿.dummy {
+}
+
+.key {
+    font-family: 'AurulentSans', sans-serif;
+    background: linear-gradient(180deg, rgba(62,62,62,1) 0%, rgba(0,0,0,1) 25%, rgba(0,0,0,1) 100%);
+    border-radius: 5px;
+    width: 0px;
+    height: 60px;
+    line-height: 50px;
+    padding-left: 0px;
+    padding-right: 0px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    margin: 2px;
+    border: 1px solid #000a;
+    color: #fff;
+    font-size: 24px;
+    text-align: center;
+    user-select: none;
+    /* Too much for embedded platforms */
+    /*filter: drop-shadow(1px 1px 1px #0007);*/
+}
+
+/* hover looks bad on some hybrid touch devices */
+/*@media (hover: hover) {
+    .key:hover {
+        background: #808080E0;
+    }
+}
+*/
+    .key:active {
+        opacity: 75%;
+        border-left: 2px solid #000a;
+        border-top: 2px solid #000a;
+        border-right: none;
+        border-bottom: none;
+        filter: none;
+    }
+
+.key-offset {
+    width: 3em;
+    height: 50px;
+    line-height: 40px;
+    font-weight: bold;
+    background: linear-gradient(180deg, rgb(29, 178, 233) 0%, rgba(22,136,178,1) 25%, rgba(22,136,178,1) 100%);
+}
+
+.key-small {
+    flex-grow: 1;
+}
+
+.key-special {
+    width: 4.5em;
+    background: linear-gradient(180deg, rgb(29, 178, 233) 0%, rgba(22,136,178,1) 25%, rgba(22,136,178,1) 100%);
+}
+
+.key-special2 {
+    width: calc(9em + 4px);
+    background: linear-gradient(180deg, rgb(29, 178, 233) 0%, rgba(22,136,178,1) 25%, rgba(22,136,178,1) 100%);
+}
+
+.key-special3 {
+    flex-grow: 1;
+    background: linear-gradient(180deg, rgb(29, 178, 233) 0%, rgba(22,136,178,1) 25%, rgba(22,136,178,1) 100%);
+}
+
+.key-action {
+    background: linear-gradient(180deg, rgb(79, 220, 154) 0%, rgba(62,184,127,1) 25%, rgba(62,184,127,1) 100%);
+}
+
+.key-space {
+    flex-grow: 1;
+}

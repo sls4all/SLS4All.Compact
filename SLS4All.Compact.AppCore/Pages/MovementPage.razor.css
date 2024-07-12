@@ -1,0 +1,69 @@
+﻿.dummy {
+}
+
+.printing-notification {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+}
+
+    .printing-notification .btn {
+        font-size: 17px;
+    }
+
+.movement-container {
+    font-size: 20px;
+}
+
+    .movement-container .btn--icon {
+        width: 3.5rem;
+        height: 3.5rem;
+    }
+
+    .movement-container i {
+        font-size: 20px;
+    }
+
+    .movement-container .h5 {
+        font-size: 20px;
+    }
+
+    .movement-container a {
+        font-size: 20px;
+    }
+
+    .movement-container tr th {
+        font-weight: bold;
+    }
+
+    .movement-container tr td {
+        padding: 2px !important;
+    }
+
+    .movement-container .movement-controls {
+        font-size: 20px;
+    }
+
+    .movement-container button {
+        font-size: 20px;
+    }
+
+.editor-content {
+    white-space: nowrap;
+    color: #03b4da;
+    text-align: left;
+    vertical-align: middle;
+}
+
+    .editor-content .editor-unit {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+.my-border-right {
+    border-right: solid 1px #fff1;
+}

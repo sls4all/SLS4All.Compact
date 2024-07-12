@@ -1,0 +1,12 @@
+﻿@page "/videocamera"
+@inherits AppPage
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" IsFullPage="true" />
+
+<VideoCameraView @key="_cameraViewKey" @ref="_cameraView" class="h-100" />
+
+@code {
+    public const string SelfPath = "/videocamera";
+    private readonly object _cameraViewKey = new();
+    private VideoCameraView? _cameraView;
+}

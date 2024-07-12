@@ -1,0 +1,258 @@
+﻿@inherits AppPage
+@page "/slicing"
+@using SLS4All.Compact.ComponentModel
+
+<PrinterPageTitle IconClass="zwicon-expand-up" IsFullPage="true" />
+
+<Modal @ref="_setupModal" class="fade" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Setup print
+            </h5>
+        </div>
+         <div class="modal-body">
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Total chamber depth [mm]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.PrintableDepth" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Laser on [%]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserOn" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Laser/galvo speed when printing outlines [mm/sec]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserOutlineSpeedXY" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Laser/galvo speed when filling [mm/sec]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserFillSpeedXY" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Laser/galvo speed when not printing [a/sec]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserOffSpeedA" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Number of outlines</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.OutlineCount" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Number of skipped outlines for fill</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.FillOutlineSkipCount" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Enable fill [0/1]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.IsFillEnabled" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Hotspot overlap [%]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HotspotOverlapPercent" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Linear X correction [%]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.XCorrectionPercent" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Linear Y correction [%]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.YCorrectionPercent" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Is bed preparation enabled</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.IsBedPreparionEnabled" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Is begin/end layer enabled</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.IsBeginEndLayerEnabled" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Is print cap enabled</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.IsPrintCapEnabled" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Layer thickness [μm]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LayerThickness" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Bed preparation height [μm]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.BedPreparationHeight" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Print cap height [μm]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.PrintCapHeight" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Bed preparation temperature target [deg]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.BedPreparationTemperatureTarget" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Begin layer temperature target [deg]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.BeginLayerTemperatureTarget" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Print cap temperature target [deg]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.PrintCapTemperatureTarget" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Temperature settle delay [sec]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.TemperatureDelay" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Requested laser energy density when printing first outlines [mJ/mm^2]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserFirstOutlineEnergyDensity" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Requested laser energy density when printing other outlines [mJ/mm^2]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserOtherOutlineEnergyDensity" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Requested laser energy density when filling [mJ/mm^2]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.LaserFillEnergyDensity" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">How many times is sintered area denser over non-sintered area</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.SinteredVolumeFactor" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Disable layer additive movement [0/1]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.DisableLayerAdditiveMovement" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Outline Power Precision</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.OutlinePowerPrecision" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Outline Power Increase [%]</span>
+                </div>
+                <input type="number" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.OutlinePowerIncrease" />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</Modal>
+
+<Modal @ref="_profileModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Pick print profile to begin printing
+            </h5>
+        </div>
+         <div class="modal-body">
+            <div class="list-group">
+                @foreach (var __profile in _profiles)
+                {
+                    var profile = __profile;
+                    <a class="list-group-item list-group-item-action print-profile"
+                        @onclick="() => DoPrintProfiles(profile)">
+                        <img src="/_content/SLS4All.Compact.AppCore/ui/img/print-profile-default.png" width="40" height="40" />
+                        @profile.Name
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</Modal>
+
+<div class="d-flex h-100 py-3 flex-column">
+    <div class="d-flex flex-row m-auto">
+        <a class="btn btn-primary" @onclick="DoSlice">Slice</a>&nbsp;
+        <a class="btn btn-secondary" @onclick="DoPlot">Plot</a>&nbsp;
+        <a class="btn btn-success" @onclick="() => DoPrint()">Print</a>&nbsp;
+        <a class="btn btn-success" @onclick="() => DoPrintProfiles()">Print profile</a>&nbsp;
+        <a class="btn btn-info" @onclick="() => _setupModal!.Show()">Setup</a>&nbsp;
+        <a class="btn btn-danger" @onclick="DoCancel">Cancel</a>&nbsp;
+        <label class="m-auto">
+            Fit
+            <input type="checkbox" @bind="@_fit" />
+        </label>
+        <label class="m-auto">
+            Layer:
+            <input type="range" min="0" max="@Printing.PreviewLayers.Length" @bind="LayerIndex" @bind:event="oninput" />
+            <input type="number" @bind="LayerIndex" @bind:event="oninput" style="width: 6em" />
+            <input type="number" @bind="LayerCount" @bind:event="oninput" style="width: 6em" placeholder="Count" />
+        </label>
+        <span class="m-auto">
+            @{
+                var status = Printing.BackgroundTask.Status;
+                @if (status != null && !status.IsCompleted)
+                {
+                    <b style="position: relative">Processing @status.Progress.ToString("0")%...</b>
+                }
+                else if (status != null && status.Exception == null)
+                {
+                    <i style="position: relative" class="text-success">Done @status.Elapsed</i>
+                }
+                else if (status != null && status.Exception != null)
+                {
+                    <i style="position: relative" class="text-danger">Failed @status.Elapsed</i>
+                }
+            }
+        </span>
+    </div>
+
+    <img class="pt-3" style="@(_fit ? "height:0px; flex-grow: 1; object-fit: contain": "")" src="/api/SlicingImage/@Printing.PreviewVersion/@_layerIndex" />
+</div>
+
+@code {
+    private bool _fit = true;
+}

@@ -1,0 +1,44 @@
+﻿[Application]
+#PrinterClient = "McuManagerLocal"
+PrinterClient = "PipedMcuManagerProxy"
+McuSerialDeviceFactory = "LocalSerial"
+VideoCameraClient = "Mjpeg"
+TemperatureCameraClient = "Mlx90640Local"
+NetworkManager = "DBus"
+Plotter = "Image"
+UseIdealCircleHotspotCalculator = false
+PushTemperatureCameraGCode = false
+
+  [Application.Dependencies.Inova]
+  Filename = "appsettings.Inova"
+  Before = "appsettings.Inova-RaspberryPi5"
+
+  [Application.Dependencies.RockPI-McuClient]
+  After = "appsettings.Inova-RaspberryPi5"
+  Filename = "appsettings.Inova-RaspberryPi5-McuClient"
+
+  [Application.Dependencies.OV5647]
+  After = "appsettings.Inova-RaspberryPi5"
+  Filename = "appsettings.Inova-RaspberryPi5-libcamera"
+
+[Logging.LogLevel]
+# TODO: temporarlily increased logging to ensure smooth testing, remove after
+"Default" = "Debug"
+
+[SystemPrinterAuthentication]
+NeedsInitializedSystemPasswords = true
+Scripts = [
+	"""
+	#!/bin/sh
+	PASSWORD={{PASSWORD}}
+	echo "$USER:$PASSWORD" | sudo chpasswd
+	""",
+]
+
+[PrinterPerformanceProvider] # [monitored]
+GpuTemperatureUsingVcio = true
+
+[Mlx90640Camera]
+BusId = 1
+
+[Frontend] # [monitored]

@@ -1,0 +1,102 @@
+﻿@inherits AppComponent
+@inject IJSRuntime JSRuntime
+
+<a @ref="@ElementRef" 
+    id="@ElementId" 
+    class="key @ClassNames" 
+    style="@StyleNames" 
+    @attributes="@Attributes" 
+    @onpointerdown="OnPointerDown" 
+    @onpointerdown:preventDefault="true"
+    @onpointerup="OnPointerUp" 
+    @onpointerup:preventDefault="true"
+    oncontextmenu="return false;">
+    @ChildContent
+</a>
+
+@code {
+    private CancellationTokenSource? _cancel;
+    private Task? _clickTask;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool ClickedEnabled { get; set; }
+
+    [Parameter]
+    public EventCallback Clicked { get; set; }
+
+    [Parameter]
+    public EventCallback<CancellationToken> Clicking { get; set; }
+
+    private async Task OnPointerDown(PointerEventArgs e)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "setPointerCapture", ElementRef, e.PointerId);
+        }
+        catch (JSException)
+        {
+            // swalow, might fail if capture failed also
+        }
+        _cancel?.Cancel();
+        _cancel = new CancellationTokenSource();
+        _clickTask = RunClicking(_cancel.Token);
+    }
+
+    private async Task OnPointerUp(PointerEventArgs e)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "releasePointerCapture", ElementRef, e.PointerId);
+        }
+        catch (JSException)
+        {
+            // swalow, might fail if capture failed also
+        }
+        if (_cancel != null)
+        {
+            _cancel.Cancel();
+            _cancel = null;
+        }
+        if (_clickTask != null)
+        {
+            await _clickTask;
+            _clickTask = null;
+        }
+    }
+
+    private async Task RunClicking(CancellationToken cancel)
+    {
+        try
+        {
+            if (ClickedEnabled)
+            {
+                if (Clicked.HasDelegate)
+                    await Clicked.InvokeAsync();
+                if (Clicking.HasDelegate)
+                {
+                    await Task.Delay(500, cancel);
+                    await Clicking.InvokeAsync(cancel);
+                }
+            }
+            else
+            {
+                if (Clicking.HasDelegate)
+                    await Clicking.InvokeAsync(cancel);
+            }
+        }
+        catch (Exception)
+        {
+            if (!cancel.IsCancellationRequested)
+                throw;
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _cancel?.Cancel();
+        return base.DisposeAsync();
+    }
+}

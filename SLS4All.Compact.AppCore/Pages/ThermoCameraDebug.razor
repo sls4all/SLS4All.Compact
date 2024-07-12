@@ -1,0 +1,178 @@
+﻿@page "/thermocameradebug"
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Temperature;
+@using System.Globalization;
+@using SLS4All.Compact.Threading
+@using System.Diagnostics
+@inherits AppPage
+@inject ITemperatureClient TemperatureClient
+@inject ISurfaceHeater Surface
+@inject ImageStreamingHelper ImageStreamingHelper
+@inject IJSRuntime JSRuntime
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
+
+<div style="width:100%; height:100%; position:relative; z-index:1">
+    <img id="@_id" @key="_streamKey" src="@StreamUri" style="position: relative; width:100%; height:100%; object-fit: contain" />
+    <div style="position: absolute; top: 10px; left: 10px; z-index:3">
+        <form class="form-inline flex-nowrap text-nowrap" @onsubmit="() => {}">
+            <div class="input-group input-group-sm" style="background-color: rgba(0,0,0,0.25)">
+                <div class="input-group-prepend">
+                    <div class="input-group-text">Average</div>
+                </div>
+                <input type="number" class="form-control" style="width: 10ch" placeholder="sec" @bind="AvgDuration" @bind:event="oninput" />
+                <button class="btn btn-sm btn-danger" @onclick:preventDefault="true" @onclick="() => AvgDuration = null">Off</button>
+            </div>
+        </form>
+        <br />
+        <form class="form-inline flex-nowrap text-nowrap" @onsubmit="() => SetSurfaceTarget(SurfaceTarget)">
+            <div class="input-group input-group-sm" style="background-color: rgba(0,0,0,0.25)">
+                <div class="input-group-prepend">
+                    <div class="input-group-text">Surface</div>
+                </div>
+                <input type="number" class="form-control" style="width: 10ch" placeholder="°C" @bind="SurfaceTarget" />
+                <button type="submit" class="btn btn-sm btn-theme">Set</button>
+                <button class="btn btn-sm btn-danger" @onclick:preventDefault="true" @onclick="() => SetSurfaceTarget(null)">Off</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@code{
+    public const string SelfPath = "/thermocameradebug";
+    private readonly object _streamKey = new object();
+    private string _id = Guid.NewGuid().ToString();
+    private decimal? _avgDuration;
+    private double? _surfaceTargetSync;
+    private decimal? _surfaceTarget;
+    private Timer _timer;
+    private const int _timerPeriod = 500;
+    private ImageStreamingHandle? _streamHandle;
+    private long _streamCounter;
+
+    private decimal? AvgDuration
+    {
+        get => _avgDuration;
+        set
+        {
+            if (_avgDuration == value)
+                return;
+            TryUnregisterImageReady();
+            _id = Guid.NewGuid().ToString();
+            _avgDuration = value;
+            StateHasChanged();
+        }
+    }
+
+    private decimal? SurfaceTarget
+    {
+        get => _surfaceTarget;
+        set
+        {
+            if (_surfaceTarget == value)
+                return;
+            _surfaceTarget = value;
+            StateHasChanged();
+        }
+    }
+
+    private string StreamUri
+    {
+        get
+        {
+            if (_avgDuration == null || _avgDuration <= 0)
+                return string.Create(CultureInfo.InvariantCulture, $"/api/bedmatrix/image/{_id}?c={_streamCounter}");
+            else
+                return string.Create(CultureInfo.InvariantCulture, $"/api/bedmatrix/average/{_id}/{_avgDuration}?c={_streamCounter}");
+        }
+    }
+
+    public ThermoCameraDebug()
+    {
+        _timer = new Timer(OnTimer);
+    }
+
+    protected override void OnInitialized()
+    {
+        TemperatureClient.StateChangedLowFrequency.AddHandler(OnTemperaturesChanged);
+        SyncSurfaceTarget();
+        base.OnInitialized();
+    }
+
+    private bool TryRegisterImageReady()
+    {
+        if (_streamHandle == null)
+            _streamHandle = new ImageStreamingHandle(JSRuntime, ImageStreamingHelper, _id, () =>
+            {
+                _streamCounter++;
+                return StreamUri;
+            });
+        return _streamHandle.TryRegisterImageReady();
+    }
+
+    private void TryUnregisterImageReady()
+    {
+        _streamHandle?.TryUnregisterImageReady();
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            return ValueTask.FromResult(TryRegisterImageReady());
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+        if (firstRender)
+            _timer.Change(0, _timerPeriod);
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        TryUnregisterImageReady();
+        _timer.Dispose();
+        TemperatureClient.StateChangedLowFrequency.RemoveHandler(OnTemperaturesChanged);
+        return base.DisposeAsync();
+    }
+
+    private async Task SetSurfaceTarget(decimal? target)
+    {
+        try
+        {
+            _surfaceTarget = target;
+            await Surface.SetTarget((double?)target, default);
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            _surfaceTarget = null;
+            StateHasChanged();
+        }
+    }
+
+    private void SyncSurfaceTarget()
+    {
+        var state = TemperatureClient.CurrentState;
+        var target = Surface.TargetTemperature;
+        if (_surfaceTargetSync == target)
+            return;
+        _surfaceTargetSync = target;
+        if (target == null || target == 0)
+            _surfaceTarget = null;
+        else
+            _surfaceTarget = Math.Round((decimal)target.Value, 1);
+    }
+
+    private ValueTask OnTemperaturesChanged(TemperatureState state, CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            SyncSurfaceTarget();
+            return ValueTask.CompletedTask;
+        });
+        return ValueTask.CompletedTask;
+    }
+}

@@ -1,0 +1,231 @@
+﻿@page "/shutdown"
+@inherits AppPage
+@using SLS4All.Compact.Printer;
+@using SLS4All.Compact.ComponentModel;
+@using SLS4All.Compact.Slicing;
+@using SLS4All.Compact.Temperature;
+@inject PrinterLifetime PrinterLifetime
+@inject ISafeShutdownManager SafeShutdown
+@inject IEmergencyHelper EmergencyHelper
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-shutdown.png" />
+
+<Modal @ref="_scheduleModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Schedule printer shutdown request
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                There are current issues with performing the request at this moment.
+            </p>
+            @if ((_issues & SafeShutdownIssues.PrintingInProgress) != 0)
+            {
+                <p>
+                    A job is <b>currently printing</b>. Please stop the printing before attempting to @ModalModeName.
+                </p>
+            }
+            else if ((_issues & SafeShutdownIssues.HeatersEnabled) != 0)
+            {
+                <p>
+                    <b>Heaters are enabled</b>, printer may not cool down.
+                </p>
+            }
+            @if ((_issues & SafeShutdownIssues.TemperatureNotSafe) != 0)
+            {
+                <p>
+                    Internal printer <b>temperature is not safe</b> to @ModalModeName just yet. Please wait until everything cools down.
+                </p>
+            }
+        </div>
+        <div class="modal-footer">
+            @if ((_issues & SafeShutdownIssues.UserMustIntervene) == 0)
+            {
+                <button @onclick="() => Apply(_modalMode, false)" class="btn btn-danger">@(Capitalize(ModalModeName)) now!</button>
+            }
+            <button @onclick="() => ScheduleShutdown(_modalMode)" class="btn btn-primary">Schedule when ready</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</Modal>
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        <h2>
+            Shutdown printer
+        </h2>
+        <hr class="my-3">
+        <p>
+            Printer will reboot, power off or exit to desktop if requested.
+        </p>
+        @if (PrinterLifetime.IsStopping)
+        {
+            <p>
+                <span class="badge badge-warning text-wrap w-100">
+                    Application is shutting down...
+                </span>
+            </p>
+        }
+        <p class="issue @(!SafeShutdown.IsShutdownScheduled && _issues != SafeShutdownIssues.None ? "issue-active" : "issue-inactive")">
+            Clicking buttons below will allow you to schedule automatic printer shutdown when it is safe to do so.
+        </p>
+        <p class="issue @(SafeShutdown.IsShutdownScheduled ? "issue-active" : "issue-inactive")">
+            <span class="badge badge-danger text-wrap w-100">
+                Will automatically <b>@(GetModeName(SafeShutdown.ScheduledShutdownMode))</b> when ready! <button class="btn btn-primary" @onclick="() => SafeShutdown.ScheduleShutdown(false)">Cancel automatic shutdown</button>
+            </span>
+        </p>
+        <p class="issue @((_issues & SafeShutdownIssues.PrintingInProgress) != 0 ? "issue-active" : "issue-inactive")">
+            <span class="badge badge-danger text-wrap w-100">
+                A job is <b>currently printing</b>. Please <a class="text-primary" href="@PrinterStatus.SelfPath">stop the printing</a> before attempting shutdown.
+            </span>
+        </p>
+        <p class="issue @((_issues & SafeShutdownIssues.PrintingInProgress) == 0 && (_issues & SafeShutdownIssues.HeatersEnabled) != 0 ? "issue-active" : "issue-inactive")">
+            <span class="badge badge-danger text-wrap w-100">
+                <b>Heaters are enabled</b>, printer may not cool down. <button class="btn btn-primary" @onclick="() => EmergencyHelper.EmergencyPowerOffHeaters()">Turn off all heaters</button>
+            </span>
+        </p>
+        <p class="issue @((_issues & SafeShutdownIssues.TemperatureNotSafe) != 0 ? "issue-active" : "issue-inactive")">
+            <span class="badge badge-danger text-wrap w-100">
+                Internal printer <b>temperature is not safe</b> to shutdown just yet. <br/>
+                Please wait until everything cools down from current @(Math.Round(_safeTemp.CurrentTemperature))°C to @(Math.Round(_safeTemp.SafeTemperature))°C.
+            </span>
+        </p>
+    </div>
+    @if (!PrinterLifetime.IsStopping)
+    {
+        <div class="accordion" id="accordionShutdown">
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" data-target="#collapseOne" class="" aria-expanded="true">Quick actions</a>
+            </div>
+
+            <div id="collapseOne" class="collapse show" data-parent="#accordionShutdown" style="">
+                <div class="card-body">
+                    <button type="button" class="btn btn-danger w-100" @onclick="() => Apply(PrinterShutdownMode.ShutdownSystem, true)">
+                            <i class="bi bi-power"></i> Power off printer
+                        </button>
+                        <button type="button" class="btn btn-warning w-100" @onclick="() => Apply(PrinterShutdownMode.RebootSystem, true)">
+                            <i class="bi bi-arrow-repeat"></i> Reboot printer
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header" id="headingTwo">
+                    <a class="collapsed" data-toggle="collapse" data-target="#collapseTwo" aria-expanded="false">Advanced actions</a>
+                </div>
+                <div id="collapseTwo" class="collapse" data-parent="#accordionShutdown" style="">
+                    <div class="card-body">
+                        <button type="button" class="btn btn-secondary w-100" @onclick="() => Apply(PrinterShutdownMode.RestartApplication, true)">
+                            <i class="bi bi-arrow-clockwise"></i> Restart software
+                        </button>
+                        <button type="button" class="btn btn-secondary w-100" @onclick="() => Apply(PrinterShutdownMode.ExitApplication, true)">
+                            <i class="bi bi-box-arrow-left"></i> Exit to desktop
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    public const string SelfPath = "/shutdown";
+
+    private static readonly TimeSpan _updatePeriod = TimeSpan.FromSeconds(1);
+    private Modal? _scheduleModal;
+    private PrinterShutdownMode _modalMode;
+    private PrinterLifetimeRequest? _initialRequest;
+    private SafeShutdownTemperature _safeTemp;
+    private SafeShutdownIssues _issues;
+    private Timer? _timer;
+
+    private string ModalModeName
+        => GetModeName(_modalMode);
+
+    private string GetModeName(PrinterShutdownMode mode)
+        => _modalMode switch
+        {
+            PrinterShutdownMode.RebootSystem => "reboot the printer",
+            PrinterShutdownMode.ShutdownSystem => "shutdown the printer",
+            PrinterShutdownMode.ExitApplication => "exit to desktop",
+            PrinterShutdownMode.UpdateApplication => "update the application",
+            _ => "shutdown",
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _initialRequest = PrinterLifetime.LastRequest;
+        PrinterLifetime.LastRequest = null;
+
+        await UpdateValues();
+        _timer = new Timer(OnTimer);
+        _timer.Change(_updatePeriod, _updatePeriod);
+
+        await base.OnInitializedAsync();
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(UpdateValues);
+    }
+
+    private async ValueTask UpdateValues()
+    {
+        _safeTemp = await SafeShutdown.GetSafeTemperature();
+        _issues = await SafeShutdown.GetShutdownIssues();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+
+        var initialRequest = _initialRequest;
+        _initialRequest = null;
+
+        if (initialRequest != null)
+            await Apply(initialRequest);
+    }
+
+    private async Task Apply(PrinterShutdownMode mode, bool showModal)
+    {
+        var issues = await SafeShutdown.GetShutdownIssues();
+        if (issues != SafeShutdownIssues.None && showModal)
+        {
+            await UpdateValues();
+            _modalMode = mode;
+            await _scheduleModal!.Show();
+            return;
+        }
+        await Apply(new PrinterLifetimeRequest(mode, null));
+    }
+
+    private async Task Apply(PrinterLifetimeRequest request)
+    {
+        var issues = await SafeShutdown.GetShutdownIssues();
+        if ((issues & SafeShutdownIssues.UserMustIntervene) == 0)
+            await PrinterLifetime.PerformShutdown(request);
+    }
+
+    private async Task ScheduleShutdown(PrinterShutdownMode mode)
+    {
+        await _scheduleModal!.Close();
+        await SafeShutdown.ScheduleShutdown(true, mode);
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        return base.DisposeAsync();
+    }
+
+    private static string Capitalize(string str)
+    {
+        if (str == "")
+            return "";
+        else
+            return char.ToUpper(str[0]) + str.Substring(1);
+    }
+}

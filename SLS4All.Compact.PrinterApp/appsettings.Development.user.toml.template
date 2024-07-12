@@ -1,0 +1,26 @@
+﻿[Application]
+#PrinterClient = "Fake"
+#PrinterClient = "KlipperApi"
+PrinterClient = "McuClient"
+McuSerialDeviceFactory = "ProxySerial"
+#McuSerialDeviceFactory = "SshSerial"
+
+#[ImageCodePlotter]
+#IncreasePixelSize = false
+#PlotWidth = 350
+#PlotHeight = 350
+#StoreLayers = true
+#ProjectionPrecision = 1.0
+
+#[KlipperApiClient]
+#TcpHost = "192.168.1.73"
+#TcpPort = 10_000
+
+[McuProxySerialDeviceFactory]
+Host = "192.168.1.73"
+Port = 5001
+
+[McuSshSerialDeviceFactory]
+Host = "192.168.1.73"
+UserName = "root"
+Password = "password"

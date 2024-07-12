@@ -1,0 +1,468 @@
+﻿@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using Nito.AsyncEx
+@using SLS4All.Compact.Helpers
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Text
+@using SLS4All.Compact.Validation;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Numerics
+@using static SLS4All.Compact.Pages.Jobs
+
+@inherits AppComponent
+@inject IJobStorage JobStorage
+@inject ICurrentJobProvider JobProvider
+@inject IPrinterFileProvider FileProvider
+@inject IPrinterSettingsStorage SettingsStorage
+@inject IPrintProfileStorage ProfileStorage
+@inject IToastProvider ToastProvider
+@inject IJobStorage JobStorage
+@inject IJSRuntime JSRuntime
+@inject ILogger<CurrentJobAutomatic> Logger
+@inject IOptionsMonitor<FrontendOptions> FrontendOptions
+@inject INestingServiceScoped Nesting
+@inject IUnitConverter UnitConverter
+
+@{
+    var nestingStatus = Nesting.BackgroundTask.Status;
+    var isNesting = IsNesting;
+    var isPrinting = IsPrinting;
+    var hasObjects = Job?.Objects.Any(x => x.InstanceCount > 0) == true;
+    var tabIndex = TabIndex;
+    var selectedObject = SelectedObject;
+    var selectedConstraint = SelectedConstraint;
+    if (Job == null)
+    {
+        tabIndex = TabIndex.Jobs;
+    }
+
+    var nestingProgress = nestingStatus != null ? nestingStatus.Progress : 0;
+    var nestingProgressInt = (int)Math.Round(nestingProgress);
+    RenderFragment nestingButton = @<div>
+        @if (!isNesting)
+        {
+            <button class="btn btn-theme btn--icon-text" @onclick="() => StartDoNest()">
+                <i class="bi bi-pip-fill" /> Start nesting
+            </button>
+        }
+        else
+        {
+            <button class="btn btn-danger btn--icon-text" @onclick="() => StopDoNest()" style="background: linear-gradient(to right, rgba(255,0,0,0.30) @nestingProgressInt%, rgba(255,0,0,0.15) @nestingProgressInt%)">
+                <i class="bi bi-pip-fill" /> Cancel @(nestingProgress.RoundToDecimal(0, true))%
+            </button>
+        }
+    </div>;
+}
+
+@if (tabIndex == TabIndex.General)
+{
+    Debug.Assert(Job != null);
+    <tr class="buttons-row hide-top-line">
+        <td colspan="2">
+            <div class="buttons-row-container">
+                @nestingButton
+            </div>
+        </td>
+    </tr>
+    Job.AggressiveNestingEnabled = false;
+    @Jobs!.RenderValues(
+        new (object, string)[] {
+        (Job, nameof(Job.Name)),
+        (Job, nameof(Job.PrintProfile)),
+        (Job, nameof(Job.AvailableDepth)),
+        (Job.NestingState, nameof(Job.NestingState.DensityPercent)),
+        (Job.NestingState, nameof(Job.NestingState.ChamberDepth)),
+    })
+    <tr class="print-row">
+        <td colspan="2">
+            <div class="print-row-container">
+                @if (ValidationErrors.Count == 0 && !isNesting && hasObjects && !isPrinting)
+                {
+                    <button class="btn btn-primary btn--icon-text w-100" @onclick="() => Jobs!.ShowPrintModal()">
+                        <i class="bi bi-play-circle-fill" /> Print this job...
+                    </button>
+                }
+                else if (isPrinting)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Finish currently running <b>printing</b> before starting new.</span>
+                }
+                else if (isNesting)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Please finish nesting before <b>printing</b> is possible.</span>
+                }
+                else if (!hasObjects)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Please add some objects before <b>printing</b> is possible.</span>
+                }
+                else
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Please fix highlighted issues before <b>printing</b> is possible.</span>
+                }
+            </div>
+        </td>
+    </tr>
+}
+else if (tabIndex == TabIndex.Objects)
+{
+    Debug.Assert(Job != null);
+    <tr class="buttons-row hide-top-line">
+        <td colspan="2">
+            <div class="buttons-row-container">
+                @nestingButton
+                <button class="ml-1 btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => Jobs!.AddObject()">
+                    <i class="bi bi-plus-circle-fill" /> Add new object...
+                </button>
+            </div>
+        </td>
+    </tr>
+    foreach (var __obj in Job.Objects)
+    {
+        var obj = __obj;
+        var isSelected = obj == selectedObject;
+        var countValue = StorageValue.Create(obj, nameof(obj.InstanceCount));
+        var instanceCount = Job.GetNestedInstanceCount(obj);
+        var objError = Jobs!.GetError(obj, "");
+        <tr class="object-name-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
+            <td colspan="2">
+                @obj.Name
+                @if (obj.Constraints.Length > 0)
+                {
+                    <i class="bi bi-align-bottom float-right" />
+                }
+            </td>
+        </tr>
+        @if (objError != null)
+        {
+            var nestedCounts = Job.GetNestedInstanceCount(obj);
+            if (nestedCounts.nonOverlapping != 0 && nestedCounts.overlapping != 0 && // tried nesting at all
+            nestedCounts.overlapping != obj.InstanceCount) // not all nested
+            {
+                <tr class="object-nested-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
+                    <td colspan="2">
+                        @nestedCounts.nonOverlapping <small>successfully nested</small>&nbsp;
+                        @if (nestedCounts.overlapping != 0)
+                        {
+                            @nestedCounts.overlapping <small class="text-warning">failed to nest</small>
+                        }
+                    </td>
+                </tr>
+            }
+        }
+        <tr @key="obj" class="object-props-row @(isSelected ? "table-active" : "")">
+            <td>
+                @countValue.RenderValueEditor(null, obj, validationError: Jobs!.GetError(obj, nameof(obj.InstanceCount)), cssScope: CssScope, isEditable: !isNesting)
+            </td>
+            <td>
+                <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="async () => { AddInstanceCount(obj, 1); await Jobs!.ValidateInner(true); }">
+                    <i class="bi bi-plus" />
+                </button>
+                <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="async () => { AddInstanceCount(obj, -1); await Jobs!.ValidateInner(true); }">
+                    <i class="bi bi-dash" />
+                </button>
+                <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => RemoveObject(obj)">
+                    <i class="bi bi-trash" />
+                </button>
+                <button class="btn btn-theme btn--icon-text" @onclick="() => Jobs!.SelectObject(obj, false, tabIndex: TabIndex.Attributes)">
+                    <i class="bi bi-list" /> Attributes
+                </button>
+            </td>
+        </tr>
+        @if (objError != null)
+        {
+            <tr class="object-issues-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
+                <td colspan="2">
+                    <span class="badge badge-warning text-wrap">@objError</span>
+                </td>
+            </tr>
+        }
+    }
+}
+else if (tabIndex == TabIndex.Attributes && selectedObject != null)
+{
+    Debug.Assert(Job != null);
+    var constraintIndex = 0;
+    var nestingMesh = TryGetOriginalNestingMesh(selectedObject);
+    <tr class="buttons-row hide-top-line">
+        <td colspan="2">
+            <div class="buttons-row-container">
+                @nestingButton
+                <button class="ml-1 btn btn-theme btn--icon-text" @onclick="() => AddConstraint(selectedObject)">
+                    <i class="bi bi-plus-circle-fill" /> Add new constraint...
+                </button>
+            </div>
+        </td>
+    </tr>
+    <tr class="object-attributes-name-row" @onclick="() => Jobs!.DeselectConstraint()">
+        <td colspan="2">
+            @selectedObject.Name <small><i class="bi bi-x" /> @selectedObject.InstanceCount</small>
+        </td>
+    </tr>
+    @if (nestingMesh != null)
+    {
+        var sx = UnitConverter.GetUnits(
+            selectedObject.Units == JobObjectUnits.Millimeters
+            ? nestingMesh.Bounds.Size.X
+            : nestingMesh.Bounds.Size.X * Numerics.Units.InchesToMm,
+            Numerics.Units.Millimeter, UnitConverterFlags);
+        var sy = UnitConverter.GetUnits(
+            selectedObject.Units == JobObjectUnits.Millimeters
+            ? nestingMesh.Bounds.Size.Y
+            : nestingMesh.Bounds.Size.Y * Numerics.Units.InchesToMm,
+            Numerics.Units.Millimeter, UnitConverterFlags);
+        var sz = UnitConverter.GetUnits(
+            selectedObject.Units == JobObjectUnits.Millimeters
+            ? nestingMesh.Bounds.Size.Z
+            : nestingMesh.Bounds.Size.Z * Numerics.Units.InchesToMm,
+            Numerics.Units.Millimeter, UnitConverterFlags);
+        <tr class="object-attributes-size-row" @onclick="() => Jobs!.DeselectConstraint()">
+            <td colspan="2">
+                <small>X:&nbsp;</small>@sx.Value<small>@sx.Unit</small>
+                <small>Y:&nbsp;</small>@sy.Value<small>@sy.Unit</small>
+                <small>Z:&nbsp;</small>@sz.Value<small>@sz.Unit</small>
+            </td>
+        </tr>
+    }
+    @Jobs!.RenderValues(
+        new (object, string)[] {
+            (selectedObject, nameof(selectedObject.InstanceCount)),
+            (selectedObject, nameof(selectedObject.IsThinObject)),
+            (selectedObject, nameof(selectedObject.Units)),
+            (selectedObject, nameof(selectedObject.Scale)),
+            (selectedObject, nameof(selectedObject.Inset)),
+        },
+        onClick: (obj, path) => Jobs!.SelectConstraint(selectedObject!, null, true),
+        isEditable: !isNesting
+    )
+    @foreach (var __constraint in selectedObject.Constraints)
+    {
+        var constraint = __constraint;
+        var isSelected = constraint == selectedConstraint;
+        <tr @key="constraint" class="object-constraints-name @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectConstraint(selectedObject, constraint, true)">
+            <td colspan="2">
+                <span><i class="bi bi-align-bottom" /> Constraint #@(constraintIndex + 1)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-theme dropright" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="bi bi-activity" /> Action
+                    </button>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => Jobs!.AlignConstraint(selectedObject, constraint, 90, true)">
+                            <i class="bi bi-align-center" />&nbsp;Align base rotation to nearest 90°
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => Jobs!.AlignConstraint(selectedObject, constraint, 45, true)">
+                            <i class="bi bi-align-center" />&nbsp;Align base rotation to nearest 45°
+                        </a>
+                        <a class="dropdown-item @(constraint.BasePitch == 0 && constraint.BaseRoll == 0 && constraint.BaseYaw == 0 ? "disabled" : "")" href="javascript:void(0)" @onclick="() => Jobs!.ResetConstraint(selectedObject, constraint, true)">
+                            <i class="bi bi-arrow-repeat" />&nbsp;Reset base rotation
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item @(constraint.Freedom == 0 && !constraint.AllowAnyYaw ? "disabled" : "")" href="javascript:void(0)" @onclick="() => Jobs!.TogglePlayConstraint(selectedObject, constraint, true)">
+                            @if (!PlayConstraint || !isSelected)
+                            {
+                                <i class="bi bi-play-fill" />
+                            }
+                            else
+                            {
+                                <i class="bi bi-stop-fill" />
+                            }
+                            &nbsp;Display maximum freedom rotations
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => Jobs!.RemoveConstraint(selectedObject, constraint, true)">
+                            <i class="bi bi-trash" />&nbsp;Remove constraint
+                        </a>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        (object, string)[] items;
+        if (constraint.Freedom == 0)
+        {
+            items = [
+                (constraint, nameof(constraint.BaseYaw)),
+                (constraint, nameof(constraint.BasePitch)),
+                (constraint, nameof(constraint.BaseRoll)),
+                (constraint, nameof(constraint.Freedom)),
+                (constraint, nameof(constraint.AllowAnyYaw)),
+            ];
+        }
+        else
+        {
+            items = [
+                (constraint, nameof(constraint.BaseYaw)),
+                (constraint, nameof(constraint.BasePitch)),
+                (constraint, nameof(constraint.BaseRoll)),
+                (constraint, nameof(constraint.Freedom)),
+            ];
+        }
+        @Jobs!.RenderValues(
+            items,
+            classes: isSelected ? "table-active" : "",
+            onClick: (obj, path) => Jobs!.SelectConstraint(selectedObject, constraint, true),
+            onValueEntered: (obj, path) => Jobs!.TogglePlayConstraint(selectedObject, constraint, true, path is nameof(constraint.Freedom) or nameof(constraint.AllowAnyYaw)),
+            isEditable: !isNesting
+        )
+        constraintIndex++;
+    }
+}
+ 
+@code {
+    private const string CssScope = Jobs.CssScope;
+    private bool _inShouldRender;
+
+    [CascadingParameter]
+    private IMainLayout? MainLayout { get; set; }
+
+    [CascadingParameter]
+    private Jobs? Jobs { get; set; }
+
+    [Parameter]
+    public UnitConverterFlags UnitConverterFlags { get; set; }
+
+    public TabIndex TabIndex => Jobs!.CurrentTab;
+    public AutomaticJob? Job => (Jobs!.Job as AutomaticJobEntry)?.Obj;
+    public AutomaticJobObject? SelectedObject => (Jobs!.SelectedObject as AutomaticJobObjectEntry)?.Obj;
+    public AutomaticJobObjectConstraint? SelectedConstraint => (Jobs!.SelectedConstraint as AutomaticJobObjectConstraintEntry)?.Obj;
+    public bool PlayConstraint => Jobs!.PlayConstraint;
+    public Dictionary<ValidationKey, ValidationValue> ValidationErrors => Jobs!.ValidationErrors;
+
+    public async Task RemoveObject(AutomaticJobObject obj)
+    {
+        if (Job == null || IsNesting)
+            return;
+        // NOTE: do not remove object file
+        Job.Objects = Job.Objects.Where(x => x != obj).ToArray();
+        if (SelectedObject == obj)
+            await Jobs!.SelectObject(null, false);
+        await Jobs!.ValidateInner(true);
+    }
+
+    public async Task AddConstraint(AutomaticJobObject obj)
+    {
+        if (Job == null || IsNesting)
+            return;
+        var costraint = new AutomaticJobObjectConstraint();
+        obj.Constraints = obj.Constraints.Append(costraint).ToArray();
+        await Jobs!.SelectConstraint(obj, costraint, false);
+        await Jobs!.ValidateInner(true);
+    }
+
+    public async Task AddObject(string[] selection, object? state, CancellationToken cancel)
+    {
+        using var _ = Jobs!.IgnoreJobUpdated();
+        try
+        {
+            if (Job == null || IsNesting)
+                return;
+            AutomaticJobObject? lastObject = null;
+            var files = new List<(PrinterPath filename, string hash)>();
+            foreach (var filename in selection)
+            {
+                var hash = FileProvider.GetHash(filename);
+                var file = Job.TryGetObjectFileByHash(hash);
+                if (file != null)
+                {
+                    lastObject = Job.AddObject(new AutomaticJobObject
+                        {
+                            Name = file.Name,
+                            InstanceCount = 1,
+                            // Constraints = [
+                            //     new AutomaticJobObjectConstraint
+                            //     {
+                            //         BaseYaw = 0,
+                            //         BasePitch = 0,
+                            //         BaseRoll = 0,
+                            //         Freedom = 0,
+                            //         AllowAnyYaw = true,
+                            //     },
+                            // ]
+                        });
+                }
+                else
+                    files.Add((filename, hash));
+            }
+            string[] names;
+            try
+            {
+                names = await JobStorage.AddObjects(Job.Id, files.Select(x => x.filename), cancel);
+            }
+            catch (KeyNotFoundException) // job is missing?
+            {
+                await JobStorage.UpsertJob(Job, cancel);
+                names = await JobStorage.AddObjects(Job.Id, files.Select(x => x.filename), cancel);
+            }
+            foreach (var item in names.Zip(files, (name, file) => (name, file.filename, file.hash)))
+            {
+                Job.AddObjectFile(item.name, item.hash);
+                lastObject = Job.AddObject(new AutomaticJobObject
+                    {
+                        Name = item.name,
+                        InstanceCount = 1,
+                    });
+            }
+            await JobStorage.UpsertJob(Job, cancel);
+            if (lastObject != null)
+                await Jobs!.SelectObject(lastObject, false);
+        }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to add object",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+        }
+        await Jobs!.ValidateInner(true);
+    }
+
+    public void AddInstanceCount(AutomaticJobObject obj, int offset)
+    {
+        if (Job == null || IsNesting)
+            return;
+        // NOTE: since modifiing instances might cause state loss from nesting, invalidate id to ensure nesting must be
+        //       rerun, even if instance count is reset to original value
+        obj.Id = Guid.NewGuid();
+        obj.InstanceCount += offset;
+        if (obj.InstanceCount < 0)
+            obj.InstanceCount = 0;
+        else if (obj.InstanceCount > AutomaticJobObject.MaxInstanceCount)
+            obj.InstanceCount = AutomaticJobObject.MaxInstanceCount;
+    }
+
+    public void OnParentStateHasChanged()
+    {
+        StateHasChanged();
+    }
+
+    protected override bool ShouldRender()
+    {
+        if (!_inShouldRender)
+        {
+            _inShouldRender = true;
+            try
+            {
+                Jobs!.OnChildStateHasChanged();
+                return base.ShouldRender();
+            }
+            finally
+            {
+                _inShouldRender = false;
+            }
+        }
+        else
+            return false;
+    }
+}

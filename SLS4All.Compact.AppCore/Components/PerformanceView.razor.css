@@ -1,0 +1,59 @@
+﻿.dummy {
+}
+
+.percentage {
+    text-align: center;
+    font-size: 17px;
+    margin-bottom: 6px;
+    outline: 1px solid #fff2;
+    font-weight: bold;
+}
+
+    .percentage small {
+        font-size: 15px !important;
+        opacity: 75%;
+        margin-left: 5px;
+    }
+
+.temperatures {
+    font-size: 17px;
+    width: 100%;
+    text-align: center;
+    font-size: 17px;
+}
+
+    .temperatures > div {
+        display: inline-block;
+        margin-left: 15px;
+        margin-right: 15px;
+    }
+
+    .temperatures .temperature span {
+        width: calc(4ex + 2em);
+        text-align: right;
+        display: inline-block;
+    }
+
+    .temperatures .uptime span {
+        display: inline-block;
+        color: white;
+        padding-left: 20px;
+    }
+
+    .temperatures .tp-threads span {
+        display: inline-block;
+        color: white;
+        padding-left: 20px;
+    }
+
+.listview__item {
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.listview__heading span {
+    color: darkgray;
+    font-size: 17px;
+    padding-left: 10px;
+    font-style: italic;
+}

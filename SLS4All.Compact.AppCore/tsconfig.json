@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "rootDir": "./Scripts",
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "incremental": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": false,
+    "noFallthroughCasesInSwitch": true,
+    "removeComments": true,
+    "sourceMap": true,
+    "declaration": false,
+    "downlevelIteration": true,
+    "experimentalDecorators": true,
+    "moduleResolution": "node",
+    "importHelpers": true,
+    "target": "es6",
+    "module": "ESNext",
+    "lib": [
+      "dom",
+      "es6"
+    ]
+  },
+  "compileOnSave": true,
+  "include": [
+    "./Scripts/*.ts"
+  ],
+  "exclude": [ "./node_modules" ]
+}

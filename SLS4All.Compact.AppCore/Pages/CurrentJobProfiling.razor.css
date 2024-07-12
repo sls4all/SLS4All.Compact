@@ -1,0 +1,240 @@
+﻿.dummy {
+}
+
+.properties-panel .hide-top-line td, .properties-panel .hide-top-line th {
+    border-top: none;
+}
+
+.property-table .object-row {
+}
+
+.property-table .object-start-row {
+    background: #0003;
+}
+
+    .property-table .object-start-row td {
+        border-top: none;
+        vertical-align: middle;
+        white-space: nowrap;
+        width: 100%;
+        padding-top: 2px;
+        padding-bottom: 2px;
+        padding-right: 20px;
+        text-align: center;
+    }
+
+    .property-table .object-start-row span {
+        color: gold;
+        font-weight: bold;
+        padding-left: 180px;
+        padding-right: 115px;
+    }
+
+    .property-table .object-start-row button {
+        font-size: 17px;
+    }
+
+.property-table .object-name-row {
+    text-align: center;
+    word-wrap: anywhere;
+    font-size: 17px;
+}
+
+    .property-table .object-name-row td {
+        padding-bottom: 0px;
+    }
+
+.property-table .object-nested-row {
+    text-align: center;
+    font-size: 17px;
+    color: #03b4da;
+    padding: 0;
+}
+
+    .property-table .object-nested-row td {
+        padding-top: 0px;
+        padding-bottom: 0px;
+        border-top: none;
+    }
+
+    .property-table .object-nested-row small {
+        padding-top: 0;
+        border-top: none;
+        color: #ffffff;
+    }
+
+.property-table .object-issues-row {
+    text-align: center;
+    font-size: 17px;
+}
+
+    .property-table .object-issues-row td {
+        padding: 0;
+        border-top: none;
+    }
+
+        .property-table .object-issues-row td span {
+            white-space: pre-wrap;
+            border-radius: 0px;
+            width: 100%;
+        }
+
+.property-table .object-missing-row {
+    text-align: center;
+    word-wrap: anywhere;
+    font-size: 17px;
+}
+
+    .property-table .object-missing-row td {
+        border-top: none;
+        vertical-align: middle;
+        white-space: nowrap;
+        width: 100%;
+        text-align: center;
+    }
+
+        .property-table .object-missing-row td button:nth-child(1) {
+            font-size: 17px;
+        }
+
+        .property-table .object-missing-row td button:nth-child(2) {
+            font-size: 17px;
+        }
+
+.property-table .object-actions-row {
+}
+
+    .property-table .object-actions-row td {
+        border-top: none;
+        vertical-align: middle;
+        white-space: nowrap;
+        width: 100%;
+        text-align: center;
+    }
+
+    .property-table .object-actions-row button {
+        font-size: 17px;
+    }
+
+.property-table .object-add-row button {
+    width: 100%;
+    font-size: 17px;
+}
+
+.property-table .object-attributes-name-row {
+    text-align: center;
+    word-wrap: anywhere;
+    font-size: 17px;
+}
+
+    .property-table .object-attributes-name-row small {
+        font-size: 17px;
+        color: #03b4da;
+    }
+
+.property-table .object-attributes-size-row {
+    text-align: center;
+    word-wrap: anywhere;
+    font-size: 17px;
+    color: #03b4da;
+}
+
+    .property-table .object-attributes-size-row > td {
+        padding-top: 0px;
+        border-top: none;
+    }
+
+    .property-table .object-attributes-size-row small {
+        font-size: 17px;
+        color: #ffffff;
+    }
+
+        .property-table .object-attributes-size-row small:nth-child(2) {
+            color: #ffffff7f;
+        }
+
+        .property-table .object-attributes-size-row small:nth-child(4) {
+            color: #ffffff7f;
+        }
+
+        .property-table .object-attributes-size-row small:nth-child(6) {
+            color: #ffffff7f;
+        }
+
+.property-table .object-constraints-name {
+}
+
+    .property-table .object-constraints-name span {
+        font-size: 20px;
+        word-wrap: anywhere;
+        line-height: 40px;
+    }
+
+    .property-table .object-constraints-name > td > .btn-group {
+        float: right;
+    }
+
+    .property-table .object-constraints-name button {
+        font-size: 17px;
+    }
+
+    .property-table .object-constraints-name .dropdown-menu {
+        background-color: rgba(0, 48, 57, 0.96);
+    }
+
+        .property-table .object-constraints-name .dropdown-menu .dropdown-item {
+            font-size: 20px;
+        }
+
+.property-table .object-add-constraint-row button {
+    width: 100%;
+    font-size: 17px;
+}
+
+.print-row-container {
+    display: flex;
+    flex-direction: row;
+}
+
+    .print-row-container > div {
+        width: 100%;
+    }
+
+    .print-row-container button {
+        font-size: 17px;
+    }
+
+    .print-row-container .dropdown-menu {
+        background-color: rgba(0, 48, 57, 0.96);
+        width: 100%;
+    }
+
+        .print-row-container .dropdown-menu .dropdown-item {
+            font-size: 20px;
+        }
+
+    .print-row-container span {
+        font-size: 18px;
+        white-space: break-spaces;
+    }
+
+.nesting-row-container {
+    display: flex;
+    flex-direction: row;
+}
+
+    .nesting-row-container button {
+        font-size: 17px;
+        width: 100%;
+    }
+
+    .nesting-row-container .nesting-progress {
+        flex-grow: 1;
+        text-align: center;
+        margin-top: auto;
+        margin-bottom: auto;
+        margin-left: 10px;
+        border: 1px solid #0007;
+        line-height: 35px;
+        width: 100%;
+    }

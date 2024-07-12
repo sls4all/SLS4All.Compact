@@ -1,0 +1,14 @@
+﻿.dummy {
+}
+
+/* hover looks bad on some hybrid touch devices */
+/*@media (hover: hover) {
+    .key:hover {
+        background: #808080E0;
+    }
+}
+*/
+.key:active {
+    background: #80808050;
+}
+

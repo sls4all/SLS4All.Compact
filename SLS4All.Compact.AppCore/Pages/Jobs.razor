@@ -1,0 +1,1109 @@
+﻿@page "/jobs"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using Nito.AsyncEx
+@using SLS4All.Compact.Helpers
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Text
+@using SLS4All.Compact.Threading;
+@using SLS4All.Compact.Validation;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Numerics
+@using System.Diagnostics.CodeAnalysis
+@using System.Text.Json
+
+@inherits AppPage
+@inject IPrintingService PrintingGlobal
+@inject IJobStorage JobStorage
+@inject ICurrentJobProvider JobProvider
+@inject ICurrentPrintingParamsProvider PrintingParamsProvider
+@inject IPrinterFileProvider FileProvider
+@inject IPrinterSettingsStorage SettingsStorage
+@inject IPrintProfileStorage ProfileStorage
+@inject IToastProvider ToastProvider
+@inject IJSRuntime JSRuntime
+@inject INestingServiceScoped Nesting
+@inject ILogger<Jobs> Logger
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IOptionsMonitor<FrontendOptions> FrontendOptions
+@inject ILayerClient LayerClient
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<FileBrowserModal @ref="_addObjectBrowser"
+                  Masks="@(new[] { "*.stl", "*.3mf", "*.obj" })"
+                  AllowSelectDirectories="false"
+                  AllowSelectFilesOutsideMask="false"
+                  Directory="@PrinterPath.Objects"
+                  OpenClicked="selection => AddObject(selection)" />
+
+<CancelModal @ref="_cancelModal" ShowSpinner="false" />
+
+<ModalWrapper @ref="_nameModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                @switch (_nameAction)
+                {
+                    case NameAction.Rename:
+                        <text>Rename job</text>
+                        break;
+                    case NameAction.Create:
+                        <text>Create new job</text>
+                        break;
+                    case NameAction.Clone:
+                        <text>Clone job</text>
+                        break;
+                    case NameAction.Delete:
+                        <text>Delete job</text>
+                        break;
+                }
+            </h5>
+        </div>
+        <div class="modal-body">
+            @if (_nameAction == NameAction.Create)
+            {
+                <text>Choose the job type</text>
+                <ValueEditor Title="Job type" @bind-Value="_jobType" Traits="GetJobTypeTraits()" class="mb-3"/>
+            }
+            @if (_nameAction != NameAction.Delete)
+            {
+                <text>Choose new name for the job</text>
+                <ValueEditor Title="New name" @bind-Value="_nameValue" ValueEntered="CompleteNameAction" />
+            }
+            else
+            {
+                <text>Do you really want to delete job <i>@_nameJob.Name</i>?</text>
+            }
+        </div>
+        <div class="modal-footer">
+            @if (_nameAction != NameAction.Delete)
+            {
+                <button @onclick="CompleteNameAction" class="btn btn-primary">
+                    @switch (_nameAction)
+                    {
+                        case NameAction.Rename:
+                            <text>Rename!</text>
+                            break;
+                        case NameAction.Create:
+                            <text>Create!</text>
+                            break;
+                        case NameAction.Clone:
+                            <text>Clone!</text>
+                            break;
+                    }
+                </button>
+            }
+            else
+            {
+                <button @onclick="CompleteNameAction" class="btn btn-danger">Delete!</button>
+            }
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_printModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Print this job</h5>
+        </div>
+        <div class="modal-body">
+            Do you want to start the print wizard for this job?
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoPrint()" class="btn btn-primary">Go to print wizard!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+@{
+    var isNesting = IsNesting;
+    var isPrinting = IsPrinting;
+    var tabIndex = _tabIndex;
+    if (_job == null)
+    {
+        _tabIndex = tabIndex = TabIndex.Jobs;
+        _selectedObject = null;
+        _selectedConstraint = null;
+    }
+}
+
+@if (isPrinting)
+{
+    <div class="printing-notification">
+        <p>
+            <span class="badge badge-dark text-wrap">
+                <i class="bi bi-play" /> Printing is in progress, Jobs cannot be browsed at this time for performance reasons.
+            </span>
+        </p>
+        <p>
+            <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+        </p>
+    </div>
+    return;
+}
+
+<CascadingValue IsFixed="true" Value="Validate">
+    <div class="container-fluid h-100">
+        <div class="row h-100">
+            <div class="col-auto h-100 p-0">
+                <div class="container properties-panel">
+                    <div class="row">
+                        <div class="col">
+                            <ul class="nav nav-tabs">
+                                <li class="nav-item">
+                                    <a class="nav-link @(tabIndex == TabIndex.Jobs ? "active" : "")" @onclick="() => ChangeTab(TabIndex.Jobs)">Jobs</a>
+                                </li>
+                                @if (_job != null)
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @(tabIndex == TabIndex.General ? "active" : "")" @onclick="() => ChangeTab(TabIndex.General)">General</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(tabIndex == TabIndex.Objects ? "active" : "")" @onclick="() => ChangeTab(TabIndex.Objects)">Objects</a>
+                                    </li>
+                                    @if (_selectedObject != null)
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @(tabIndex == TabIndex.Attributes ? "active" : "")" @onclick="() => ChangeTab(TabIndex.Attributes)">Attributes</a>
+                                        </li>
+                                    }
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <div class="property-container">
+                                <table class="table table-sm property-table">
+                                    <tbody>
+                                        @if (tabIndex == TabIndex.Jobs)
+                                        {
+                                            <tr class="new-job-row">
+                                                <td colspan="2">
+                                                    <div class="add-job-row-container">
+                                                        <button class="btn btn-theme btn--icon-text" @onclick="() => CreateJob()">
+                                                            <i class="bi bi-plus-circle-fill" /> Create new job...
+                                                        </button>
+                                                        <button class="ml-1 btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => ToggleJobSort()">
+                                                            @switch (_jobSort)
+                                                            {
+                                                                default:
+                                                                case JobSort.Name:
+                                                                    <text><i class="bi bi-sort-alpha-down" /> Name</text>
+                                                                    break;
+                                                                case JobSort.DateAsc:
+                                                                    <text><i class="bi bi-sort-numeric-down" /> Date</text>
+                                                                    break;
+                                                                case JobSort.DateDesc:
+                                                                    <text><i class="bi bi-sort-numeric-up" /> Date</text>
+                                                                    break;
+                                                            }
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            foreach (var __job in _jobs)
+                                            {
+                                                var job = __job;
+                                                var isSelected = job.Id == _job?.Id;
+                                                <tr @key="job" class="jobs-job-name-row @(isSelected ? "table-active" : "")">
+                                                    <td @onclick="() => SelectJob(job, false)">
+                                                        <div class="jobs-job-name-row-name">
+                                                            @if (isSelected)
+                                                            {
+                                                                <i class="bi @(job.Type switch { PrintJobType.Profiling => "bi-file-earmark-ppt-fill", _ => "bi-file-earmark-fill"})" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <i class="bi @(job.Type switch { PrintJobType.Profiling => "bi-file-earmark-ppt", _ => "bi-file-earmark"})" />
+                                                            }
+                                                            <small>@job.Name</small>
+                                                        </div>
+                                                        @if (isSelected)
+                                                        {
+                                                            <div class="jobs-job-name-row-date">
+                                                                <i class="bi bi-clock" />
+                                                                <small>
+                                                                    <BrowserTime DateTime="job.CreatedAtUtc" />
+                                                                </small>
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        <div class="btn-group">
+                                                            <button type="button" class="btn btn-theme dropright" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                                <i class="bi bi-activity" /> Action
+                                                            </button>
+                                                            <div class="dropdown-menu">
+                                                                <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SelectJob(job, true)">
+                                                                    <i class="bi bi-check2-square" />&nbsp;Select job
+                                                                </a>
+                                                                <a class="dropdown-item" href="javascript:void(0)" @onclick="() => DoPrint(job)">
+                                                                    <i class="bi bi-play-circle-fill" />&nbsp;Print job...
+                                                                </a>
+                                                                <div class="dropdown-divider"></div>
+                                                                <a class="dropdown-item" href="javascript:void(0)" @onclick="() => RenameJob(job)">
+                                                                    <i class="bi bi-pencil" />&nbsp;Rename...
+                                                                </a>
+                                                                <a class="dropdown-item" href="javascript:void(0)" @onclick="() => CloneJob(job)">
+                                                                    <i class="bi bi-diagram-2" />&nbsp;Clone...
+                                                                </a>
+                                                                <a class="dropdown-item" href="javascript:void(0)" @onclick="() => DeleteJob(job)">
+                                                                    <i class="bi bi-trash" />&nbsp;Delete job...
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        <CascadingValue IsFixed="true" Value="this">
+                                            @if (_job is AutomaticJobEntry)
+                                            {
+                                                <CurrentJobAutomatic @ref="_currentJobAutomatic" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" />
+                                            }
+                                            else if (_job is ProfilingJobEntry)
+                                            {
+                                                <CurrentJobProfiling @ref="_currentJobProfiling" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" />
+                                            }
+                                        </CascadingValue>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col h-100 p-0 job-canvas-container">
+                <canvas @ref="_canvas" class="job-canvas"></canvas>
+                @if (_job == null)
+                {
+                    <div class="validation-notification">
+                        <span class="badge badge-danger text-wrap">
+                            <i class="bi bi-exclamation-octagon" />&nbsp;
+                            Select job first.
+                        </span>
+                    </div>
+                }
+                else if (_validationErrors.Count != 0)
+                {
+                    var jobError = GetError(_job.Job, "");
+                    <div class="validation-notification">
+                        <span class="badge badge-danger text-wrap">
+                            <i class="bi bi-exclamation-octagon" />&nbsp;
+                            @if (_validationErrors.Count == 1 && jobError != null)
+                            {
+                                <text>@jobError</text>
+                            }
+                            else
+                            {
+                                <text>Please fix highlighted issues with the job.</text>
+                            }
+                        </span>
+                    </div>
+                }
+                <IndeterminateProgress @ref="_working">
+                    <div class="working-progress">
+                        <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+                    </div>
+                </IndeterminateProgress>
+            </div>
+        </div>
+    </div>
+</CascadingValue>
+
+@code {
+    public enum TabIndex
+    {
+        NotSet = 0,
+        Jobs,
+        General,
+        Objects,
+        Attributes,
+    }
+
+    private enum NameAction
+    {
+        NotSet = 0,
+        Rename,
+        Clone,
+        Create,
+        Delete,
+    }
+
+    private enum JobSort
+    {
+        NotSet = 0,
+        Name,
+        DateAsc,
+        DateDesc,
+    }
+
+    public const string SelfPath = "/jobs";
+    public const string CssScope = "b-jobs";
+    private static readonly TimeSpan s_saveDelay = TimeSpan.FromSeconds(5);
+    private int _saveIndex;
+    private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
+    private PrintJobDescription[] _jobs = Array.Empty<PrintJobDescription>();
+    private JobEntry? _job, _jobOriginal;
+    private JobSort _jobSort = JobSort.Name;
+    private TabIndex __tabIndex = TabIndex.Jobs;
+    private TabIndex _tabIndex
+    {
+        get => __tabIndex;
+        set => __tabIndex = value;
+    }
+    private PrintProfileEntry[] _printProfiles = Array.Empty<PrintProfileEntry>();
+    private JobObjectEntry? __selectedObject;
+    private JobObjectEntry? _selectedObject
+    {
+        get => __selectedObject;
+        set
+        {
+            if (__selectedObject == value)
+                return;
+            __selectedObject = value;
+        }
+    }
+    private JobObjectConstraintEntry? _selectedConstraint;
+    private FileBrowserModal? _addObjectBrowser;
+    private object? _addObjectState;
+    private DotNetObjectReference<Jobs> _self = default!;
+    private PrintProfileReference _resetPrintProfile;
+    private IndeterminateProgress? _working;
+    private bool _hadFirstRender;
+    private bool _inShouldRender;
+
+    private NameAction _nameAction;
+    private ModalWrapper? _nameModal;
+    private string _nameValue = "";
+    private PrintJobType _jobType = PrintJobType.Automatic;
+    private PrintJobDescription _nameJob = default!;
+    private IDisposable? _locationChangingSubscription;
+    private ModalWrapper? _printModal;
+    private CancelModal? _cancelModal;
+    private volatile int _ignoreJobUpdatedRefCount;
+
+    private CurrentJobAutomatic? _currentJobAutomatic;
+    private CurrentJobProfiling? _currentJobProfiling;
+
+    public bool ShouldShowConstrainedInstance =>
+        _tabIndex == TabIndex.Attributes &&
+        _selectedConstraint != null;
+
+    public TabIndex CurrentTab => _tabIndex;
+    public JobEntry? Job => _job;
+    public JobObjectEntry? SelectedObject => _selectedObject;
+    public JobObjectConstraintEntry? SelectedConstraint => _selectedConstraint;
+    public PrintProfileEntry[] PrintProfiles => _printProfiles;
+    public Dictionary<ValidationKey, ValidationValue> ValidationErrors => _validationErrors;
+
+    private async Task RereadJobs()
+    {
+        _jobs = await JobStorage.GetOrderedJobDescriptions();
+        switch (_jobSort)
+        {
+            case JobSort.DateAsc:
+                _jobs = _jobs.OrderBy(x => x.CreatedAtUtc).ToArray();
+                break;
+            case JobSort.DateDesc:
+                _jobs = _jobs.OrderByDescending(x => x.CreatedAtUtc).ToArray();
+                break;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await RereadJobs();
+        _syncCollapse.Logger = Logger;
+        _self = DotNetObjectReference.Create(this);
+        var powerSettings = SettingsStorage.GetPowerSettings();
+        var validationContext = ValidationContextFactory.CreateContext();
+
+        var profiles = new List<PrintProfileEntry>();
+        foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
+        {
+            var isValid = (await item.profile.Validate(validationContext)).IsValid;
+            profiles.Add(new PrintProfileEntry
+                {
+                    Profile = item.profile,
+                    IsValid = isValid,
+                    IsDefault = item.isDefault,
+                });
+        }
+        _printProfiles = profiles.ToArray();
+        Nesting.StateChanged.AddHandler(OnProviderStateChanged);
+        Nesting.BackgroundTask.StateChanged.AddHandler(TryInvokeStateHasChangedAsync);
+        JobStorage.JobUpdatedEvent.AddHandler(OnStorageJobUpdated);
+
+        // select and validate job
+        var currentJobDesc = _jobs.FirstOrDefault(x => x.Id == JobProvider.CurrentJobId);
+        await SelectJob(currentJobDesc, true);
+        await ValidateInner(false, doNotReset: true);
+
+        _locationChangingSubscription = NavigationManager.RegisterLocationChangingHandler(OnLocationChanging);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender)
+        {
+            _hadFirstRender = true;
+            await Sync();
+        }
+    }
+
+    private ValueTask OnStorageJobUpdated(PrintJobDescription desc, CancellationToken cancel)
+    {
+        if (_ignoreJobUpdatedRefCount == 0)
+        {
+            TryInvokeStateHasChanged(async () =>
+            {
+                await RereadJobs();
+                if (_job?.Id == desc.Id && _ignoreJobUpdatedRefCount == 0)
+                {
+                    await SelectJob(desc, false, doNotSave: true);
+                }
+            });
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public IDisposable IgnoreJobUpdated()
+    {
+        Interlocked.Increment(ref _ignoreJobUpdatedRefCount);
+        return new DelegatedDisposable(() => Interlocked.Decrement(ref _ignoreJobUpdatedRefCount));
+    }
+
+    private Task OnProviderStateChanged(CancellationToken cancel)
+        => Sync(wait: false, fromNester: true);
+
+    public async Task Save(bool delayed)
+    {
+        var index = ++_saveIndex;
+        if (delayed)
+        {
+            if (_job != null && !_job.Job.Equals(_jobOriginal?.Job))
+            {
+                Logger.LogDebug($"Saving job (will delay), changes detected. Job={JsonSerializer.Serialize(_job.Job)}. Original={JsonSerializer.Serialize(_jobOriginal?.Job)}");
+                _ = Task.Delay(s_saveDelay).ContinueWith(prev =>
+                {
+                    _ = InvokeAsync(async () =>
+                    {
+                        if (_saveIndex == index)
+                        {
+                            await Save(false); // will not throw
+                        }
+                    });
+                });
+            }
+        }
+        else
+        {
+            using var _ = IgnoreJobUpdated();
+            try
+            {
+                if (_job != null && !_job.Job.Equals(_jobOriginal?.Job))
+                {
+                    Logger.LogDebug($"Saving job, changes detected. Job={JsonSerializer.Serialize(_job.Job)}. Original={JsonSerializer.Serialize(_jobOriginal?.Job)}");
+                    await JobStorage.UpsertJob(_job.Job);
+                    _jobOriginal = _job.CloneJob();
+                    await RereadJobs();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to save the job");
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to save the job",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+        }
+    }
+
+    public async Task ValidateInner(bool saveAndSync, bool doNotReset = false)
+    {
+        if (_job == null)
+        {
+            _validationErrors.Clear();
+            return;
+        }
+        var validationContext = ValidationContextFactory.CreateContext();
+        var helper = await _job.Job.Validate(validationContext);
+        _validationErrors = helper.ToDictionary();
+        if (_currentJobAutomatic != null)
+            await _currentJobAutomatic.OnValidate();
+        if (_currentJobProfiling != null)
+            await _currentJobProfiling.OnValidate();
+        if (saveAndSync)
+        {
+            await Sync(wait: false);
+            await Save(true);
+        }
+    }
+
+    private async Task<string?> Validate(object obj, string name)
+    {
+        await ValidateInner(false);
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, name), out var value))
+            return value.Message; // not valid
+        else
+        {
+            await Sync(wait: false);
+            await Save(true);
+            StateHasChanged();
+            return null;
+        }
+    }
+
+    public string? GetError(object obj, string path)
+    {
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, path), out var value))
+            return value.Message;
+        else
+            return null;
+    }
+
+    private IInputValueTraits GetJobTypeTraits()
+    {
+        var choices = new object[] { PrintJobType.Automatic, PrintJobType.Profiling };
+        var traits = new DelegatedInputValueTraits(typeof(PrintJobType),
+            input => input switch
+            {
+                PrintJobType.Automatic => "Standard",
+                PrintJobType.Profiling => "Profiling",
+                _ => "Other",
+            },
+            input => PrintJobType.NotSet,
+            choices: choices);
+        return traits;
+    }
+
+    private IInputValueTraits GetPrintProfileTraits()
+    {
+        var choices = _printProfiles.Select(x => (object?)x.Reference).ToArray();
+        var traits = new DelegatedInputValueTraits(typeof(PrintProfileReference),
+            input => _printProfiles.SingleOrDefault(x => x.Reference == (PrintProfileReference?)input)?.Name ?? "not set",
+            input => Guid.Empty,
+            choices: choices);
+        return traits;
+    }
+
+    private IInputValueTraits GetJobObjectUnitsTraits()
+    {
+        var choices = new object[] { JobObjectUnits.Millimeters, JobObjectUnits.Inches };
+        var traits = new DelegatedInputValueTraits(typeof(JobObjectUnits),
+            input => input switch
+            {
+                JobObjectUnits.Millimeters => "Millimeters (mm)",
+                JobObjectUnits.Inches => "Inches (in)",
+                _ => "Other",
+            },
+            input => JobObjectUnits.NotSet,
+            choices: choices);
+        return traits;
+    }
+
+    public RenderFragment RenderValues(
+        (object obj, string path)[] paths,
+        string classes = "",
+        Func<object, string, Task>? onClick = null,
+        Func<object, string, Task>? onValueEntered = null,
+        bool isEditable = true)
+    {
+        return builder =>
+        {
+            var seq = 1;
+            for (int row = 0; row < paths.Length; row++)
+            {
+                var firstPath = paths[row];
+                var value = StorageValue.Create(firstPath.obj, firstPath.path);
+                IInputValueTraits? traits = null;
+                if (value.Type == typeof(PrintProfileReference))
+                    traits = GetPrintProfileTraits();
+                else if (value.Type == typeof(JobObjectUnits))
+                    traits = GetJobObjectUnitsTraits();
+                else if (value.Type == typeof(PrintJobType))
+                    traits = GetJobTypeTraits();
+                builder.OpenElement(seq++, "tr");
+                if (onClick != null)
+                    builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => onClick(firstPath.obj, firstPath.path)));
+                builder.AddAttribute(seq++, CssScope);
+                var rowClasses = classes;
+                if (row == 0)
+                    rowClasses += " hide-top-line";
+                builder.AddAttribute(seq++, "class", rowClasses);
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", "col-auto property-name");
+                builder.AddContent(seq++, value.Name.Name);
+                builder.CloseElement();
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", "col property-value pr-4");
+                builder.AddContent(seq++, value.RenderValueEditor(
+                    null,
+                    firstPath.obj,
+                    validationError: GetError(firstPath.obj, value.Path),
+                    cssScope: CssScope,
+                    traits: traits,
+                    valueEntered: onValueEntered != null ? EventCallback.Factory.Create(this, () => onValueEntered(firstPath.obj, firstPath.path)) : default,
+                    isEditable: isEditable
+                ));
+                builder.CloseElement();
+                builder.CloseElement();
+            }
+        };
+    }
+
+    public async Task AddObject(string[]? selection = null, object? state = null)
+    {
+        if (IsNesting)
+            return;
+        if (selection == null)
+        {
+            _addObjectState = state;
+            await _addObjectBrowser!.Show();
+        }
+        else
+        {
+            await _cancelModal!.Execute(async cancel =>
+                {
+                    using (_working!.BeginWork())
+                    {
+                        if (_currentJobAutomatic != null)
+                            await _currentJobAutomatic.AddObject(selection, _addObjectState, cancel);
+                        if (_currentJobProfiling != null)
+                            await _currentJobProfiling.AddObject(selection, _addObjectState, cancel);
+                    }
+                },
+                titleText: "Please wait",
+                bodyText: "Adding selected objects to the Job...",
+                cancelText: "Cancel");
+        }
+    }
+
+    public async Task SelectObject(JobObjectEntry? obj, bool sync, TabIndex? tabIndex = null)
+    {
+        if (_selectedObject == obj && (tabIndex == null || _tabIndex == tabIndex.Value))
+            return;
+        _selectedObject = obj;
+        _selectedConstraint = null;
+        _playConstraint = false;
+        if (tabIndex != null)
+            _tabIndex = tabIndex.Value;
+        if (sync)
+            await Sync(wait: false);
+    }
+
+    public async Task DeselectConstraint()
+    {
+        if (_selectedConstraint != null)
+        {
+            _selectedConstraint = null;
+            await Sync(wait: false);
+        }
+    }
+
+    public async Task SelectConstraint(JobObjectEntry obj, JobObjectConstraintEntry? constraint, bool sync)
+    {
+        if (constraint != null && !obj.Constraints.Contains(constraint))
+            constraint = null;
+        if (_selectedObject == obj && _selectedConstraint == constraint)
+            return;
+        _selectedObject = obj;
+        _selectedConstraint = constraint;
+        _playConstraint = false;
+        if (sync)
+            await Sync(wait: false);
+    }
+
+    public async Task RemoveConstraint(JobObjectEntry obj, JobObjectConstraintEntry constraint, bool sync)
+    {
+        if (Job == null || IsNesting)
+            return;
+        obj.Constraints = obj.Constraints.Where(x => x != constraint).ToArray();
+        if (_selectedConstraint == constraint)
+            _selectedConstraint = null;
+        _playConstraint = false;
+        if (sync)
+            await Sync();
+    }
+
+    public async Task ResetConstraint(JobObjectEntry obj, JobObjectConstraintEntry constraint, bool sync)
+    {
+        if (Job == null || IsNesting)
+            return;
+        await SelectConstraint(obj, constraint, false);
+        constraint.BaseYaw = 0;
+        constraint.BasePitch = 0;
+        constraint.BaseRoll = 0;
+        _playConstraint = false;
+        if (sync)
+            await Sync(wait: false);
+    }
+
+    public async Task AlignConstraint(JobObjectEntry obj, JobObjectConstraintEntry constraint, decimal alignValue, bool sync)
+    {
+        if (Job == null || IsNesting)
+            return;
+        await SelectConstraint(obj, constraint, false);
+        constraint.BaseYaw = Math.Round(constraint.BaseYaw / alignValue) * alignValue;
+        constraint.BasePitch = Math.Round(constraint.BasePitch / alignValue) * alignValue;
+        constraint.BaseRoll = Math.Round(constraint.BaseRoll / alignValue) * alignValue;
+        _playConstraint = false;
+        if (sync)
+            await Sync(wait: false);
+    }
+
+    public async Task TogglePlayConstraint(JobObjectEntry obj, JobObjectConstraintEntry constraint, bool sync, bool? desiredState = null)
+    {
+        await SelectConstraint(obj, constraint, false);
+        _playConstraint = desiredState ?? !_playConstraint;
+        if (sync)
+            await Sync(wait: false);
+    }
+
+    private async Task ChangeTab(TabIndex index)
+    {
+        if (_tabIndex == index)
+            return;
+        var old = _tabIndex;
+        _tabIndex = index;
+        if (old == TabIndex.Attributes)
+        {
+            _selectedConstraint = null;
+            _playConstraint = false;
+            await Sync(wait: false);
+        }
+        if (index == TabIndex.Jobs)
+        {
+            await Save(false);
+            await RereadJobs();
+        }
+    }
+
+    private async Task SelectJob(PrintJobDescription? job, bool changePage, bool doNotSave = false)
+    {
+        if (!doNotSave)
+            await Save(false);
+        var jobInstance = job != null ? await JobStorage.TryGetJob(job.Id) : null;
+        await SelectJob(jobInstance, changePage);
+    }
+
+    private async Task SelectJob(IPrintJob? job, bool changePage, bool forPrint = false)
+    {
+        if (JobProvider.CurrentJobId != job?.Id)
+            await JobProvider.SetCurrentJob(job?.Id);
+        if (_job?.Id != job?.Id || 
+            (job != null && _job != null && !job.Equals(_job.Job)))
+        {
+            _syncCollapse.Cancel(); // cancel sync
+            Nesting.BackgroundTask.Cancel(); // cancel nesting
+            await _syncCollapse.Wait();
+            await Nesting.BackgroundTask.Wait(); // wait for the nesting thread to finish, so the Sync will proceed
+            await CollectGarbage();
+            _selectedObject = null;
+            _selectedConstraint = null;
+            _job = JobEntry.Create(job);
+            _jobOriginal = _job?.CloneJob();
+        }
+        if (changePage)
+            _tabIndex = TabIndex.General;
+        StateHasChanged();
+        await ValidateInner(false);
+        await Sync(wait: false, nestingOnly: forPrint);
+    }
+
+    private async Task RenameJob(PrintJobDescription job, string? newName = null)
+    {
+        if (string.IsNullOrWhiteSpace(newName) || job.Name == newName)
+        {
+            _nameAction = NameAction.Rename;
+            _nameJob = job;
+            _nameValue = job.Name;
+            _jobType = job.Type;
+            await _nameModal!.Show();
+        }
+        else
+        {
+            if (_job?.Id == job.Id)
+            {
+                _job.Name = newName;
+                await Save(false);
+            }
+            else
+            {
+                using var _ = IgnoreJobUpdated();
+                try
+                {
+                    var newJob = await JobStorage.TryGetJob(job.Id);
+                    if (newJob == null)
+                        throw new ApplicationException("Job is missing");
+                    newJob.Name = newName;
+                    await JobStorage.UpsertJob(newJob);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to rename the job");
+                    ToastProvider.Show(new ToastMessage
+                        {
+                            HeaderText = "Failed to rename the job",
+                            BodyText = ex.Message,
+                            Type = ToastMessageType.Error,
+                            Key = this,
+                            Exception = ex,
+                        });
+                }
+                finally
+                {
+                    await RereadJobs();
+                    StateHasChanged();
+                }
+            }
+        }
+    }
+
+    private async Task CloneJob(PrintJobDescription job, string? newName = null)
+    {
+        if (string.IsNullOrWhiteSpace(newName) || newName == job.Name)
+        {
+            _nameAction = NameAction.Clone;
+            _nameJob = job;
+            _nameValue = await JobStorage.GetUniqueJobName(job.Name);
+            _jobType = job.Type;
+            await _nameModal!.Show();
+        }
+        else
+        {
+            using var _ = IgnoreJobUpdated();
+            try
+            {
+                if (_job?.Id == job.Id)
+                    await Save(false);
+                var newJob = await JobStorage.CloneJob(job.Id, newName);
+                await SelectJob(newJob, false);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to clone the job");
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to clone the job",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+            finally
+            {
+                await RereadJobs();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task CreateJob(string? newName = null)
+    {
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            _nameAction = NameAction.Create;
+            _nameValue = NamesGenerator.GenerateRandomName(true, false);
+            _jobType = PrintJobType.Automatic;
+            await _nameModal!.Show();
+        }
+        else
+        {
+            using var _ = IgnoreJobUpdated();
+            try
+            {
+                IPrintJob newJob;
+                // NOTE: do not assign profile, such assumption might be dangerous due to different profile temperatures
+                switch (_jobType)
+                {
+                    case PrintJobType.Automatic:
+                        newJob = new AutomaticJob
+                            {
+                                Name = newName,
+                            };
+                        break;
+                    case PrintJobType.Profiling:
+                        newJob = new ProfilingJob
+                            {
+                                Name = newName,
+                            };
+                        break;
+                    default:
+                        return;
+                }
+                await JobStorage.UpsertJob(newJob);
+                await SelectJob(newJob, true);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to create new job");
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to create new job",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+        }
+    }
+
+    private async Task DeleteJob(PrintJobDescription job, bool force = false)
+    {
+        if (!force)
+        {
+            _nameJob = job;
+            _nameAction = NameAction.Delete;
+            await _nameModal!.Show();
+        }
+        else
+        {
+            if (_job?.Id == job.Id)
+                await SelectJob((IPrintJob?)null, false);
+            using var _ = IgnoreJobUpdated();
+            try
+            {
+                await JobStorage.DeleteJob(job.Id);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to delete the job");
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to delete the job",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+            await RereadJobs();
+        }
+    }
+
+    private async Task CompleteNameAction()
+    {
+        await _nameModal!.Close();
+        switch (_nameAction)
+        {
+            case NameAction.Rename:
+                await RenameJob(_nameJob, _nameValue);
+                break;
+            case NameAction.Clone:
+                await CloneJob(_nameJob, _nameValue);
+                break;
+            case NameAction.Create:
+                await CreateJob(_nameValue);
+                break;
+            case NameAction.Delete:
+                await DeleteJob(_nameJob, true);
+                break;
+        }
+    }
+
+    private async Task DoPrint(PrintJobDescription? job = null)
+    {
+        if (job != null && job.Id != _job?.Id)
+        {
+            var jobInstance = job != null ? await JobStorage.TryGetJob(job.Id) : null;
+            await SelectJob(jobInstance, false, forPrint: true);
+        }
+        var printingParams = await TryGetParametersBeforePrint();
+        if (printingParams == null)
+        {
+            if (job != null)
+                await Sync(cancelPrev: true); // full sync
+            return;
+        }
+        if (PrintingGlobal.BackgroundTask.Status?.IsCompleted == false)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Cannot start print",
+                    BodyText = "Printing is already in progress.",
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                });
+            return;
+        }
+        PrintingParamsProvider.PrintingParams = printingParams;
+        NavigationManager.NavigateTo(PrintWizard.SelfPath);
+    }
+
+    private async ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        await Save(false);
+    }
+
+    public async Task ShowPrintModal()
+    {
+        await ValidateInner(false);
+        if (_validationErrors.Any())
+            return; // not valid
+        await _printModal!.Show();
+    }
+
+    public void OnChildStateHasChanged()
+    {
+        StateHasChanged();
+    }
+
+    protected override bool ShouldRender()
+    {
+        if (!_inShouldRender)
+        {
+            _inShouldRender = true;
+            try
+            {
+                _currentJobAutomatic?.OnParentStateHasChanged();
+                _currentJobProfiling?.OnParentStateHasChanged();
+                return base.ShouldRender();
+            }
+            finally
+            {
+                _inShouldRender = false;
+            }
+        }
+        else
+            return false;
+    }
+
+    public async Task ToggleJobSort()
+    {
+        _jobSort = _jobSort switch
+        {
+            JobSort.Name => JobSort.DateDesc,
+            JobSort.DateDesc => JobSort.DateAsc,
+            JobSort.DateAsc => JobSort.Name,
+            _ => _jobSort,
+        };
+        await RereadJobs();
+    }
+}

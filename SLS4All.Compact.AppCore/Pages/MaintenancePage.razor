@@ -1,0 +1,610 @@
+﻿@page "/maintenance"
+@page "/maintenance/{TabIndexName}"
+@using System.Diagnostics
+@using SLS4All.Compact.ComponentModel;
+@using SLS4All.Compact.Helpers;
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage;
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Collections
+@inherits AppPage
+@inject IPrintSessionStorage SessionStorage
+@inject IPrinterMaintenanceManager MaintenanceManager
+@inject IPrinterWearProvider WearProvider
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IToastProvider ToastProvider
+@inject IPrinterTimeManager TimeManager
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-maintenance.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_halogenModal" class="app-modal" Closed="OnResetModalClosed" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Reset <b>halogen</b> maintenance
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                If you have performed maintenance on halogens or you have any other reason to reset the maintenance period, click <b>Reset maintenace</b> below.
+            </p>
+            @if (MaintenanceManager.LastHalogenReset != null)
+            {
+                <p>
+                    Last halogen maintenance reset was performed at <BrowserTime DateTime="MaintenanceManager.LastHalogenReset?.UtcDateTime" />.
+                </p>
+            }
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoReset(modal, MaintenanceManager.ResetHalogen)" class="btn btn-danger">Reset <b>Halogens</b> maintenace</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_laserModal" class="app-modal" Closed="OnResetModalClosed" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Reset <b>laser</b> maintenance
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                If you have performed maintenance on laser or you have any other reason to reset the maintenance period, click <b>Reset maintenace</b> below.
+            </p>
+            @if (MaintenanceManager.LastLaserReset != null)
+            {
+                <p>
+                    Last laser maintenance reset was performed at <BrowserTime DateTime="MaintenanceManager.LastLaserReset?.UtcDateTime" />.
+                </p>
+            }
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoReset(modal, MaintenanceManager.ResetLaser)" class="btn btn-danger">Reset <b>Laser</b> maintenace</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_z1Modal" class="app-modal" Closed="OnResetModalClosed" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Reset <b>Z1 axis</b> maintenance
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                If you have performed maintenance on the Z1 axis or you have any other reason to reset the maintenance period, click <b>Reset maintenace</b> below.
+            </p>
+            @if (MaintenanceManager.LastZ1Reset != null)
+            {
+                <p>
+                    Last Z1 axis maintenance reset was performed at <BrowserTime DateTime="MaintenanceManager.LastZ1Reset?.UtcDateTime" />.
+                </p>
+            }
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoReset(modal, MaintenanceManager.ResetZ1)" class="btn btn-danger">Reset <b>Z1</b> maintenace</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_z2Modal" class="app-modal" Closed="OnResetModalClosed" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Reset <b>Z2 axis</b> maintenance
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                If you have performed maintenance on the Z2 axis or you have any other reason to reset the maintenance period, click <b>Reset maintenace</b> below.
+            </p>
+            @if (MaintenanceManager.LastZ2Reset != null)
+            {
+                <p>
+                    Last Z2 axis maintenance reset was performed at <BrowserTime DateTime="MaintenanceManager.LastZ2Reset?.UtcDateTime" />.
+                </p>
+            }
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoReset(modal, MaintenanceManager.ResetZ2)" class="btn btn-danger">Reset <b>Z2</b> maintenace</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_rModal" class="app-modal" Closed="OnResetModalClosed" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Reset <b>recoater</b> maintenance
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                If you have performed maintenance on the recoater or you have any other reason to reset the maintenance period, click <b>Reset maintenace</b> below.
+            </p>
+            @if (MaintenanceManager.LastRReset != null)
+            {
+                <p>
+                    Last recoater maintenance reset was performed at <BrowserTime DateTime="MaintenanceManager.LastRReset?.UtcDateTime" />.
+                </p>
+            }
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoReset(modal, MaintenanceManager.ResetR)" class="btn btn-danger">Reset <b>recoater</b> maintenace</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<CascadingValue IsFixed="true" Value="Validate">
+    <div class="container h-100 py-3 pr-0">
+        <div class="row align-items-end h-100">
+            <div class="col h-100 p-0">
+                <div class="d-flex align-items-start flex-column h-100">
+                    @if (_tabIndex is TabIndex.Session or TabIndex.SessionDetail or TabIndex.SessionTimes)
+                    {
+                        <div class="flex-grow-1 container item-list">
+                            <div class="row item-list quick-stats">
+                                @foreach (var item_ in _sessions)
+                                {
+                                    var item = item_;
+                                    var isSelected = _selectedSession?.Id == item.Id;
+                                    <div @key="item" class="col-3 col-item">
+                                        <div class="quick-stats__item @(isSelected ? "item-selected" : "")" @onclick="() => SelectSession(item)">
+                                            <div class="quick-stats__info">
+                                                <h2><i class="bi bi-clock" /> <BrowserTime class="session-time" DateTime="@item.Brief.StartTime.UtcDateTime" /></h2>
+                                                <small><i class="bi bi-card-text" /> @item.Brief.JobName</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    <div class="container properties-panel">
+                        <div class="row">
+                            <div class="col">
+                                <ul class="nav nav-tabs">
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Maintenance ? "active" : "")" @onclick="() => SelectTab(TabIndex.Maintenance)">Maintenance</a>
+                                    </li>
+                                    @if (_selectedSession?.Detail != null)
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link @(_tabIndex == TabIndex.Session ? "active" : "")" @onclick="() => SelectTab(TabIndex.Session)">Session</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @(_tabIndex == TabIndex.SessionDetail ? "active" : "")" @onclick="() => SelectTab(TabIndex.SessionDetail)">Session detail</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link @(_tabIndex == TabIndex.SessionTimes ? "active" : "")" @onclick="() => SelectTab(TabIndex.SessionTimes)">Session times</a>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                                <form class="property-container">
+                                    <table class="table table-sm property-table">
+                                        <tbody>
+                                            @if (_tabIndex is TabIndex.Session && _selectedSession?.Detail != null)
+                                            {
+                                                @RenderValues(
+                                                    new (object, string?)[] {
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.StartTime)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.DurationRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.Result)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.JobName)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.ProfileName)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.ExceptionStringCollapsed)),
+                                                    })
+                                            }
+                                            else if (_tabIndex == TabIndex.SessionDetail && _selectedSession?.Detail != null)
+                                            {
+                                                @RenderValues(
+                                                    new (object, string?)[] {
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.TotalPowderDepthRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.TotalPowderVolumeLitersRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.SinteredVolumeLitersRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.FinalPrintDepthRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.FinalPrintVolumeLitersRounded)),
+                                                    })
+                                            }
+                                            else if (_tabIndex == TabIndex.SessionTimes && _selectedSession?.Detail != null)
+                                            {
+                                                @RenderValues(
+                                                    new (object, string?)[] {
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.StartTime)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.DurationRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.HeatingDurationRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.ObjectsDurationRounded)),
+                                                        (_selectedSession.Detail, nameof(_selectedSession.Detail.CoolingDurationRounded)),
+                                                    })
+                                            }
+                                            else if (_tabIndex == TabIndex.Maintenance)
+                                            {
+                                                @RenderValues(
+                                                    new (object, string?)[] {
+                                                        (_maintenance, nameof(_maintenance.HalogenRemaining)),
+                                                        (_maintenance, nameof(_maintenance.LaserRemaining)),
+                                                        (_maintenance, nameof(_maintenance.Z1Remaining)),
+                                                        (_maintenance, nameof(_maintenance.Z2Remaining)),
+                                                        (_maintenance, nameof(_maintenance.RRemaining)),
+
+                                                        (_maintenance, nameof(_maintenance.StartTime)),
+
+                                                        (_maintenance, nameof(_maintenance.HalogenTotal)),
+                                                        (_maintenance, nameof(_maintenance.LaserTotal)),
+                                                        (_maintenance, nameof(_maintenance.Z1Total)),
+                                                        (_maintenance, nameof(_maintenance.Z2Total)),
+                                                        (_maintenance, nameof(_maintenance.RTotal)),
+                                                    })
+                                            }
+                                        </tbody>
+                                    </table>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</CascadingValue>
+
+@code {
+    public enum TabIndex
+    {
+        NotSet = 0,
+        Maintenance,
+        Session,
+        SessionDetail,
+        SessionTimes,
+    }
+
+    private sealed class SessionInfo
+    {
+        public Guid Id => Brief.Id;
+        public required PrintSessionBrief Brief { get; set; }
+        public PrintSessionDetail? Detail { get; set; }
+    }
+
+    private sealed class MaintenanceInfo(MaintenancePage page)
+    {
+        private readonly MaintenancePage _page = page;
+
+        [StorageName("Halogen remaining", isEditable: false)]
+        [StorageDescription("How long of active halogen time is remaining for planned maintenance")]
+        [StorageUnit("hours")]
+        public decimal HalogenRemaining => _page.MaintenanceManager.HalogenRemaining.TotalHours.RoundToDecimal(1);
+        [StorageName("Halogen total", isEditable: false)]
+        [StorageDescription("How long of active halogen time has elapsed in total")]
+        [StorageUnit("hours")]
+        public decimal HalogenTotal => _page.WearProvider.HalogenDuration.TotalHours.RoundToDecimal(1);
+
+        [StorageName("Laser remaining", isEditable: false)]
+        [StorageDescription("How long of active laser time is remaining for planned maintenance")]
+        [StorageUnit("hours")]
+        public decimal LaserRemaining => _page.MaintenanceManager.LaserRemaining.TotalHours.RoundToDecimal(1);
+        [StorageName("Laser total", isEditable: false)]
+        [StorageDescription("How long of active laser time has elapsed in total")]
+        [StorageUnit("hours")]
+        public decimal LaserTotal => _page.WearProvider.LaserDuration.TotalHours.RoundToDecimal(1);
+
+        [StorageName("Z1 remaining", isEditable: false)]
+        [StorageDescription("How much of travelled distance for Z1 axis is remaining for planned maintenance")]
+        [StorageUnit("m")]
+        public decimal Z1Remaining => _page.MaintenanceManager.Z1Remaining.RoundToDecimal(3);
+        [StorageName("Z1 total", isEditable: false)]
+        [StorageDescription("How much Z1 axis has travelled in total")]
+        [StorageUnit("m")]
+        public decimal Z1Total => _page.WearProvider.Z1Distance.RoundToDecimal(3);
+
+        [StorageName("Z2 remaining", isEditable: false)]
+        [StorageDescription("How much of travelled distance for Z2 axis is remaining for planned maintenance")]
+        [StorageUnit("m")]
+        public decimal Z2Remaining => _page.MaintenanceManager.Z2Remaining.RoundToDecimal(3);
+        [StorageName("Z2 total", isEditable: false)]
+        [StorageDescription("How much Z2 axis has travelled in total")]
+        [StorageUnit("m")]
+        public decimal Z2Total => _page.WearProvider.Z2Distance.RoundToDecimal(3);
+
+        [StorageName("R remaining", isEditable: false)]
+        [StorageDescription("How much of travelled distance for Recoater is remaining for planned maintenance")]
+        [StorageUnit("m")]
+        public decimal RRemaining => _page.MaintenanceManager.RRemaining.RoundToDecimal(3);
+        [StorageName("R total", isEditable: false)]
+        [StorageDescription("How much Recoater has travelled in total")]
+        [StorageUnit("m")]
+        public decimal RTotal => _page.WearProvider.RDistance.RoundToDecimal(3);
+
+        [StorageName("Measuring from", isEditable: false)]
+        [StorageDescription("Time the total statistics have begun recording")]
+        public DateTimeOffset StartTime => _page.WearProvider.FirstUpdateTime;
+
+        public ValueTask<ValidationHelper> Validate(ValidationContext context)
+        {
+            var h = context.CreateHelper(this);
+            if (HalogenRemaining <= 0)
+                h.AddErrorForValue("Halogen maintenance required", HalogenRemaining, prependValueName: false);
+            if (LaserRemaining <= 0)
+                h.AddErrorForValue("Laser maintenance required", LaserRemaining, prependValueName: false);
+            if (Z1Remaining <= 0)
+                h.AddErrorForValue("Z1 maintenance required", Z1Remaining, prependValueName: false);
+            if (Z2Remaining <= 0)
+                h.AddErrorForValue("Z2 maintenance required", Z2Remaining, prependValueName: false);
+            if (RRemaining <= 0)
+                h.AddErrorForValue("Recoater maintenance required", RRemaining, prependValueName: false);
+            return h;
+        }
+    }
+
+    public const string SelfPath = "/maintenance";
+    private const string CssScope = "b-maintenance";
+    private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
+    private TabIndex _tabIndex = TabIndex.Maintenance;
+    private readonly List<SessionInfo> _sessions = new();
+    private SessionInfo? _selectedSession;
+    private TimeZoneInfo _timeZone = TimeZoneInfo.Local;
+    private readonly MaintenanceInfo _maintenance;
+    private ModalWrapper? _halogenModal;
+    private ModalWrapper? _laserModal;
+    private ModalWrapper? _z1Modal;
+    private ModalWrapper? _z2Modal;
+    private ModalWrapper? _rModal;
+    private IInputValueTraitsActionHandler? _resetModalHandler;
+
+    [Parameter]
+    public string TabIndexName
+    {
+        get => _tabIndex.ToString();
+        set
+        {
+            if (Enum.TryParse<TabIndex>(value, true, out var tabIndex))
+                _tabIndex = tabIndex;
+        }
+    }
+
+    public MaintenancePage()
+    {
+        _maintenance = new MaintenanceInfo(this);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _timeZone = await TimeManager.GetTimeZone(MainLayout?.IsLocalSession ?? false, true) ?? TimeZoneInfo.Local;
+        await ReloadInfo();
+        await ValidateInner();
+    }
+
+    private async Task ReloadInfo()
+    {
+        SessionInfo? newSelectedSession = null;
+        _sessions.Clear();
+        await foreach (var brief in SessionStorage.GetSessionsDescending())
+        {
+            var info = new SessionInfo
+            {
+                Brief = brief,
+            };
+            if (info.Id == _selectedSession?.Id)
+                newSelectedSession = info;
+            _sessions.Add(info);
+        }
+        if (newSelectedSession == null)
+            newSelectedSession = _sessions.FirstOrDefault();
+        await SelectSession(newSelectedSession);
+    }
+
+    private string? GetError(object obj, string path)
+    {
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, path), out var value))
+            return value.Message;
+        else
+            return null;
+    }
+
+    private RenderFragment RenderValues(
+        (object obj, string? path)[] pathsSource,
+        bool hideTopLine = true)
+    {
+        return builder =>
+        {
+            var paths = pathsSource.Where(x => x.path != null).ToArray()!;
+            var seq = 1;
+            var rows = (paths.Length + 1) / 2;
+            var col1 = 0;
+            var col2 = rows;
+            var nonNullPath = paths.First();
+
+            void RenderColumn(object obj, string path, bool hasPath, bool isLeft)
+            {
+                var value = StorageValue.Create(obj, path);
+                var visibility = hasPath ? "" : "invisible";
+                IInputValueTraits? traits = GetTraits(value);
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-1 property-name {(isLeft ? "" : "pl-4")} {visibility}");
+                builder.AddContent(seq++, value.Name.Name);
+                builder.CloseElement();
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-4 property-value {(isLeft ? "pr-4" : "")} {visibility}");
+                builder.AddContent(seq++, value.RenderValueEditor(null, obj, validationError: GetError(obj, value.Path), cssScope: CssScope, traits: traits));
+                builder.CloseElement();
+            }
+
+            for (int row = 0; row < rows; row++)
+            {
+                var hasFirstPath = col1 < paths.Length;
+                var hasSecondPath = col2 < paths.Length;
+                var firstPath = (hasFirstPath ? paths[col1++] : nonNullPath);
+                var secondPath = (hasSecondPath ? paths[col2++] : nonNullPath);
+                builder.OpenElement(seq++, "tr");
+                builder.AddAttribute(seq++, CssScope);
+                if (row == 0 && hideTopLine)
+                    builder.AddAttribute(seq++, "class", "hide-top-line");
+                RenderColumn(firstPath.obj, firstPath.path!, hasFirstPath, true);
+                RenderColumn(secondPath.obj, secondPath.path!, hasSecondPath, false);
+                builder.CloseElement();
+            }
+        };
+    }
+
+    private RenderFragment RenderValues(
+        object obj,
+        string?[] paths,
+        bool hideTopLine = true)
+        => RenderValues(paths.Select(x => (obj, x)).ToArray(), hideTopLine);
+
+    private IInputValueTraits? GetTraits(StorageValue value)
+    {
+        if (value.Path == nameof(MaintenanceInfo.LaserRemaining))
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _laserModal!.Show())]);
+        else if (value.Path == nameof(MaintenanceInfo.HalogenRemaining))
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _halogenModal!.Show())]);
+        else if (value.Path == nameof(MaintenanceInfo.Z1Remaining))
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _z1Modal!.Show())]);
+        else if (value.Path == nameof(MaintenanceInfo.Z2Remaining))
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _z2Modal!.Show())]);
+        else if (value.Path == nameof(MaintenanceInfo.RRemaining))
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _rModal!.Show())]);
+        else if (value.Type == typeof(PrintSessionResult))
+            return GetPrintSessionResultTraits();
+        else if (value.Type == typeof(DateTimeOffset))
+            return GetDateTimeOffsetTraits();
+        else if (value.Type == typeof(DateTimeOffset?))
+            return GetDateTimeOffsetNullableTraits();
+        else
+            return null;
+    }
+
+    private IInputValueTraits GetDateTimeOffsetTraits()
+    {
+        var traits = new DelegatedInputValueTraits(typeof(DateTimeOffset),
+            input =>
+            {
+                var local = TimeZoneInfo.ConvertTimeFromUtc(((DateTimeOffset)input!).UtcDateTime, _timeZone);
+                return local.ToString();
+            },
+            input => DateTimeOffset.Now);
+        return traits;
+    }
+
+    private IInputValueTraits GetDateTimeOffsetNullableTraits()
+    {
+        var traits = new DelegatedInputValueTraits(typeof(DateTimeOffset?),
+            input =>
+            {
+                if (input == null)
+                    return null;
+                else
+                {
+                    var local = TimeZoneInfo.ConvertTimeFromUtc(((DateTimeOffset)input!).UtcDateTime, _timeZone);
+                    return local.ToString();
+                }
+            },
+            input => DateTimeOffset.Now);
+        return traits;
+    }
+
+    private IInputValueTraits GetPrintSessionResultTraits()
+    {
+        var traits = new DelegatedInputValueTraits(typeof(PrintSessionResult),
+            input => input switch
+            {
+                PrintSessionResult.NotSet => "Unknown",
+                PrintSessionResult.Succeeded => "Succeeded",
+                PrintSessionResult.Cancelled => "Cancelled",
+                PrintSessionResult.Failed => "Failed",
+                _ => "Other",
+            },
+            input => PrintSessionResult.NotSet);
+        return traits;
+    }
+
+    private void SelectTab(TabIndex tab)
+    {
+        _tabIndex = tab;
+        UpdateUri();
+    }
+
+    private void UpdateUri()
+    {
+        NavigationManager.NavigateTo($"{SelfPath}/{TabIndexName}", new NavigationOptions { ReplaceHistoryEntry = true });
+    }
+
+    private async Task ValidateInner()
+    {
+        var validationContext = ValidationContextFactory.CreateContext();
+        var helper = await _maintenance.Validate(validationContext);
+        _validationErrors = helper.ToDictionary();
+    }
+
+    private async Task<string?> Validate(object obj, string name)
+    {
+        await ValidateInner();
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, name), out var value))
+            return value.Message; // not valid
+        else
+            return null;
+    }
+
+    private async Task SelectSession(SessionInfo? item)
+    {
+        if (item != null)
+        {
+            if (item.Detail == null)
+                item.Detail = await SessionStorage.TryGetDetail(item.Id);
+        }
+        _selectedSession = item;
+    }
+
+    private async ValueTask DoReset(IInputValueTraitsActionHandler handler, ModalWrapper? modal)
+    {
+        _resetModalHandler = handler;
+        if (modal != null)
+            await modal.Show();
+    }
+
+    private async Task OnResetModalClosed()
+    {
+        await ValidateInner();
+        StateHasChanged();
+    }
+
+    private async Task DoReset(ModalWrapper? modal, Func<CancellationToken, ValueTask> func)
+    {
+        if (modal != null)
+            await modal.Close();
+        try
+        {
+            await func(default);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                Exception = ex,
+                HeaderText = "Failed to reset maintenance",
+                BodyText = ex.Message,
+                Key = this,
+            });
+        }
+        await OnResetModalClosed();
+    }
+}

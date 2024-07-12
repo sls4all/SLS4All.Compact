@@ -1,0 +1,278 @@
+// Copyright(C) 2024 anyteq development s.r.o.
+// 
+// This file is part of SLS4All project (sls4all.com) and is made available
+// under the terms of the License Agreement as described in the LICENSE.txt
+// file located in the root directory of the repository.
+
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Nito.AsyncEx;
+using SLS4All.Compact.Diagnostics;
+using SLS4All.Compact.Numerics;
+using SLS4All.Compact.Power;
+using SLS4All.Compact.Printer;
+using SLS4All.Compact.Threading;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+
+namespace SLS4All.Compact.Movement
+{
+    public class FakeMovementClientOptions : MovementClientBaseOptions
+    {
+        public double PwmCycleTime { get; set; } = 1.0 / 4500;
+        public TimeSpan AccelerationStepDuration { get; set; } = TimeSpan.FromSeconds(0.01);
+        public double MaxXYVelocity { get; set; }
+        public double SpeedFactor { get; set; } = 1;
+
+        public override void CopyFrom(MovementConfigOptions config)
+        {
+            base.CopyFrom(config);
+            var other = config as FakeMovementClientOptions;
+            if (other != null)
+            {
+                PwmCycleTime = other.PwmCycleTime;
+                AccelerationStepDuration = other.AccelerationStepDuration;
+            }
+        }
+    }
+
+    public sealed class FakeMovementClient : MovementClientBase
+    {
+        private const double _maxReaasonableVelocity = 1_000_000_000;
+        private readonly ILogger _logger;
+        private readonly IOptionsMonitor<FakeMovementClientOptions> _options;
+        private SystemTimestamp _timestamp;
+        private double _posX, _posY, _posR, _posZ1, _posZ2;
+        private readonly object _lock = new();
+        private readonly AsyncLock _homingLock;
+        private readonly TrapezoidCalculator _trapezoid;
+
+        public FakeMovementClient(
+            ILogger<FakeMovementClient> logger,
+            IOptionsMonitor<FakeMovementClientOptions> options)
+            : base(logger, options)
+        {
+            _logger = logger;
+            _options = options;
+
+            _homingLock = new();
+            _trapezoid = new();
+        }
+
+        protected override Position? TryGetPosition()
+        {
+            lock (_lock)
+            {
+                return new Position(_posX, _posY, _posZ1, _posZ2, _posR);
+            }
+        }
+
+        private void ResetTimestampInner()
+        {
+            var now = SystemTimestamp.Now;
+            if (_timestamp.IsEmpty || _timestamp < now)
+                _timestamp = now;
+        }
+
+        public override ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            cancel.ThrowIfCancellationRequested();
+            var options = _options.CurrentValue;
+            lock (_lock)
+            {
+                ResetTimestampInner();
+                _timestamp += delay / options.SpeedFactor;
+            }
+            return ValueTask.CompletedTask;
+        }
+
+        public override Task EnableProjectionPattern(bool enable, CancellationToken cancel = default)
+            => Task.CompletedTask;
+
+        public override Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            cancel.ThrowIfCancellationRequested();
+            TimeSpan duration;
+            lock (_lock)
+            {
+                var now = SystemTimestamp.Now;
+                if (!_timestamp.IsEmpty && _timestamp > now)
+                    duration = _timestamp - now;
+                else
+                    duration = TimeSpan.Zero;
+            }
+            if (duration != TimeSpan.Zero)
+                return Delay(duration, context, cancel);
+            else
+                return Task.CompletedTask;
+        }
+
+        public override async ValueTask HomeAux(MovementAxis axis, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            using (await _homingLock.LockAsync(cancel))
+            {
+                await FinishMovement(context, cancel);
+                double distance;
+                lock (_lock)
+                {
+                    switch (axis)
+                    {
+                        case MovementAxis.Z1:
+                            distance = _posZ1;
+                            _posZ1 = 0;
+                            break;
+                        case MovementAxis.Z2:
+                            distance = _posZ2;
+                            _posZ2 = 0;
+                            break;
+                        case MovementAxis.R:
+                            distance = _posR;
+                            _posR = 0;
+                            break;
+                        default: throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis));
+                    }
+                }
+                if (distance != 0 && speed != null)
+                {
+                    double travel;
+                    if (distance >= 0)
+                        travel = Math.Max(Math.Min(distance, -maxDistance), 0);
+                    else
+                        travel = Math.Max(Math.Min(-distance, maxDistance), 0);
+                    var duration = TimeSpan.FromSeconds(travel / speed.Value);
+                    await Delay(duration, context,cancel);
+                }
+                await UpdatePositionHighFrequency(true, cancel);
+            }
+        }
+
+        public override async ValueTask HomeXY(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            using (await _homingLock.LockAsync(cancel))
+            {
+                await FinishMovement(context, cancel);
+                lock (_lock)
+                {
+                    _posX = 0;
+                    _posY = 0;
+                }
+                await UpdatePositionHighFrequency(true, cancel);
+            }
+        }
+
+        public override ValueTask MoveAux(MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, double? decceleration = null, bool hidden = false, double? initialSpeed = null, double? finalSpeed = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            var options = _options.CurrentValue;
+            lock (_lock)
+            {
+                double distance;
+                ResetTimestampInner();
+                switch (axis)
+                {
+                    case MovementAxis.Z1:
+                        distance = relative ? value : value - _posZ1;
+                        _posZ1 = relative ? _posZ1 + value : value;
+                        break;
+                    case MovementAxis.Z2:
+                        distance = relative ? value : value - _posZ2;
+                        _posZ2 = relative ? _posZ2 + value : value;
+                        break;
+                    case MovementAxis.R:
+                        distance = relative ? value : value - _posR;
+                        _posR = relative ? _posR + value : value;
+                        break;
+                    default: throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis));
+                }
+                _trapezoid.Values.Clear();
+                var duration = _trapezoid.Move(
+                    initialSpeed ?? 0,
+                    finalSpeed ?? 0,
+                    acceleration ?? 0,
+                    decceleration ?? acceleration ?? 0,
+                    speed ?? _maxReaasonableVelocity,
+                    0,
+                    Math.Abs(distance),
+                    0);
+                _timestamp += duration / options.SpeedFactor;
+            }
+            return UpdatePositionHighFrequency(false, cancel);
+        }
+
+        public override TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null)
+        {
+            var options = _options.CurrentValue;
+            var distance = Math.Sqrt(rx * rx + ry * ry);
+            var velocity = Math.Min(speed / 60 ?? options.MaxXYVelocity, options.MaxXYVelocity);
+            if (velocity <= 0)
+                throw new ArgumentOutOfRangeException(nameof(speed));
+            if (distance != 0)
+                return TimeSpan.FromSeconds(distance / velocity);
+            else
+                return TimeSpan.Zero;
+        }
+
+        public override ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            var options = _options.CurrentValue;
+            var velocity = Math.Min(speed / 60 ?? options.MaxXYVelocity, options.MaxXYVelocity);
+            if (velocity <= 0)
+                throw new ArgumentOutOfRangeException(nameof(speed));
+            lock (_lock)
+            {
+                double distance;
+                TimeSpan duration;
+                ResetTimestampInner();
+                distance = Math.Sqrt(relative ? x * x + y * y : NumberExtensions.Square(x - _posX) + NumberExtensions.Square(y - _posY));
+                _posX = relative ? _posX + x : x;
+                _posY = relative ? _posY + y : y;
+                if (distance != 0)
+                    duration = TimeSpan.FromSeconds(distance / velocity);
+                else
+                    duration = TimeSpan.Zero;
+                _timestamp += duration / options.SpeedFactor;
+            }
+            return UpdatePositionHighFrequency(false, cancel);
+        }
+
+        public override ValueTask SetLaser(double value, bool noCompensation = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            cancel.ThrowIfCancellationRequested();
+            lock (_lock)
+            {
+                ResetTimestampInner();
+            }
+            return ValueTask.CompletedTask;
+        }
+
+        public override ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            cancel.ThrowIfCancellationRequested();
+            TimeSpan duration;
+            lock (_lock)
+            {
+                var now = SystemTimestamp.Now;
+                if (!_timestamp.IsEmpty && _timestamp > now)
+                    duration = _timestamp - now;
+                else
+                    duration = TimeSpan.Zero;
+            }
+            return new ValueTask<(TimeSpan, SystemTimestamp)>((duration, SystemTimestamp.Now + duration));
+        }
+
+        public override double? TryGetMinLaserPwmCycleTime(IPrinterClientCommandContext? context = null)
+            => _options.CurrentValue.PwmCycleTime;
+
+        public override TimeSpan GetQueueAheadDuration(IPrinterClientCommandContext? context = null)
+            => TimeSpan.Zero;
+    }
+}

@@ -1,0 +1,114 @@
+﻿@inherits AppComponent
+@inject IJSRuntime JSRuntime
+
+<div @ref="@ElementRef" 
+    id="@ElementId" 
+    class="key @ClassNames" 
+    style="@StyleNames" 
+    @attributes="@Attributes" 
+    oncontextmenu="return false;">
+    @if (ChildContent != null)
+    {
+        @ChildContent
+    }
+    else
+    {
+        @CurrentValue
+    }
+</div>
+
+@code {
+    private ValueEditorState _state = default!;
+    private DotNetObjectReference<ValueEditorKey>? _self;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool IsSpecial { get; set; } = false;
+
+    [Parameter]
+    public bool IsRepeat { get; set; } = true;
+
+    [Parameter]
+    public string Value { get; set; } = "";
+
+    [Parameter]
+    public string? Upper { get; set; } = null;
+
+    [CascadingParameter]
+    public ValueEditorState State
+    {
+        get => _state;
+        set
+        {
+            if (_state == value)
+                return;
+            _state = value;
+            StateHasChanged();
+        }
+    }
+
+    [Parameter]
+    public EventCallback Down { get; set; }
+
+    [Parameter]
+    public EventCallback Up { get; set; }
+
+    [Parameter]
+    public EventCallback Clicked { get; set; }
+
+    private string CurrentValue
+    {
+        get
+        {
+            if (_state.HasUpper && !IsSpecial)
+                return Upper ?? Value.ToUpper();
+            else
+                return Value;
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnPointerDown()
+    {
+        if (Down.HasDelegate)
+            await Down.InvokeAsync();
+    }
+
+    [JSInvokable]
+    public async Task OnPointerUp()
+    {
+        if (Up.HasDelegate)
+            await Up.InvokeAsync();
+    }
+
+    [JSInvokable]
+    public async Task OnClick()
+    {
+        if (!IsSpecial)
+            await _state.Editor.Insert(CurrentValue);
+        if (Clicked.HasDelegate)
+            await Clicked.InvokeAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _self = DotNetObjectReference.Create(this);
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender)
+            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "attachValueEditorKeyHandlers", ElementRef, _self, IsRepeat);
+    }
+
+
+    public override ValueTask DisposeAsync()
+    {
+        _self?.Dispose();
+        return base.DisposeAsync();
+    }
+}

@@ -1,0 +1,81 @@
+﻿@using System.Diagnostics;
+@inherits AppComponent
+
+@if (_renderModal)
+{
+    <Modal 
+        @ref="@_modal" 
+        id="@ElementId" 
+        class="@ClassNames" 
+        style="@StyleNames" 
+        @attributes="@Attributes"
+        Closed="OnClosed">
+        @if (ChildContent != null)
+        {
+            @ChildContent(this)
+        }
+    </Modal>
+}
+
+
+@code {
+    private readonly Stopwatch _shownStopwatch = new();
+    private Modal? _modal;
+    private bool _renderModal;
+    private bool _shown;
+
+    [Parameter]
+    public RenderFragment<ModalWrapper>? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback Closed { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (_renderModal)
+        {
+            if (!_shown)
+            {
+                _shownStopwatch.Restart();
+                _shown = true;
+                await _modal!.Show();
+            }
+        }
+    }
+
+    public Task Show()
+    {
+        if (_shown)
+            return Task.CompletedTask; 
+        _renderModal = true;
+        _shown = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public async Task Close(CancellationToken cancel = default)
+    {
+        if (_shown)
+        {
+            TimeSpan minShown = TimeSpan.FromSeconds(0.5);
+            if (_shownStopwatch.Elapsed < minShown) // helps to solve the issue when modal opened and immedialely closed will not close due JS sync issues
+                await Task.Delay(minShown);
+            await _modal!.Close(cancel);
+        }
+        else
+        {
+            _renderModal = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnClosed()
+    {
+        _shownStopwatch.Reset();
+        _shown = false;
+        _renderModal = false;
+        StateHasChanged();
+        await Closed.InvokeAsync();
+    }
+}

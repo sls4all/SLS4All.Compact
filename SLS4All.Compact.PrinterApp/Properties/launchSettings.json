@@ -1,0 +1,25 @@
+{
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:26202",
+      "sslPort": 0
+    }
+  },
+  "profiles": {
+    "Windows": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "externalUrlConfiguration": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+        //"ASPNETCORE_ENVIRONMENT": "Inova-RockPi"
+      },
+      //"commandLineArgs": "--Application:Includes:0 appsettings.Inova-RaspberryPi.json",
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5000",
+      "hotReloadProfile": "aspnetcore"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+﻿@if (_isEnabledDelay)
+{
+    @ChildContent
+}
+
+
+@code {
+    private bool _isEnabled;
+    private bool _isEnabledDelay;
+    private int _version;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+    [Parameter]
+    public TimeSpan Timeout { get; set; }
+    [Parameter]
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set
+        {
+            if (_isEnabled == value)
+                return;
+            if (value)
+            {
+                _isEnabled = true;
+                _isEnabledDelay = true;
+            }
+            else
+            {
+                _isEnabled = false;
+                DelayDisable();
+            }
+        }
+    }
+
+    private async void DelayDisable()
+    {
+        if (Timeout == TimeSpan.Zero)
+            _isEnabledDelay = false;
+        try
+        {
+            var version = ++_version;
+            await Task.Delay(Timeout);
+            if (!_isEnabled && _version == version)
+            {
+                _isEnabledDelay = false;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // swallow
+        }
+    }
+}

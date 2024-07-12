@@ -1,0 +1,39 @@
+﻿.dummy {
+}
+
+.main-button {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 17px;
+    border: 1px solid rgba(0, 0, 0, 0);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    color: inherit;
+    background: inherit;
+}
+
+    .main-button:focus {
+        border: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    .main-button.disabled-button {
+        opacity: 25%;
+        cursor: inherit;
+    }
+
+.profile-button {
+    font-size: 20px;
+    padding: 5px 5px 5px 5px;
+}
+
+@media (hover: hover) {
+    .main-button:hover:not(.disabled-button) {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.01);
+    }
+}
+
+.main-button:active:not(.disabled-button) {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.1);
+}

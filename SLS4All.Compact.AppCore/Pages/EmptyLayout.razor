@@ -1,0 +1,36 @@
+﻿@using System.Numerics
+@using SLS4All.Compact.Graphics
+@inherits LayoutComponentBase
+@implements IMainLayout
+@inject NavigationManager Navigation
+
+<CascadingValue Value="(IMainLayout)this" IsFixed="true">
+    @Body
+</CascadingValue>
+
+@code {
+    public Vector2 Scale => Vector2.One;
+    public bool IsLocalSession => false;
+    public RgbaF BackgroundColor => default;
+    public bool IsDeveloperMode
+    {
+        get => false;
+        set { }
+    }
+
+    public void SetTitle(PrinterPageTitle? title)
+    {
+    }
+
+    public Task SetPageLoader()
+        => Task.CompletedTask;
+
+    public Task BrowseFiles()
+        => Task.CompletedTask;
+
+    public string GetReloadUri(string? relative = null)
+    {
+        string queryString = Navigation.Uri;
+        return queryString;
+    }
+}

@@ -1,0 +1,35 @@
+﻿@page "/panzoom"
+@layout EmptyLayout
+@inject IJSRuntime JSRuntime
+
+<div style="background-image: url('/_content/SLS4All.Compact.AppCore/ui/img/transparent.png'); background-repeat: repeat; width: 100vw; height: 100vh; overflow: hidden">
+    <div @ref="_root" class="w-100 h-100">
+        <img class="w-100 h-100" src="@ImageUrl" style="object-fit: contain;" />
+    </div>
+</div>
+
+@code {
+    public const string SelfPath = "/panzoom";
+
+    private ElementReference _root;
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "image")]
+    public string ImageUrl { get; set; } = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("panzoom", _root);
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+    }
+}

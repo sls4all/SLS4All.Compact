@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "name": "asp.net",
+  "private": true,
+  "devDependencies": {
+    "webpack": "5.75.0",
+    "webpack-cli": "5.0.1",
+    "copy-webpack-plugin": "11.0.0",
+    "source-map-loader": "4.0.1",
+    "style-loader": "3.3.1",
+    "css-loader": "6.7.3",
+    "file-loader": "6.2.0",
+    "mini-css-extract-plugin": "2.7.2",
+    "babylonjs": "5.56.0",
+    "babylonjs-materials": "5.56.0",
+    "babylonjs-loaders": "5.56.0",
+    "tslib": "2.3.1",
+    "titatoggle": "2.1.2",
+    "@types/jquery": "3.5.14",
+    "@types/bootstrap": "4.6.2",
+    "bootstrap-icons": "1.11.1",
+    "panzoom": "9.4.3"
+  },
+  "scripts": {
+    "build": "webpack"
+  }
+}

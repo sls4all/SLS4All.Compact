@@ -1,0 +1,169 @@
+﻿@inherits AppComponent
+@using SLS4All.Compact.Camera;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing;
+@using SLS4All.Compact.Temperature;
+@using SLS4All.Compact.Threading
+@using System.Diagnostics
+@inject ILightsClient Lights
+@inject IToastProvider ToastProvider
+@inject ICameraClient Camera
+@inject IPrintingService PrintingGlobal
+@inject NavigationManager NavigationManager
+@inject ImageStreamingHelper ImageStreamingHelper
+@inject IJSRuntime JSRuntime
+
+<div @ref="@ElementRef" id="@ElementId" class="d-flex flex-column camera-view @ClassNames" style="@StyleNames" @attributes="@AttributesWithCssScope">
+    @if (ControlsEnabled && !PrintingGlobal.IsPrinting)
+    {
+        <div class="light-control-container" @attributes="@JustAttributesWithCssScope">
+            @if (LightsControlsEnabled)
+            {
+                <button class="btn btn-secondary btn--icon-text" @onclick="() => IsLightEnabled = !IsLightEnabled">
+                    @if (IsLightEnabled)
+                    {
+                        <text><i class="bi bi-lightbulb-fill" /> Lights</text>
+                    }
+                    else
+                    {
+                        <text><i class="bi bi-lightbulb-off" /> Lights</text>
+                    }
+                </button>
+            }
+            @ChildContent
+        </div>
+    }
+    <div class="video-image-container" @attributes="@JustAttributesWithCssScope">
+        <img id="@_id" @key="_streamKey" class="video-image" src="@StreamUri" @attributes="@JustAttributesWithCssScope" />
+    </div>
+</div>
+
+@code {
+    public const string CssScope = "b-camera-view";
+    private readonly object _streamKey = new();
+    private readonly string _id = Guid.NewGuid().ToString();
+    private bool? _isLightEnabled;
+    private bool _hasTouchedLights;
+    private IAsyncDisposable? _modeDisposable;
+    private CameraMode? _lastMode;
+    private Timer _timer;
+    private const int _timerPeriod = 500;
+    private ImageStreamingHandle? _streamHandle;
+    private long _streamCounter;
+
+    private string StreamUri => $"/api/videocamera/image/{_id}?c={_streamCounter}";
+
+    [Parameter]
+    public bool LightsControlsEnabled { get; set; } = true;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool ControlsEnabled { get; set; } = true;
+
+    [Parameter]
+    public CameraMode Mode { get; set; } = CameraMode.NotSet;
+
+    private bool IsLightEnabled
+    {
+        get => _isLightEnabled ?? Lights.CurrentState.IsEnabled;
+        set
+        {
+            _hasTouchedLights = true;
+            _isLightEnabled = value;
+            _ = UpdateLightEnabled();
+        }
+    }
+
+    public VideoCameraView()
+    {
+        _timer = new Timer(OnTimer);
+    }
+
+    private bool TryRegisterImageReady()
+    {
+        if (_streamHandle == null)
+            _streamHandle = new ImageStreamingHandle(JSRuntime, ImageStreamingHelper, _id, () =>
+            {
+                _streamCounter++;
+                return StreamUri;
+            });
+        return _streamHandle.TryRegisterImageReady();
+    }
+
+    private void TryUnregisterImageReady()
+    {
+        _streamHandle?.TryUnregisterImageReady();
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            if (!TryRegisterImageReady() && _isLightEnabled == null)
+                return ValueTask.FromResult(false);
+            else
+            {
+                _isLightEnabled = null;
+                return ValueTask.FromResult(true);
+            }
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+        if (firstRender)
+            _timer.Change(0, _timerPeriod);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastMode != Mode)
+        {
+            var newMode = await Camera.SetCameraMode(Mode);
+            if (_modeDisposable != null)
+                await _modeDisposable.DisposeAsync();
+            _modeDisposable = newMode;
+            _lastMode = Mode;
+        }
+        await base.OnParametersSetAsync();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        TryUnregisterImageReady();
+        _timer.Dispose();
+        _isLightEnabled = false;
+        _modeDisposable?.DisposeAsync();
+        await UpdateLightEnabled();
+        await base.DisposeAsync();
+    }
+
+    private async Task UpdateLightEnabled()
+    {
+        try
+        {
+            _timer.Change(_timerPeriod, _timerPeriod);
+            await Lights.SetLights(_isLightEnabled!.Value, null, null, default);
+        }
+        catch (Exception ex)
+        {
+            if (_hasTouchedLights) // NOTE: prevent spewing errors when disposing and printer is not ready or shutdown
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Failed to enable/disable light",
+                        BodyText = ex.Message,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+            _isLightEnabled = null;
+        }
+    }
+}

@@ -1,0 +1,186 @@
+﻿@using SLS4All.Compact.Graphics
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Storage.PrinterSettings
+@inherits AppComponent
+@inject IPrinterPerformanceProvider PrinterPerformanceProvider
+@inject IPrinterSettingsStorage PrinterSettings
+@inject IUnitConverter UnitConverter
+
+@{
+    var values = PrinterPerformanceProvider.Values;
+    var totalCpuLoadInt = (int)Math.Round(values.TotalCpuLoad);
+    var totalIOLoadInt = (int)Math.Round(values.TotalIOLoad);
+    var selfCpuLoadInt = (int)Math.Round(values.SelfCpuLoad);
+    var totalMemoryLoadInt = (int)Math.Round(values.TotalMemoryLoad);
+    var selfMemoryLoadInt = (int)Math.Round(values.SelfMemoryLoad);
+    var storageLoadInt = (int)Math.Round(values.StorageLoad);
+    const byte opacity1 = 80;
+    const byte opacity2 = 128;
+    const byte opacity3 = 12;
+    const float minTemperature = 40;
+    const float maxTemperature = 90;
+    var totalCpuLoadColor = ColorHelper.GetGreenOrangeRedHeatmapColor(values.TotalCpuLoad, 0, 100);
+    var totalMemoryLoadColor = ColorHelper.GetGreenOrangeRedHeatmapColor(values.TotalMemoryLoad, 0, 100);
+    var selfMemoryLoadColor = ColorHelper.GetGreenOrangeRedHeatmapColor(values.SelfMemoryLoad, 0, 100);
+    var totalIOLoadColor = ColorHelper.GetGreenOrangeRedHeatmapColor(values.TotalIOLoad, 0, 100);
+    var storageLoadColor = ColorHelper.GetGreenOrangeRedHeatmapColor(values.StorageLoad, 0, 100);
+    var cpuTemperatureColor = values.CpuTemperature != null ? (RgbB?)ColorHelper.GetGreenOrangeRedHeatmapColor(values.CpuTemperature.Value, minTemperature, maxTemperature) : null;
+    var gpuTemperatureColor = values.GpuTemperature != null ? (RgbB?)ColorHelper.GetGreenOrangeRedHeatmapColor(values.GpuTemperature.Value, minTemperature, maxTemperature) : null;
+    var systemUptime = values.SystemStartTimestamp.ElapsedFromNow;
+    var appUptime = values.ApplicationStartTimestamp.ElapsedFromNow;
+}
+
+<a href="javascript:void(0)" class="listview__item">
+    <i class="bi bi-cpu avatar-img" />
+
+    <div class="listview__content">
+        <div class="listview__heading">
+            CPU Load <small>Total, SLS4All</small>
+        </div>
+        <div class="w-100 percentage" style="background: linear-gradient(to right, @totalCpuLoadColor.ToRgbaB(opacity1).CssString @(totalCpuLoadInt - selfCpuLoadInt)%, @totalCpuLoadColor.ToRgbaB(opacity2).CssString @(totalCpuLoadInt - selfCpuLoadInt)%, @totalCpuLoadColor.ToRgbaB(opacity2).CssString @totalCpuLoadInt%, @totalCpuLoadColor.ToRgbaB(opacity3).CssString @totalCpuLoadInt%)">
+            @(values.TotalCpuLoad.RoundToDecimal(1, true))% <small>@(values.SelfCpuLoad.RoundToDecimal(1, true))%</small>
+        </div>
+    </div>
+</a>
+
+<a href="javascript:void(0)" class="listview__item">
+    <i class="bi bi-memory avatar-img" />
+
+    <div class="listview__content">
+        <div class="listview__heading">
+            Memory Load <span>@(((values.TotalAvaialableMemory - values.TotalUsedMemory) / (double)(1024 * 1024 * 1024)).RoundToDecimal(1, true)) GB free</span> <small>Total, SLS4All</small>
+        </div>
+        <div class="w-100 percentage" style="background: linear-gradient(to right, @totalMemoryLoadColor.ToRgbaB(opacity1).CssString @(totalMemoryLoadInt - selfMemoryLoadInt)%, @totalMemoryLoadColor.ToRgbaB(opacity2).CssString @(totalMemoryLoadInt - selfMemoryLoadInt)%, @totalMemoryLoadColor.ToRgbaB(opacity2).CssString @totalMemoryLoadInt%, @totalMemoryLoadColor.ToRgbaB(opacity3).CssString @totalMemoryLoadInt%)">
+            @(values.TotalMemoryLoad.RoundToDecimal(1, true))% <small>@(values.SelfMemoryLoad.RoundToDecimal(1, true))%</small>
+        </div>
+    </div>
+</a>
+
+<a href="javascript:void(0)" class="listview__item">
+    <i class="bi bi-hdd avatar-img" />
+
+    <div class="listview__content">
+        <div class="listview__heading">
+            IO Load <small>Total</small>
+        </div>
+        <div class="w-100 percentage" style="background: linear-gradient(to right, @totalIOLoadColor.ToRgbaB(opacity1).CssString @totalIOLoadInt%, @totalIOLoadColor.ToRgbaB(opacity3).CssString @totalIOLoadInt%)">
+            @(values.TotalIOLoad.RoundToDecimal(1, true))%
+        </div>
+    </div>
+</a>
+
+<a href="javascript:void(0)" class="listview__item" @onclick="() => MainLayout!.BrowseFiles()">
+    <i class="bi bi-hdd-fill avatar-img" />
+
+    <div class="listview__content">
+        <div class="listview__heading">
+            Storage Use <span>@(((values.StorageTotal - values.StorageUsed) / (double)(1024 * 1024 * 1024)).RoundToDecimal(1, true)) GB free</span> <small>Total</small>
+        </div>
+        <div class="w-100 percentage" style="background: linear-gradient(to right, @storageLoadColor.ToRgbaB(opacity1).CssString @storageLoadInt%, @storageLoadColor.ToRgbaB(opacity3).CssString @storageLoadInt%)">
+            @(values.StorageLoad.RoundToDecimal(1, true))%
+        </div>
+    </div>
+</a>
+
+<a href="javascript:void(0)" class="listview__item">
+    <i class="bi bi-thermometer avatar-img" />
+
+    <div class="listview__content">
+        <div class="listview__heading">
+            Temperature & Uptime
+        </div>
+        <div class="temperatures">
+            @if (values.CpuTemperature != null)
+            {
+                var value = GetUnitValue((decimal)values.CpuTemperature.Value, Units.Celsius);
+                <div class="temperature">
+                    CPU: 
+                    <span style="color: @cpuTemperatureColor!.Value.CssString">
+                        @(value.Value.RoundToDecimal(1, true))@value.Unit
+                    </span>
+                </div>
+            }
+            @if (values.GpuTemperature != null)
+            {
+                var value = GetUnitValue((decimal)values.GpuTemperature.Value, Units.Celsius);
+                <div class="temperature">
+                    GPU: 
+                    <span style="color: @gpuTemperatureColor!.Value.CssString">
+                        @(value.Value.RoundToDecimal(1, true))@value.Unit
+                    </span>
+                </div>
+            }
+            <br/>
+            <div class="uptime">
+                System:
+                <span>
+                    @if (systemUptime.Days == 1)
+                    {
+                        <text>1 day, </text>
+                    }
+                    else if (systemUptime.Days > 1)
+                    {
+                        @systemUptime.Days
+                        <text> days, </text>
+                    }
+                    @systemUptime.ToString(@"hh\:mm\:ss")
+                </span>
+            </div>
+            <div class="uptime">
+                App:
+                <span>
+                    @if (appUptime.Days == 1)
+                    {
+                        <text>1 day, </text>
+                    }
+                    else if (appUptime.Days > 1)
+                    {
+                        @appUptime.Days
+                        <text> days, </text>
+                    }
+                    @appUptime.ToString(@"hh\:mm\:ss")
+                </span>
+            </div>
+            <br/>
+            @if (MainLayout!.IsDeveloperMode)
+            {
+                <div class="tp-threads">
+                    Thread pool:
+                    <span>
+                        @(values.ThreadPoolThreadCount)
+                    </span>
+                </div>
+            }
+        </div>
+    </div>
+</a>
+
+@code {
+    private PrinterLocalizationSettings _localization = new();
+
+    [CascadingParameter]
+    public IMainLayout? MainLayout { get; set; }
+
+    private ValueTask OnValuesChanged(PrinterPerformanceValues values, CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged(cancel);
+        return ValueTask.CompletedTask;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _localization = PrinterSettings.GetLocalizationSettings();
+        await base.OnInitializedAsync();
+        PrinterPerformanceProvider.ValuesChangedEvent.AddHandler(OnValuesChanged);
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        PrinterPerformanceProvider.ValuesChangedEvent.RemoveHandler(OnValuesChanged);
+        return base.DisposeAsync();
+    }
+
+    protected UnitValue GetUnitValue(decimal value, string unit)
+        => UnitConverter.GetUnits(value, unit, _localization.UnitConverterFlags);
+}

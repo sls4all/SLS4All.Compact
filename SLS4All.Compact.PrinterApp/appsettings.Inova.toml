@@ -1,0 +1,45 @@
+﻿[Application]
+
+	[Application.Dependencies.ProjectionPattern]
+	After = "appsettings.Inova"
+	Filename = "appsettings.Inova-ProjectionPattern"
+
+[Kestrel.Endpoints.Http]
+Url = "http://0.0.0.0:80"
+
+[ImageCodePlotter]
+PlotWidth = 500
+PlotHeight = 500
+IncreasePixelSize = true
+DrawLaserCompensation = false
+ProjectionPrecision = 0.333333
+StoreLayers = false
+
+[PrintingService]
+PlotWidth = 500
+PlotHeight = 500
+IncreasePixelSize = true
+# NOTE: preview width & height affects estimate and depth calculation precision
+PreviewWidth = 1750
+PreviewHeight = 1750
+
+[KlipperApiClient]
+EnableRunner = true
+UnixSocketPath = "/tmp/klippy_uds"
+
+[McuPrinterClient]
+EnableRunner = true
+
+[WatchDogMonitor]
+IsEnabled = true
+
+[McuManager]
+
+    [McuManager.Mcus.1-1.FirmwareUpdate]
+	IsEnabled = true
+
+    [McuManager.Mcus.1-2.FirmwareUpdate]
+	IsEnabled = true
+
+    [McuManager.Mcus.1-3.FirmwareUpdate]
+	IsEnabled = true

@@ -1,0 +1,632 @@
+﻿AllowedHosts = "*"
+
+[Application]
+PrinterClient = "Fake"
+VideoCameraClient = "Fake"
+TemperatureCameraClient = "Mlx90640Fake"
+NetworkManager = "Fake"
+Plotter = "Image"
+UseIdealCircleHotspotCalculator = false
+PushTemperatureCameraGCode = false
+SoftHeater = "SoftAnalysis"
+
+[Logging.LogLevel]
+"Default" = "Information"
+"Microsoft" = "Warning"
+"Microsoft.Hosting.Lifetime" = "Information"
+"SLS4All.Compact.McuClient.McuClockSync" = "Information"
+"SLS4All.Compact.McuClient.PipedMcu.PipedMcuClockSyncLocal" = "Information"
+
+[Logging.File]
+Path = "logs/default.log"
+Append = "True"
+# limit log file size for viewing in the browser
+FileSizeLimitBytes = 1_048_576
+MaxRollingFiles = 64
+
+[Kestrel.Endpoints.Http]
+Url = "http://0.0.0.0:5000"
+
+[AppDataWriter]
+BasePath = "SLS4All"
+
+[FileSystemTempBlobStorage]
+MaximumSize = 1073741824 # 1GB
+Directory = "BlobStorage"
+
+[NestingService]
+TargetTrianglesLocal = 1_000_000
+TargetTrianglesDefault = 10_000_000
+
+[DefaultGCodeHistory]
+HistoryDepth = "200"
+
+[FakePrinterClient]
+
+[FakeTemperatureClient]
+FakeBedMatrix = false
+
+[FakeMovementClient]
+MaxXYVelocity = 28_000
+SpeedFactor = 1.0
+
+[DefaultTemperatureHistory]
+HistoryDepth = "1000"
+
+[InovaBedProjection]
+XOffsetRelative = 0.005982588
+YOffsetRelative = 0.0025991062
+XYAngle = 0
+LaserYaw = 0
+LaserPitch = 0
+LaserXOffset = -88
+LaserYOffset = 0
+LaserZOffset = 0
+M = 7.000523
+I = 7.000523
+H = 251
+LidAngle = 0
+MinH = 100
+MaxH = 400
+MirrorAOffset = -0.06751146
+MirrorBOffset = -0.06751146
+Width = 175
+Height = 175
+PositionTolerance = 0.001
+HeightTolerance = 0.001
+AlphaMinAngle = -18.85869375616312
+AlphaMaxAngle = 18.92158223129809
+BetaMinAngle = -18.84591054916382
+BetaMaxAngle = 18.406323742121458
+AlphaCenter = -0.3492792174220085
+BetaCenter = -0.03971324092708528
+AlphaOffset = 0.5065432322444394
+BetaOffset = 0.49044246412813663
+AlphaCurve = [
+  0.021546645627670464,
+  -0.021367899425383613,
+  0.02181014102783955,
+  0.004592016496980865,
+  0.004442676530423651,
+  0.00445713236483634,
+  0.004088087436420419,
+  0.003567955536301606,
+  0.0017355267721837293,
+  0.0012576813066422562,
+  0.001276703474783781,
+  0.0009005696456554049,
+  0.021890197031423496,
+  0.021831416153751025,
+  -0.02185188940117074
+]
+BetaCurve = [
+  -0.021908580287966432,
+  -0.0025050637722446,
+  0.02105517543174911,
+  0.00028933247955967685,
+  0.002728252987386545,
+  0.004123097951797399,
+  0.0044378909888189814,
+  0.002750236666884266,
+  0.003854419403482757,
+  0.005691922319714807,
+  0.007157077015108426,
+  0.008745977758187133,
+  -0.02151618709143576,
+  -0.021982592545021235,
+  0.0218760856586994
+]
+InvertX = false
+InvertY = true
+MirrorAAxisPitch = 0.1825691
+MirrorAAxisRoll = 0.49067748
+MirrorBAxisYaw = 0.82322025
+MirrorBAxisRoll = -0.050493643
+
+# Options for "IdealCircle" hotspot calculator when "UseIdealCircleHotspotCalculator = true"
+[BitmapSliceIdealCircleHotspotCalculator]
+# Number of bitmap pixels per mm
+PixelsPerUnit = 100
+# The default circle radius (if not overriden in code)
+HotspotRadiusDefault = 0.175
+
+# Options for "ProjectionHotspot" calculator when "UseIdealCircleHotspotCalculator = false"
+[BitmapSliceProjectionHotspotCalculator]
+# Number of bitmap pixels per mm
+PixelsPerUnit = 100
+# Number of precalculated projections per axis
+SquareDim = 100
+# Number of fill ranges per axis
+FillRanges = 1
+# Number of points to calculate hotspot outline
+OutlinePoints = 60
+# How many times should be the precalculated hotspot bitmap should be larger/smaller than pixels-per-unit the class was initialzed with
+BitmapScale = 3
+
+	[BitmapSliceProjectionHotspotCalculator.HotspotShape]
+	Type = "Rectangle"
+	CenterWidth = 0.26
+	CenterHeight = 0.46
+
+[BitmapSliceProcessor] # [monitored]
+AllowedOverlapToleranceFactor = 1.0
+SortEdgeLength = 0.04 # lower range of powder grain size
+MinOutlineEdgeLength = 0.1
+MinFillEdgeLength = 0.1
+MaxFillEdgeLength = 5.00
+MaxEdgeLength = 0.20
+HotspotOverlapFactorDefault = 0.1
+OutlineCountDefault = 1
+FillOutlineSkipCountDefault = 0
+IsFillEnabledDefault = true
+CompensationDistanceMin = 0.5
+CompensationDistanceMax = 3.0
+#OutlinesOrder = "OutlinesAndFillInterleaved"
+OutlinesOrder = "FillThanOutlines"
+InnerBeforeOuterOutlines = true
+Randomize = true
+
+[ImageCodePlotter]
+IncreasePixelSize = true
+ExecuteAsync = true
+
+[FileSystemPrintProfileStorage]
+
+	[FileSystemPrintProfileStorage.FallbackDefaultProfile]
+    Id = "076d1ae2-2c41-413d-a035-c9494a95cd08"
+	Name = "Default"
+	XProjectionPercent = 100
+	YProjectionPercent = 100
+	PrintableWidth = 160
+	PrintableHeight = 160
+	PrintableDepth = 180
+	PrintableXDiameter = 0
+	PrintableYDiameter = 0
+	CutCornerDistanceTopLeft = 0
+	CutCornerDistanceTopRight = 0
+	CutCornerDistanceBottomLeft = 0
+	CutCornerDistanceBottomRight = 0
+	CoolingTimePercent = 50
+	HeatingRate = 8
+	SurfaceHeatingRate = 15
+	HeatingMinimumTime = "01:00:00"
+	BeginLayerTemperatureDelay = "00:00:05"
+	BedPreparationTemperatureDelay = "00:00:05"
+	PrintCapTemperatureDelay = "00:00:05"
+	LaserOnPercent = 100
+	LaserOffPercent = 0
+	OutlineCount = 2
+	FillOutlineSkipCount = 1
+	IsFillEnabled = true
+	HotspotOverlapPercent = 25
+	HeatingLayerPeriod = "00:02:00"
+	ShrinkageCorrectionType = 2
+	ShrinkageCorrectionStandard.Id = "076d1ae2-2c41-413d-a035-c9494a95cd09"
+	ShrinkageCorrectionStandard.XScalePercent = 100
+	ShrinkageCorrectionStandard.YScalePercent = 100
+	ShrinkageCorrectionStandard.ZScalePercent = 100
+
+
+[ExhaustiveNester]
+MeshMargin = 0.75
+ChamberStep = 1.0
+NestingDimX = 161
+NestingDimY = 161
+NestingDimZ = 200
+# NestingDiameterX = 175
+# NestingDiameterY = 175
+
+[DefaultLayerEstimateExtrapolator] # [monitored]
+AllowExtrapolation = true
+PickFastest = true
+
+[PrintingService] # [monitored]
+SimplifyEnabled = false # simplifing disabled for now (with AdvancedSlicerEdgeSorter), to preserve some small details we can manage with (25% Benchys have slicing artifacts when enabled)
+SimplifyMinTrianglesPerMesh = 50
+SimplifyMaxTrianglesPerMm2 = 24.0 # default benchy is ~24 triangles per mm/2
+CenterXFactor = 0.5
+CenterYFactor = 0.5
+CenterXOffset = 0.0
+CenterYOffset = 0.0
+LayerLatencyExtrapolationMaxCount = 10_000
+UseSoftSurfaceHeater = false
+ZSliceStepFactor = 0.0
+#OverrideLaserOnFactor = 0.025
+#OverrideLaserOffFactor = 0.00
+PrintObjectPerObject = true
+PreviewWeightSegments = 4
+PwmCompensationCycleTimeFactor = 1.25
+# Minimum number of free bytes on application drive/disk to even begin printing
+# this value must accomodate `MinPreparedLayerCount` prepared layers and still must have `MinPreparedLayerDriveSpace` free bytes
+MinStartDriveSpace = 262144000 # 250MB
+# Minumum number of layers to prepare. If drive space runs out (below `MinPreparedLayerDriveSpace`) and this count of layers 
+# has not yet been prepared printing will fail.
+MinPreparedLayerCount = 50
+# Number of bytes that will be kept free when preparing layers to ensure other sw/system features are working
+MinPreparedLayerDriveSpace = 67108864 # 64MB
+
+[DefaultTemperatureLogger]
+Path = "Temperatures"
+Culture = "cs-CZ"
+
+[CompactUpdateChecker]
+	
+	[CompactUpdateChecker.ServerManifestUris]
+	"production" = "https://compact.sls4all.com/ApplicationUpdate/list"
+
+	[CompactUpdateChecker.ForcedChannels]
+	"stable" = "stable"
+
+[MainLayoutStateProvider] # [monitored]
+
+[Mlx90640Camera] # [monitored]
+BusId = 1
+DeviceAddress = 51
+RefreshRate = "Hz8_0"
+Emissivity = 1
+EnableChessMode = true
+ReadPeriod = "0:0:0.05"
+FlipX = false
+FlipY = true
+RotateCW = false
+IgnoredTemperatureChange = 25
+IgnoredTemperatureFrames = 8
+
+  [Mlx90640Camera.MainBox]
+  MinX = 10
+  MinY = 9
+  MaxX = 23
+  MaxY = 21
+
+[ControlledHeating] # [monitored]
+ControlPeriod = "0:0:1"
+
+  [ControlledHeating.HeatingPrintHeaterIds]
+  1-1 = "printChamber1"
+  1-2 = "printChamber2"
+  1-3 = "printChamber3"
+  1-4 = "printChamber4"
+  1-5 = "printBed"
+
+  [ControlledHeating.HeatingPrintBedHeaterIds]
+  1-1 = "printBed"
+
+  [ControlledHeating.HeatingPowderHeaterIds]
+  1-1 = "powderChamber1"
+  1-2 = "powderChamber2"
+  1-3 = "powderChamber3"
+  1-4 = "powderChamber4"
+  1-5 = "powderBed"
+
+  [ControlledHeating.CoolingHeaterOffIds]
+  1-1 = "powderChamber1"
+  1-2 = "powderChamber2"
+  1-3 = "powderChamber3"
+  1-4 = "powderChamber4"
+  1-5 = "powderBed"
+
+  [ControlledHeating.CoolingHeaterIds]
+  1-1 = "printChamber1"
+  1-2 = "printChamber2"
+  1-3 = "printChamber3"
+  1-4 = "printChamber4"
+  1-5 = "printBed"
+
+  [ControlledHeating.DefaultHeatingSetup]
+  Rate = 10
+  SurfaceRate = 10
+  Step = 1
+  Tolerance = 10
+
+  [ControlledHeating.DefaultCoolingSetup]
+  Rate1 = 0.5
+  Rate2 = 0.5
+  Rate3 = 0.75
+  Step = 1
+  Tolerance = 20
+
+[LayerClient] # [monitored]
+MinimumPowderBedDepth = 5 # [mm]
+ZMove = 750
+ZSpeed = 5_000
+ZAcceleration = 10_000
+RMovesInitialize = [ ]
+DisableSurfaceHeaterOnEndLayer = false
+PowderChamberArea = 39_074
+PrintChamberArea = 31_109
+ChamberDepth = 200
+VolumeFactor = 1.1
+PowderBedLevelingDepth = 5
+SettleTemperatureIncrease = 0
+SettleTemperatureIncreaseDuration = "0:0:0"
+
+  [LayerClient.RMovesHome.1-1]
+  Speed = 50
+  Target = -520
+  IsHoming = true
+  IsRelative = true
+
+  [LayerClient.RMovesForward.1-1]
+  Speed = 150
+  Acceleration = 200
+  Target = 250
+  FinalSpeed = 100
+
+  [LayerClient.RMovesForward.1-2]
+  InitialSpeed = 100
+  Speed = 100
+  Acceleration = 50
+  Deceleration = 200
+  Target = 480
+
+  [LayerClient.RMovesForwardSlow.1-1]
+  Speed = 150
+  Acceleration = 200
+  Target = 250
+  FinalSpeed = 60
+
+  [LayerClient.RMovesForwardSlow.1-2]
+  InitialSpeed = 60
+  Speed = 60
+  Acceleration = 22
+  Deceleration = 200
+  Target = 480
+
+  [LayerClient.RMovesBackward.1-1]
+  Speed = 200
+  Acceleration = 300
+  Target = 2
+
+  [LayerClient.ZMovesHome.1-1]
+  Speed = 15_000
+  Target = -210_000
+  IsHoming = true
+
+[BedMatrixController] # [monitored]
+RefreshRate = 1
+
+  [BedMatrixController.MainBox]
+  MinX = 10
+  MinY = 8
+  MaxX = 23
+  MaxY = 21
+
+  [BedMatrixController.Boxes.1-1]
+  MinX = 10
+  MinY = 8
+  MaxX = 16
+  MaxY = 15
+
+  [BedMatrixController.Boxes.1-2]
+  MinX = 17
+  MinY = 8
+  MaxX = 23
+  MaxY = 15
+
+  [BedMatrixController.Boxes.1-3]
+  MinX = 10
+  MinY = 16
+  MaxX = 16
+  MaxY = 21
+
+  [BedMatrixController.Boxes.1-4]
+  MinX = 17
+  MinY = 16
+  MaxX = 23
+  MaxY = 21
+
+[AnalyseHeating] # [monitored]
+# how long to wait to cool down before starting
+InitCooldownTimeout = "0:20:0"
+# how long to wait to cool down after target temperature has been reached
+CooldownTimeout = "0:4:0"
+# delay for additional captures
+CaptureTimeout = "0:0:5"
+# number of heaters counted from the start, that constitute "all" set of main heaters
+TargetTemperatureMainHeaterCount = 4
+# target temperature to stop heating with all main heaters [deg]
+TargetTemperatureAllMain = 170
+# target temperature to stop heating witk all aux heaters [deg]
+TargetTemperatureAllAux = 155
+# target temperature to stop heating with individual heaters [deg]
+TargetTemperature = 165
+# timeout that if elapsed, analysis will continue even if target was not reached
+TargetTemperatureTimeout = "0:3:0"
+# light PWM power [0..1]
+Power = 1
+# whether to include part of double heater analysis
+IncludeDouble = false
+# target temperature camera area
+
+  [AnalyseHeating.BedArea]
+  MinX = 10
+  MinY = 8
+  MaxX = 23
+  MaxY = 21
+
+[MeasureHeating] # [monitored]
+MeasureDuration = "0:0:30"
+OutlinerFactor = 0.80
+
+[SoftMLSurfaceHeater] # [monitored]
+LightCount = 4
+MinOnFactor = 0.2
+UpRange = 3.0
+DownRange = 3.0
+ReachedTolerance = 1.5
+SimulationNetworkFilename = "C:/Develop/SLS4All.Compact/SLS4All.Compact.MLSoftHeaterTest/bin/Release/net8.0/simulation_model.2024-04-09_22-23-42.mlnet"
+DecisionNetworkFilename = "C:/Develop/SLS4All.Compact/SLS4All.Compact.MLSoftHeaterTest/bin/Release/net8.0/decision_model.2024-04-10_00-27-31.mlnet"
+CameraAveragePeriod = "0:0:1.000"
+FactorAveragePeriod = "0:0:4.000"
+CriticalOvershoot = 2.0
+
+  [SoftMLSurfaceHeater.CaptureBox]
+  MinX = 10
+  MinY = 8
+  MaxX = 23
+  MaxY = 21
+
+[SoftAnalysisSurfaceHeater] # [monitored]
+# Heaters will never completely turn off if other conditions below are satisfited
+AuxAlwaysOn = false
+# Minumum power factor for AuxAlwaysOn (0.0-1.0)
+AuxAlwaysOnFactorMin = 0.35
+# Temperature associated with AuxAlwaysOnFactorMin. Below that temperature the AuxAlwaysOn will not take over. [deg]
+AuxAlwaysOnTargetMin = 130
+# Maxinum power factor for AuxAlwaysOn (0.0-1.0)
+AuxAlwaysOnFactorMax = 0.7
+# Temperature associated with AuxAlwaysOnFactorMax. Above that temperature the factor will be left at AuxAlwaysOnFactorMax. [deg]
+AuxAlwaysOnTargetMax = 175
+# How long to simulate before comparing and using results
+SimulationDuration = "0:0:0.050"
+# Simulation time step
+SimulationStep = "0:0:0.050"
+# Period to average the camera values (delay will be compensated)
+AveragePeriod = "0:0:1.000"
+# Pushes simulated data to fake temperature camera. Does not have an effect if the application uses real camera.
+GenerateFakeCameraDataIfPossible = true
+# Approximate temperature of the main halogen heaters [deg]
+MaximumMainTemperature = 2_250
+# Approximate temperature of the aux halogen heaters [deg]
+MaximumAuxTemperature = 2_250
+# Duration of calculated ss to calculate whether target was reached
+TargetReachedDuration = "0:0:5"
+# How many times can one half of calculated errors (for TargetReachedDuration) can exceed other half to consider target not reached (0.0-1.0)
+TargetReachedErrorFactor = 0.05
+# How many degrees over target the bed temperature must be to negate TargetReached
+TargetReachedOvershoot = 2.5
+# How much to penalize temperature that is over the surface target. Value of 1.0 means, that one degree OVER on single point weights as much
+# as one degree UNDER on all points
+ErrorOverFactor = 0.35
+# Maximum number of evaluations when searching for dimming factors
+MaximumEvaluations = 100
+TargetCompensationRequested1 = 140
+TargetCompensationUsed1 = 140
+TargetCompensationRequested2 = 170
+TargetCompensationUsed2 = 170
+LaserCompensationHotmapSizeFactor = 6
+LaserCompensationDuration = "0:0:4"
+LaserCompensationPercentileAdd = 2.0
+LaserCompensationMode = "ApplySimulation"
+UseOldLaserCompensationFactor = false
+LaserMaxTemperatureFactor = 1.0
+# Time period for which to compute moving average from maximum values over surface
+MaxTemperaturePeriod = "0:0:1"
+# Degrees celsius the average maximum temperature is allowed to exceed the target (if not in None and UpdateMapWithRegulator modes). If it exceeds more than this value, the internal target is decreased so the condition is satisfied.
+# This helps to avoid hotspots at the cost of lowered overall temperature (if not in None and UpdateMapWithRegulator modes). Set to zero to disable.
+MaxTemperatureOvershoot = 0.0
+MinTemperatureUndershoot = 3.0
+TemperatureOverFactor = 1.10
+TemperatureUnderFactor = 3.0
+# one of None, UpdateTarget, UpdateMap, UpdateMapWithUndershootCorrection
+MaxTemperatureOvershootMode = "UpdateMapWithUndershootCorrection"
+CoolingIneffectivnessFactor = 0.33
+LaserHotMapCoolingIncludeHeating = true
+Light1WeightOffset = 0.00
+Light2WeightOffset = 0.00
+Light3WeightOffset = 0.00
+Light4WeightOffset = 0.00
+UseCoolMap = false
+UseInitialCoolAsSource = false
+FallbackLightCount = 4
+MinOnFactorDrainDuration = "0:0:0.5"
+EnableForcedAvgAll = false
+
+  [SoftAnalysisSurfaceHeater.FallbackCaptureBox]
+  MinX = 10
+  MinY = 8
+  MaxX = 23
+  MaxY = 21
+
+# Expected heating latency to compensate. Increasing the value causes more stable lighting/heating, decreasing causes frequent large flashes and rapid changes of power (oscillation).
+# Too low value might cause the lamps wont even turn on if the temperature difference is small, that is the reason we have different values for temperature target ranges.
+InterpolateHeatingLatencies = false
+
+	[SoftAnalysisSurfaceHeater.HeatingLatencies.1-1]
+	Target = 100
+	Latency = "0:0:1"
+
+	[SoftAnalysisSurfaceHeater.HeatingLatencies.1-2]
+	Target = 140
+	Latency = "0:0:2"
+
+	[SoftAnalysisSurfaceHeater.HeatingLatencies.1-3]
+	Target = 180
+	Latency = "0:0:3.5"
+
+[HalogenHeaterChecker] # [monitored]
+OnDurationMax = "0:0:15"
+OffDuration = "0:0:10"
+ExpectedTemperatureIncrease = 5
+
+[ChamberHeaterChecker] # [monitored]
+OnDurationMax = "0:2:30"
+OffDuration = "0:0:30"
+ExpectedTemperatureIncrease = 10.0
+TargetTemperature = 70
+
+[SafeShutdownManager] # [monitored]
+SafeTemperature = 75
+CheckPeriod = "0:0:1"
+GraceDelay = "0:0:10"
+
+[PrinterShutdownMonitor] # [monitored]
+TemperatureCheckEnabled = true
+UnsafeTemperatureIncreaseAfterShutdown = 10
+UnsafeChamberTemperatureAfterShutdown = 100
+UnsafeSurfaceTemperatureAfterShutdown = 100
+ShutdownGracePeriod = "0:0:5"
+
+[UIToastProvider] # [monitored]
+PlayMelody = true
+RemindInformation = false
+RemindWarning = false
+RemindError = true
+RemindInterval = "0:1:0"
+
+[FirmwareConnectedNotifier] # [monitored]
+PlayMelodyWhenConnected = true
+
+[GalvoFanMonitor]
+Enabled = false
+MonitorPeriod = "0:0:30"
+EnabledFactor = 1.00
+EnableTemperature = 60
+Hysteresis = 5
+
+[PrinterTimeManager]
+TimeScript.ExecutableLinux = "sls4all_settime.sh"
+TimeScript.ArgsLinux = "{{Epoch}}"
+
+[PrinterPerformanceProvider] # [monitored]
+
+[PowerBuzzerClient]
+
+[BuzzerMelodyClient] # [monitored]
+
+	[BuzzerMelodyClient.Melodies.Information]
+		Pattern = "10 10 10 100 10 10 10 100"
+	
+	[BuzzerMelodyClient.Melodies.Warning]
+		Pattern = "100 10 100 10 100"
+	
+	[BuzzerMelodyClient.Melodies.Error]
+		Pattern = "300 100 300 100 300 1000 300 100 300 100 300 1000 300 100 300 100 300 100"
+
+[PrinterMaintenanceManager] # [monitored]
+HalogenMaintenancePeriod = "100:0:0"
+LaserMaintenancePeriod = "100:0:0"
+Z1MaintenanceDistance = 10
+Z2MaintenanceDistance = 10
+RMaintenanceDistance = 10
+
+[WatchDogMonitor]
+IsEnabled = false
+
+[PrinterWearCapture] # [monitored]
+RFactor = 0.001
+Z1Factor = 0.000_001
+Z2Factor = 0.000_001
+SavePeriod = "0:5:0"
+
+[Frontend] # [monitored]

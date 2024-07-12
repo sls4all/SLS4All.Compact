@@ -1,0 +1,53 @@
+﻿@using System.Collections.Concurrent;
+@using SkiaSharp;
+@inherits AppComponent
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+@inject ILogger<SmartImage> Logger
+
+<img @ref="@ElementRef" id="@ElementId" class="@ClassNames" style="@StyleNames" src="@Source" width="@_width" height="@_height" @attributes="@AttributesWithCssScope"/>
+
+@code {
+    private static ConcurrentDictionary<string, (int? Width, int? Height)> s_sizes = new();
+    private int? _width;
+    private int? _height;
+
+    [Parameter]
+    public string? Source { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var source = Source ?? "";
+        // if (!s_sizes.TryGetValue(source, out var size))
+        // {
+        //     size = await GetSizeFromSource(source, default);
+        //     s_sizes[source] = size;
+        // }
+        (_width, _height) = (null, null);
+        await base.OnInitializedAsync();
+    }
+
+    private async Task<(int?, int?)> GetSizeFromSource(string uri, CancellationToken cancel)
+    {
+        if (uri == "")
+            return (null, null);
+        try
+        {
+            var requestUri = new Uri(new Uri(NavigationManager.Uri), uri);
+            using (var response = await HttpClient.GetAsync(requestUri, cancel))
+            using (var stream = await response.Content.ReadAsStreamAsync(cancel))
+            {
+                return await Task.Run(() =>
+                {
+                    var bounds = SKBitmap.DecodeBounds(stream);
+                    return (bounds.Width, bounds.Height);
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Failed to process image at '{uri}'");
+        }
+        return (null, null);
+    }
+}

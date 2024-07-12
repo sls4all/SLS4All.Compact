@@ -1,0 +1,71 @@
+﻿@page "/thermocamera"
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Temperature;
+@inherits AppPage
+@inject ITemperatureClient TemperatureClient
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
+
+@{
+    var state = TemperatureClient.CurrentState;
+    var stateEntries = state.Entries.ToDictionary(x => x.Id);
+}
+
+<div class="root-container">
+    <div class="container-flex">
+        <div class="row">
+            <div class="col-1 d-none d-lg-block text-right">
+                <SmartImage Source="/_content/SLS4All.Compact.AppCore/ui/img/thermometer-powder.png" class="img-fluid" ExternalCssScope="@CssScope" />
+            </div>
+            <div class="col-12 col-md-6">
+                <ThermoCameraView @key="_cameraViewKey" @ref="_cameraView" class="w-100" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" ExternalCssScope="@CssScope" />
+            </div>
+            <div class="col-12 col-md-6 col-lg-5">
+                <table class="table temperature-table">
+                    <thead>
+                        <tr class="hide-top-line">
+                            <th scope="col" colspan="2">Current temperatures</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var id in TemperatureClient.SurfaceSensorIds.Concat(TemperatureClient.ExtraSurfaceSensorIds))
+                        {
+                            if (!stateEntries.TryGetValue(id.Id, out var temp))
+                                continue;
+                            var tempUnit = GetUnits(temp.CurrentTemperature, Units.Celsius);
+                            <tr>
+                                <td scope="row">@id.Description</td>
+                                <td class="temperature-value">@tempUnit.Value.ToString("0.0")@tempUnit.Unit</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private const string CssScope = "b-thermo-camera";
+    public const string SelfPath = "/thermocamera";
+    private readonly object _cameraViewKey = new object();
+    private ThermoCameraView? _cameraView;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        TemperatureClient.StateChangedLowFrequency.AddHandler(OnTemperaturesChanged);
+    }
+
+    private ValueTask OnTemperaturesChanged(TemperatureState state, CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged();
+        return ValueTask.CompletedTask;
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        TemperatureClient.StateChangedLowFrequency.RemoveHandler(OnTemperaturesChanged);
+        return base.DisposeAsync();
+    }
+}

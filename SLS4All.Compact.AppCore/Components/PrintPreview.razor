@@ -1,0 +1,286 @@
+﻿@using Microsoft.Extensions.Options
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Printing
+@inherits AppComponent
+@inject IToastProvider ToastProvider
+@inject IOptionsMonitor<FrontendOptions> FrontendOptions
+
+@{
+    var previewLayers = Printing.PreviewLayers;
+    var isRunning = Printing.BackgroundTask.IsRunning;
+    var previewLayer = PreviewLayerIndex >= 1 && PreviewLayerIndex <= previewLayers.Length ? previewLayers[PreviewLayerIndex - 1] : null;
+}
+
+<div class="w-100 h-100 print-preview">
+    <img class="print-preview-image"
+         src="@LayerUrl" />
+    <div class="control-buttons print-preview-buttons">
+        <span>
+            Preview <ValueEditor Title="Layer number" class="w-auto" @bind-Value="PreviewLayerIndex" /> of @Printing.PreviewLayerFinalCount
+        </span>
+        @if (previewLayer != null && previewLayer.Weight.EnergyDensityIncrease > 0)
+        {
+            <br/>
+            <span>
+                Energy density +@(previewLayer.Weight.EnergyDensityIncrease.RoundToDecimal(1))
+            </span>
+        }
+        <hr class="my-2">
+        <button type="button" class="btn btn-theme btn--icon-text" @onclick="() => PreviewUp()">
+            <i class="bi bi-arrow-up" />
+        </button>
+        <button type="button" class="btn btn-theme btn--icon-text" @onclick="() => PreviewDown()">
+            <i class="bi bi-arrow-down" />
+        </button>
+        <button type="button" class="btn btn-theme btn--icon-text" @onclick="() => PreviewTop()">
+            <i class="bi bi bi-box-arrow-up" />
+        </button>
+        @{
+            var status = Printing.BackgroundTask.Status;
+            @if (status != null && !status.IsCompleted)
+            {
+                <hr class="my-2">
+                <b style="position: relative">Processing @status.Progress.ToString("0")%...</b>
+
+                <br />
+                <b style="position: relative">
+                    Estimate: <i>calculating...</i>
+                </b>
+            }
+            else if (_previewStats != null)
+            {
+                (var hours, var minutes) = _previewStats.TotalDuration.ToHoursAndMinutes();
+                <hr class="my-2">
+                <b style="position: relative">
+                    Estimate:
+                    @if (_previewStats.PrintDurationIncomplete)
+                    {
+                        <text>&gt; </text>
+                    }
+                    @if (hours > 0)
+                    {
+                        <text>@hours @(hours > 1 ? "hours " : "hour ")</text>
+                    }
+                    @minutes mins.
+                </b>
+                @if (_previewStats.PrintDurationIncomplete)
+                {
+                    <br />
+                    <text>Estimate incomplete, print first</text>
+                }
+            }
+        }
+    </div>
+    @if (MainLayout!.IsDeveloperMode)
+    {
+        <div class="control-buttons developer-buttons">
+            <a class="btn btn-theme btn--icon-text @(isRunning ? "disabled" : "")" @onclick="() => DoPreview()">
+                <i class="bi bi-search" /> Redraw preview
+            </a>
+            <a class="btn btn-theme btn--icon-text @(isRunning ? "disabled" : "")" @onclick="() => DoPlot()">
+                <i class="bi bi-pencil" /> Plot
+            </a>
+            @if (!MainLayout.IsLocalSession)
+            {
+                <a class="btn btn-theme btn--icon-text" href="@PanZoom.SelfPath?image=@Uri.EscapeDataString(LayerUrl)" target="_blank">
+                    <i class="bi bi-fullscreen" /> Open tab
+                </a>
+            }
+            <a class="btn btn-theme btn--icon-text" @onclick="() => Printing.BackgroundTask.Cancel()">
+                <i class="bi bi-x" /> Cancel
+            </a>
+        </div>
+    }
+    <input type="range"
+           min="1" max="@Printing.PreviewLayers.Length" @bind="PreviewLayerIndex" @bind:event="oninput"
+           orient="vertical"
+           class="print-preview-range" />
+</div>
+
+@code {
+    private static readonly TimeSpan s_slicingPreviewUpdatePeriod = TimeSpan.FromSeconds(0.5);
+    private float _previewLayerThickness;
+    private int _previewLayerIndex, _previewLayerCountCache;
+    private PrintingServiceLayerStats? _previewStats;
+    private LayerWeight[]? _layerWeights;
+
+    private string LayerUrl => $"/api/SlicingImageScoped/{Printing.Id}/{Printing.PreviewVersion}/{PreviewLayerIndex - 1}";
+    [Parameter]
+    public INestingService? Nesting { get; set; } = null!;
+    [Parameter]
+    public IPrintingService Printing { get; set; } = null!;
+    [Parameter]
+    public PrintingParameters PrintingParameters { get; set; } = null!;
+    [Parameter]
+    public int? LayerCount { get; set; } = null!;
+    [CascadingParameter]
+    protected IMainLayout? MainLayout { get; set; }
+    public LayerWeight[]? LayerWeights => _layerWeights;
+    public bool IsDone => _layerWeights != null;
+
+    public int PreviewLayerIndex
+    {
+        get
+        {
+            if (_previewLayerIndex == 0)
+                return _previewLayerCountCache = Printing.PreviewLayers.Length;
+            else
+                return _previewLayerIndex;
+        }
+        set
+        {
+            if (_previewLayerIndex == value ||
+                (_previewLayerIndex == 0 && value == _previewLayerCountCache))
+                return;
+            _previewLayerIndex = value;
+            StateHasChanged();
+        }
+    }
+
+    private ValueTask OnSlicingPreviewUpdate(CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged(
+            (Func<ValueTask>?)null,
+            () => new ValueTask(Task.Delay(s_slicingPreviewUpdatePeriod, cancel)),
+            cancel);
+        return ValueTask.CompletedTask;
+    }
+
+    private Task OnSlicingException(Exception ex, CancellationToken cancel)
+    {
+        if (ex is not OperationCanceledException)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    HeaderText = "Error during slicing",
+                    BodyText = ex.Message,
+                    Key = this,
+                    Exception = ex,
+                });
+        }
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        Printing.BackgroundTask.StateChanged.AddHandler(OnSlicingPreviewUpdate);
+        Printing.BackgroundTask.ExceptionHandler.AddHandler(OnSlicingException);
+
+        var prepared = PrintingParameters;
+        var setup = prepared.Setup.Clone();
+        setup.LayerStart = 0;
+        if (LayerCount != null)
+            setup.LayerCount = LayerCount;
+
+        _previewLayerIndex = 0; // special case indicating last layer
+        _previewLayerThickness = (float)prepared.Setup.LayerThickness;
+        _previewStats = null;
+        var stats = Printing.GetLayerStats(prepared);
+        var options = FrontendOptions.CurrentValue;
+        await Printing.BackgroundTask.StartValueTask(new(), async (cancel) =>
+        {
+            _layerWeights = await Printing.ProcessPreviews(
+                Nesting,
+                prepared.Instances,
+                setup,
+                false,
+                stats,
+                stats =>
+                {
+                    _previewStats = stats;
+                    return Task.CompletedTask;
+                },
+                cancel);
+            StateHasChanged();
+        });
+    }
+
+    private void PreviewUp()
+    {
+        var index = PreviewLayerIndex + 1;
+        var count = Printing.PreviewLayers.Length;
+        if (index > count)
+            index = count;
+        PreviewLayerIndex = index;
+    }
+
+    private void PreviewTop()
+    {
+        PreviewLayerIndex = 0;
+    }
+
+    private void PreviewDown()
+    {
+        var index = PreviewLayerIndex - 1;
+        if (index < 1)
+            index = 1;
+        PreviewLayerIndex = index;
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        Printing.BackgroundTask.Cancel();
+        Printing.BackgroundTask.StateChanged.RemoveHandler(OnSlicingPreviewUpdate);
+        Printing.BackgroundTask.ExceptionHandler.RemoveHandler(OnSlicingException);
+        await base.DisposeAsync();
+    }
+
+    public async Task DoPlot()
+    {
+        if (Printing.BackgroundTask.IsRunning)
+            return;
+        var layerIndex = PreviewLayerIndex - 1;
+        var layer = Printing.TryGetPreviewLayer(layerIndex);
+        if (layer != null)
+        {
+            var prepared = PrintingParameters;
+            var setup = prepared.Setup.Clone();
+            await Printing.BackgroundTask.StartValueTask(new(), async (cancel) =>
+            {
+                await Printing.PlotLayer(
+                    Nesting, 
+                    prepared.Instances, 
+                    layer, 
+                    setup);
+                StateHasChanged();
+            });
+        }
+    }
+
+    public async Task DoPreview()
+    {
+        if (Printing.BackgroundTask.IsRunning)
+            return;
+        var layerIndex = PreviewLayerIndex - 1;
+        var layer = Printing.TryGetPreviewLayer(layerIndex);
+        if (layer != null)
+        {
+            var prepared = PrintingParameters;
+            var setup = prepared.Setup.Clone();
+            setup.LayerStart = layerIndex;
+            setup.LayerCount = 1;
+            var options = FrontendOptions.CurrentValue;
+            var stats = Printing.GetLayerStats(prepared);
+            await Printing.BackgroundTask.StartValueTask(new(), async (cancel) =>
+            {
+                await Printing.ProcessPreviews(
+                    Nesting,
+                    prepared.Instances,
+                    setup,
+                    true,
+                    stats,
+                    saveStats: null,
+                    cancel);
+                StateHasChanged();
+            });
+        }
+    }
+}

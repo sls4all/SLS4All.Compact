@@ -1,0 +1,233 @@
+﻿@using System.Diagnostics
+@using System.Runtime.CompilerServices
+@using SLS4All.Compact.ComponentModel
+@using System.Globalization
+@inherits AppComponent
+@inject IJSRuntime JSRuntime
+@inject IToastProvider ToastProvider
+@inject NavigationManager NavigationManager
+
+<div aria-live="polite" aria-atomic="true" class="snackbar-container">
+    <div class="snackbar-container-child" style="@_scrollFixStyle">
+        @foreach (var item_ in _toasts.OrderBy(x => x.Key.Stopwatch.Elapsed))
+        {
+            var item = item_;
+            var state = item.Value;
+            var isSeen = state.ShownRefreshes > 0;
+            var toast = state.Message;
+            var elapsed = toast.Stopwatch.Elapsed;
+            <div @key="toast" @ref="state.Element" class="toast snackbar-toast" role="alert" aria-live="assertive" aria-atomic="true" data-animation="true" data-autohide="false" @onclick="() => OnClicked(state)">
+                <div class="toast-header snackbar-toast-header @GetBackground(toast.Type) @(isSeen ? "snackbar-toast-header-seen" : "")">
+                    @switch (toast.Type)
+                    {
+                        case ToastMessageType.Information:
+                            <i class="zwicon-info-circle text-info font-weight-bold"></i>
+                            break;
+                        case ToastMessageType.Error:
+                            <i class="zwicon-exclamation-triangle text-danger font-weight-bold"></i>
+                            break;
+                        case ToastMessageType.Warning:
+                            <i class="zwicon-exclamation-mark text-warning font-weight-bold"></i>
+                            break;
+                    }
+                    @if (toast.Header != null)
+                    {
+                        @toast.Header
+                    }
+                    else @if (toast.HeaderText != null)
+                    {
+                        <span>@toast.HeaderText</span>
+                    }
+                    else
+                    {
+                        @switch (toast.Type)
+                        {
+                            case ToastMessageType.Information:
+                                <span>Information</span>
+                                break;
+                            case ToastMessageType.Error:
+                                <span>Error</span>
+                                break;
+                            case ToastMessageType.Warning:
+                                <span>Warning</span>
+                                break;
+                        }
+                    }
+                    @if (elapsed < TimeSpan.FromSeconds(3))
+                    {
+                        <small class="text-muted">just now</small>
+                    }
+                    else @if (elapsed < TimeSpan.FromMinutes(1))
+                    {
+                        <small class="text-muted">@Math.Floor(elapsed.TotalSeconds) secs ago</small>
+                    }
+                    else @if (elapsed < TimeSpan.FromHours(1))
+                    {
+                        <small class="text-muted">@Math.Floor(elapsed.TotalMinutes) mins ago</small>
+                    }
+                    else
+                    {
+                        <small class="text-muted">@Math.Floor(elapsed.TotalHours) hours ago</small>
+                    }
+                    @if (state.Message.TargetUri != null)
+                    {
+                        <button type="button" class="ml-2 mb-1 close" aria-label="Close" @onclick="() => OnClose(state)" @onclick:stopPropagation="true">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    }
+                </div>
+                <div class="toast-body">
+                    @if (toast.Body != null)
+                    {
+                        @toast.Body
+                    }
+                    else if (toast.BodyText != null)
+                    {
+                        <span class="toast-body-text">@toast.BodyText</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private sealed class ToastState
+    {
+        public ToastMessage Message { get; set; } = default!;
+        public ElementReference Element { get; set; }
+        public bool Shown { get; set; }
+        public int ShownRefreshes { get; set; }
+        public int DismissRefreshes { get; set; }
+    }
+
+    private readonly ConditionalWeakTable<ToastMessage, ToastState> _toasts = new();
+    private Timer? _timer;
+    private string _scrollFixStyle = "";
+
+    [CascadingParameter]
+    public IMainLayout? MainLayout { get; set; }
+
+    private static string GetBackground(ToastMessageType type)
+        => type switch
+        {
+            ToastMessageType.Information => "snackbar-toast-header-info",
+            ToastMessageType.Error => "snackbar-toast-header-error",
+            ToastMessageType.Warning => "snackbar-toast-header-warning",
+            _ => "snackbar-toast-header-info",
+        };
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _timer = new Timer(OnTimer, null, 1000, 1000);
+        ToastProvider.MessagesChanged.AddHandler(OnMessagesChanged);
+    }
+
+    private void OnTimer(object? state)
+    {
+        try
+        {
+            var task = InvokeAsync(() => Refresh(true));
+        }
+        catch
+        {
+            // swallow
+        }
+    }
+
+    private Task OnMessagesChanged(CancellationToken cancel)
+    {
+        try
+        {
+            var task = InvokeAsync(() => Refresh(false));
+        }
+        catch
+        {
+            // swallow
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task Refresh(bool fromTimer)
+    {
+        var anyToasts = false;
+        var set = ToastProvider.Messages.ToHashSet();
+        foreach (var message in _toasts)
+            set.Add(message.Key);
+        foreach (var message in set)
+        {
+            anyToasts = true;
+            if (!_toasts.TryGetValue(message, out var existing))
+            {
+                if (message.HasOnlyForLayoutOwner && !ReferenceEquals(message.OnlyForLayoutOwner, MainLayout))
+                    continue;
+                var state = new ToastState { Message = message };
+                _toasts.Add(message, state);
+            }
+            else if (fromTimer)
+            {
+                existing.ShownRefreshes++;
+                if (message.Dismissed != ToastDismissReason.NotSet)
+                    existing.DismissRefreshes++;
+            }
+        }
+        if (anyToasts)
+        {
+            var scrollTop = await JSRuntime.InvokeAsync<float>("AppHelpersInvoke", "getBodyScrollTop");
+            _scrollFixStyle = string.Create(CultureInfo.InvariantCulture, $"top: {-scrollTop / MainLayout!.Scale.Y}px");
+            StateHasChanged(); // we are displaying seconds, need to refresh always
+        }
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        foreach (var item in _toasts.ToArray())
+        {
+            var state = item.Value;
+            var isDismissed = state.Message.Dismissed != ToastDismissReason.NotSet;
+            if (!state.Shown && state.Element.Id != null)
+            {
+                await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "showToast", state.Element);
+                state.Shown = true;
+            }
+            else if (state.Shown || state.Message.Dismissed != ToastDismissReason.NotSet)
+            {
+                if (state.Message.Dismissed == ToastDismissReason.KeyOverlay && state.DismissRefreshes < 2)
+                    continue;
+                var destroyed = await JSRuntime.InvokeAsync<bool>("AppHelpersInvoke", "tryDestroyToast", state.Element, isDismissed);
+                if (destroyed)
+                {
+                    ToastProvider.Dismiss(state.Message, isDismissed ? state.Message.Dismissed : ToastDismissReason.UserClosed);
+                    _toasts.Remove(state.Message);
+                }
+            }
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        ToastProvider.MessagesChanged.RemoveHandler(OnMessagesChanged);
+        _timer?.Dispose();
+        return base.DisposeAsync();
+    }
+
+    private void OnClicked(ToastState state)
+    {
+        if (state.Message.Dismissed == ToastDismissReason.NotSet)
+        {
+            state.Message.Dismissed = ToastDismissReason.UserClosed;
+            if (state.Message.TargetUri != null)
+                NavigationManager.NavigateTo(state.Message.TargetUri, state.Message.TargetUriForceReload);
+        }
+    }
+
+    private void OnClose(ToastState state)
+    {
+        if (state.Message.Dismissed == ToastDismissReason.NotSet)
+        {
+            state.Message.Dismissed = ToastDismissReason.UserClosed;
+        }
+    }
+}

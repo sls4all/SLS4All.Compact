@@ -1,0 +1,271 @@
+﻿@page "/backups"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using System.Globalization
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Printer;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Threading
+@inherits AppPage
+@inject IToastProvider ToastProvider
+@inject IPrinterDataBackupManager BackupManager
+@inject IPrinterFileProvider FileProvider
+@inject IPrinterTimeManager TimeManager
+
+<PrinterPageTitle IconClass="zwicon-database" IsFullPage="true" />
+
+<FileBrowserModal @ref="_browseAfterBackupModal"
+                  Masks="@(new[] { $"*{PrinterPath.BackupExtension}" })"
+                  PackageMasksExcept="@(new[] { $"*{PrinterPath.BackupExtension}" })"
+                  Directory="@PrinterPath.Backups" />
+
+<FileBrowserModal @ref="_restoreBrowser"
+                  MaxSelectedCount="1"
+                  Masks="@(new[] { $"*{PrinterPath.BackupExtension}" })"
+                  PackageMasksExcept="@(new[] { $"*{PrinterPath.BackupExtension}" })"
+                  OpenClicked="(selection) => { _restoreName = selection[0]; StateHasChanged(); }"
+                  Directory="@PrinterPath.Backups"
+                  Closed="() => _backupEditor!.OnEditorClosed()" />
+
+<CancelModal @ref="_progressModal" ProgressCurrent="_progressValue" ProgressTotal="100" />
+
+<ModalWrapper @ref="_restoreModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Confirm restore
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                Are you absolutely sure you want to restore the backup file <i>@_restoreName</i>?
+            </p>
+            <p class="badge badge-warning text-wrap">
+                Current application version (binaries), current <b>profiles</b>, <b>jobs</b>, <b>objects</b> and <b>configuration</b> will be removed and replaced with the backup!
+            </p>
+        </div>
+        <div class="modal-footer">
+            @if (!_doubleConfirmed)
+            {
+                <button @onclick="() => _doubleConfirmed = true" class="btn btn-danger">Restore and lose current data</button>
+            }
+            else
+            {
+                <button @onclick="() => Restore(true)" class="btn btn-danger" style="font-weight: bold">Really restore and lose current data!</button>
+            }
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        @switch (_stepIndex)
+        {
+            case Step.Selection:
+                <h2>
+                    Backup or restore
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Please select whether you want to backup or restore printer data. This includes current application version (binaries) and all <b>profiles</b>, <b>jobs</b>, <b>objects</b> and <b>configuration</b>.
+                    It does not backup any previous complemed backups and any data in the rest of the system and any executables.
+                </p>
+                <p>
+                    Purpose for this feature is if the system image of the printer is reset to factory state,
+                    you can use it to get the 3D printing features back to the state you made the backup.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => _stepIndex = Step.Backup">Make a backup...</a>
+                    <a class="btn btn-danger btn-lg" role="button" @onclick="() => _stepIndex = Step.Restore">Restore backup...</a>
+                </p>
+                break;
+            case Step.Backup:
+                <h2>
+                    Name of the backup
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Please type any name you wish it to be included in the backup name:
+                    <ValueEditor Title="Backup name" Placeholder="Not set" @bind-Value="_backupName" />
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => Backup()">Begin backup</a>
+                    <a class="btn btn-secondary btn-lg" role="button" href="@PrinterSettings.SelfPath">I have changed my mind</a>
+                </p>
+                break;
+            case Step.BackupCompleted:
+                <h2>
+                    Backup completed
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Backup of the printer data has been successfully completed. <a class="btn btn-success btn-lg" role="button" @onclick="() => _browseAfterBackupModal!.Show(_backupNameFinal)">Browse backups</a>
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-secondary btn-lg" role="button" href="@IndexPage.SelfPath">Go to home page</a>
+                </p>
+                break;
+            case Step.Restore:
+                <h2>
+                    Select the source
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Please select the file you wish to restore:
+                    <ValueEditor @ref="_backupEditor"
+                                 Title="Backup source"
+                                 Placeholder="Not set"
+                                 @bind-Value="_restoreName"
+                                 OpenEditor="() => _restoreBrowser!.Show(_restoreName)"
+                                 CloseEditor="() => _restoreBrowser!.Close()" />
+                </p>
+                <p class="pt-3">
+                    <span class="badge badge-warning text-wrap">
+                        Any current <b>profiles</b>, <b>jobs</b>, <b>objects</b> and <b>configuration</b> will be removed and replaced with the backup!
+                    </span>
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-danger btn-lg" role="button" @onclick="() => Restore()">Restore backup</a>
+                    <a class="btn btn-secondary btn-lg" role="button" href="@PrinterSettings.SelfPath">I have changed my mind</a>
+                </p>
+                break;
+            case Step.RestoreCompleted:
+                <h2>
+                    Restore completed
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Restoration of the printer data has been successfully completed.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-secondary btn-lg" role="button" href="@IndexPage.SelfPath">Go to home page</a>
+                </p>
+                break;
+        }
+    </div>
+</div>
+
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Selection,
+        Backup,
+        BackupCompleted,
+        Restore,
+        RestoreCompleted,
+    }
+
+    public const string SelfPath = "/backups";
+    private const string CssScope = "b-backups";
+    private static readonly TimeSpan _progressRefreshDelay = TimeSpan.FromSeconds(0.25);
+
+    private FileBrowserModal? _browseAfterBackupModal;
+    private FileBrowserModal? _restoreBrowser;
+    private CancelModal? _progressModal;
+    private ModalWrapper? _restoreModal;
+    private ValueEditor<string?>? _backupEditor;
+    private string? _restoreName;
+    private string? _backupName;
+    private string? _backupNameFinal;
+    private bool _doubleConfirmed;
+    private double _progressValue;
+
+    private Step _stepIndex = Step.Selection;
+
+    private async Task<string> GenerateDefaultBackupName()
+    {
+        var timeZone = await TimeManager.GetTimeZone(true, true);
+        var name = TimeZoneInfo.ConvertTimeFromUtc(DateTime.Now.ToUniversalTime(), timeZone!).ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
+        return name;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _backupName = await GenerateDefaultBackupName();
+    }
+
+    private async Task Restore(bool fromModal = false)
+    {
+        if (string.IsNullOrWhiteSpace(_restoreName))
+            return;
+        if (!fromModal)
+        {
+            _doubleConfirmed = false;
+            await _restoreModal!.Show();
+        }
+        else
+        {
+            await _restoreModal!.Close();
+
+            _progressValue = 0;
+            var collapse = new BackgroundTask();
+            await _progressModal!.Execute(
+                async cancel =>
+                {
+                    var filename = (_backupName ?? await GenerateDefaultBackupName()).Trim() + PrinterPath.BackupExtension;
+                    _backupNameFinal = PrinterPath.Combine(PrinterPath.Backups, filename);
+                    using (var source = FileProvider.OpenRead(_restoreName))
+                    {
+                        await Task.Run(async () =>
+                        {
+                            await BackupManager.Restore(
+                                source,
+                                (done, total, estimate, status) => collapse.StartTask(null, cancel => InvokeAsync(async () =>
+                                    {
+                                        _progressValue = (double)done * 100 / total;
+                                        StateHasChanged();
+                                        await Task.Delay(_progressRefreshDelay, cancel);
+                                    })),
+                                cancel);
+                        });
+                    }
+                    _stepIndex = Step.RestoreCompleted;
+                },
+                titleText: "Please wait",
+                bodyText: "Restore in progress...",
+                cancelText: "Cancel restore",
+                errorToastHeaderText: "Failed to restore the backup");
+        }
+    }
+
+    private async Task Backup()
+    {
+        _progressValue = 0;
+        var collapse = new BackgroundTask();
+        await _progressModal!.Execute(
+            async cancel =>
+            {
+                var filename = (_backupName ?? await GenerateDefaultBackupName()).Trim() + PrinterPath.BackupExtension;
+                _backupNameFinal = PrinterPath.Combine(PrinterPath.Backups, filename);
+                await Task.Run(async () =>
+                {
+                    await BackupManager.Backup(
+                        filename,
+                        (done, total, estimate, status) => collapse.StartTask(null, cancel => InvokeAsync(async () =>
+                            {
+                                _progressValue = (double)done * 100 / total;
+                                StateHasChanged();
+                                await Task.Delay(_progressRefreshDelay, cancel);
+                            })),
+                        cancel);
+                });
+                _backupNameFinal = PrinterPath.Combine(PrinterPath.Backups, filename);
+                _stepIndex = Step.BackupCompleted;
+            },
+            titleText: "Please wait",
+            bodyText: "Backup in progress...",
+            cancelText: "Cancel backup",
+            errorToastHeaderText: "Failed to make a backup");
+    }
+}

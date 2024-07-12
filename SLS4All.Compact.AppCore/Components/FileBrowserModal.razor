@@ -1,0 +1,139 @@
+﻿@using System.Numerics;
+@using System.Globalization;
+@using Nito.Disposables.Internals;
+@using SLS4All.Compact.IO;
+@inherits AppComponent
+
+@if (_renderModal)
+{
+    <Modal @ref="_modal" class="fade file-browser-modal" Closed="OnModalClosed">
+        <div class="modal-content">
+             <div class="modal-body">
+                <FileBrowser class="file-browser"
+                    MaxSelectedCount="@MaxSelectedCount"
+                    Directory="@OpenDirectory"
+                    ShowAllFiles="@ShowAllFiles"
+                    Selection="@_selection"
+                    Masks="@Masks"
+                    PackageMasksExcept="@PackageMasksExcept"
+                    PackageMasks="@PackageMasks"
+                    AllowSelectDirectories="@AllowSelectDirectories"
+                    AllowSelectFilesOutsideMask="@AllowSelectFilesOutsideMask"
+                    ShowOpen="OpenClicked.HasDelegate"
+                    OpenClicked="OnOpenClicked"
+                    CloseClicked="OnCloseClicked"/>
+            </div>
+        </div>
+    </Modal>
+}
+
+@code {
+    private bool _renderModal;
+    private bool _shown;
+    private string[] _selection = Array.Empty<string>();
+    private string[] _lastSelected = Array.Empty<string>();
+    private Modal? _modal;
+
+    public string? OpenDirectory
+    {
+        get
+        {
+            if (_lastSelected.Length > 0)
+                return PrinterPath.GetDirectoryName(_lastSelected[0]) ?? Directory;
+            else
+                return Directory;
+        }
+    }
+
+    [Parameter]
+    public int? MaxSelectedCount { get; set; }
+
+    [Parameter]
+    public string? Directory { get; set; }
+
+    [Parameter]
+    public bool? ShowAllFiles { get; set; }
+
+    [Parameter]
+    public string[]? Masks { get; set; }
+
+    [Parameter]
+    public string[]? PackageMasks { get; set; }
+
+    [Parameter]
+    public string[]? PackageMasksExcept { get; set; }
+
+    [Parameter]
+    public bool AllowSelectDirectories { get; set; } = false;
+
+    [Parameter]
+    public bool AllowSelectFilesOutsideMask { get; set; } = false;
+
+    [Parameter]
+    public EventCallback<string[]> OpenClicked { get; set; }
+
+    [Parameter]
+    public EventCallback Closed { get; set; }
+
+    [CascadingParameter]
+    private IMainLayout? MainLayout { get; set; }
+
+    public Task Show(string? selection)
+        => Show(new[] { selection });
+
+    public Task Show(params string?[]? selection)
+    {
+        if (_shown)
+            return Task.CompletedTask;
+        _selection = selection?.WhereNotNull().ToArray() ?? Array.Empty<string>();
+        _renderModal = true;
+        _shown = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public async Task Close()
+    {
+        if (_shown)
+            await _modal!.Close();
+        else
+        {
+            _renderModal = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnModalClosed()
+    {
+        if (Closed.HasDelegate)
+            await Closed.InvokeAsync();
+        _shown = false;
+        _renderModal = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (_renderModal)
+        {
+            if (!_shown)
+            {
+                _shown = true;
+                await _modal!.Show();
+            }
+        }
+    }
+
+    private async Task OnOpenClicked(string[] selected)
+    {
+        _lastSelected = selected;
+        await _modal!.Close();
+        await OpenClicked.InvokeAsync(selected);
+    }
+
+    private async Task OnCloseClicked()
+    {
+        await _modal!.Close();
+    }
+}

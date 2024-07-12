@@ -1,0 +1,202 @@
+﻿.dummy {
+}
+
+p {
+    font-size: 17px;
+}
+
+.properties-panel {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 20px;
+}
+
+    .properties-panel .properties-content {
+        overflow-y: scroll;
+    }
+
+    .properties-panel .hide-top-line td, .properties-panel .hide-top-line th {
+        border-top: none;
+    }
+
+    .properties-panel .nav-link {
+        font-size: 20px;
+    }
+
+    .properties-panel .nav-tabs {
+        border-bottom: 0px solid white;
+    }
+
+    .properties-panel .nav-item {
+    }
+
+.property-container {
+    position: relative;
+}
+
+.property-table {
+    background: #8080801E;
+    border-radius: 10px;
+    position: relative;
+    top: 0px;
+}
+
+    .property-table .property-name {
+        white-space: nowrap;
+        color: #ffffff;
+        font-size: 20px;
+        vertical-align: middle;
+        vertical-align: middle;
+    }
+
+    .property-table .property-value {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: right;
+        vertical-align: middle;
+    }
+
+        .property-table .property-value.property-value-left {
+            text-align: left;
+        }
+
+        .property-table .property-value .property-value-set {
+            /*font-weight: bold;*/
+        }
+
+        .property-table .property-value .property-value-set-parent {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+        .property-table .property-value .property-value-not-set {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+    .property-table .property-suffix {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .property-table .property-separator {
+    }
+
+
+.update-progress {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    object-fit: none;
+}
+
+.update-current {
+}
+
+    .update-current span {
+        margin-right: 3px;
+        font-size: 17px;
+    }
+
+    .update-current small {
+        color: darkgray;
+        font-size: 15px;
+    }
+
+.update-list {
+    height: 100%;
+    overflow-y: scroll;
+}
+
+    .update-list .listview__heading {
+        font-size: 20px;
+    }
+
+    .update-list .badge {
+        margin-right: 3px;
+    }
+
+.network-name span {
+    margin-left: 10px;
+}
+
+.network-attributes .bi {
+    margin-right: 5px;
+}
+
+.network-attributes span {
+    margin-right: 3px;
+    font-size: 17px;
+}
+
+.network-attributes small {
+    color: darkgray;
+    font-size: 15px;
+}
+
+.list-header {
+    color: darkgray;
+    font-size: 17px;
+    font-weight: bold;
+    margin-bottom: 0px;
+}
+
+.wireless-network-table {
+}
+
+.wireless-network-list {
+}
+
+    .wireless-network-list .listview__item {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .wireless-network-list .listview__heading {
+        font-size: 20px;
+    }
+
+    .wireless-network-list .wireless-network-name .bi {
+        margin-right: 10px;
+        color: darkgrey;
+    }
+
+    .wireless-network-list .wireless-network-attributes .bi {
+        margin-left: 20px;
+    }
+
+    .wireless-network-list small {
+        color: darkgray;
+        font-size: 17px;
+        margin-left: 12px;
+    }
+
+.update-para {
+}
+
+    .update-para .btn {
+        float: right;
+    }
+
+    .update-para .update-status {
+        width: calc(80% - 30px);
+        display: inline-block;
+        margin-right: 20px;
+        padding: 5px 10px 5px 10px;
+    }
+
+        .update-para .update-status.update-progress {
+            text-align: center;
+            border: solid 1px #fff3;
+        }
+
+.configuring-para {
+}
+
+    .configuring-para .btn {
+        float: right;
+    }

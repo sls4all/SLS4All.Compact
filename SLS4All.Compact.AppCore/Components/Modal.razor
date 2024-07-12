@@ -1,0 +1,133 @@
+﻿@using System.Globalization
+@inherits AppComponent
+@inject IJSRuntime JSRuntime
+
+<CascadingValue Value="this" IsFixed="true">
+    @if (Parent == null)
+    {
+        <div @key="_selfKey" @ref="@ElementRef" id="@ElementId" class="modal @ClassNames" style="@StyleNames" @attributes="@Attributes">
+            <div class="modal-dialog" style="@_scrollFixStyle">
+                @if (ChildContent != null)
+                {
+                    @ChildContent(this)
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        Parent.UpdateSibling(this);
+    }
+
+    <DummyComponent @ref="_siblings">
+        @foreach (var sibling_ in _siblingModals)
+        {
+            var sibling = sibling_;
+            <DummyComponent @key="sibling.Modal._selfKey" @ref="sibling.Container">
+                <div @ref="@sibling.Modal.ElementRef" id="@sibling.Modal.ElementId" class="modal @sibling.Modal.ClassNames" style="@sibling.Modal.StyleNames" @attributes="@sibling.Modal.Attributes">
+                    <div class="modal-dialog" style="@_scrollFixStyle">
+                        @if (sibling.Modal.ChildContent != null)
+                        {
+                            @sibling.Modal.ChildContent(sibling.Modal)
+                        }
+                    </div>
+                </div>
+            </DummyComponent>
+        }
+    </DummyComponent>
+</CascadingValue>
+
+@code {
+    private sealed class SiblingModal
+    {
+        public required Modal Modal { get; init; }
+        public DummyComponent? Container { get; set; }
+    }
+
+    private readonly List<SiblingModal> _siblingModals = new();
+    private readonly object _selfKey = new();
+    private string _scrollFixStyle = "";
+    private DotNetObjectReference<Modal> _self = default!;
+    private DummyComponent? _siblings;
+
+    [Parameter]
+    public RenderFragment<Modal>? ChildContent { get; set; }
+    [Parameter]
+    public EventCallback Opened { get; set; }
+    [Parameter]
+    public EventCallback Closed { get; set; }
+    [CascadingParameter]
+    public Modal? Parent { get; set; }
+    [CascadingParameter]
+    public IMainLayout? MainLayout { get; set; }
+
+    private void UpdateSibling(Modal modal)
+    {
+        var sibling = _siblingModals.SingleOrDefault(x => x.Modal == modal);
+        if (sibling == null)
+        {
+            _siblingModals.Add(new SiblingModal { Modal = modal });
+            _siblings!.InvokeStateHasChanged();
+        }
+        else
+        {
+            if (sibling.Container != null)
+                sibling.Container.InvokeStateHasChanged();
+            else
+                _siblings!.InvokeStateHasChanged();
+        }
+    }
+
+    private void RemoveSibling(Modal modal)
+    {
+        var sibling = _siblingModals.SingleOrDefault(x => x.Modal == modal);
+        if (sibling != null)
+        {
+            _siblingModals.Remove(sibling);
+            _siblings!.InvokeStateHasChanged();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _self = DotNetObjectReference.Create(this);
+    }
+
+    public async Task Show(bool focus = true, CancellationToken cancel = default)
+    {
+        var scrollTop = await JSRuntime.InvokeAsync<float>("AppHelpersInvoke", cancel, "getBodyScrollTop");
+        _scrollFixStyle = string.Create(CultureInfo.InvariantCulture, $"top: {-scrollTop / MainLayout!.Scale.Y}px");
+        await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "showModal", ElementRef, _self, focus);
+    }
+
+    [JSInvokable]
+    public ValueTask OnModalOpened()
+    {
+        if (Opened.HasDelegate)
+            return new ValueTask(Opened.InvokeAsync());
+        else
+            return ValueTask.CompletedTask;
+    }
+
+    [JSInvokable]
+    public ValueTask OnModalClosed()
+    {
+        if (Closed.HasDelegate)
+            return new ValueTask(Closed.InvokeAsync());
+        else
+            return ValueTask.CompletedTask;
+    }
+
+    public async Task Close(CancellationToken cancel = default)
+    {
+        await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "closeModal", ElementRef);
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        Parent?.RemoveSibling(this);
+        _self?.Dispose();
+        return base.DisposeAsync();
+    }
+}

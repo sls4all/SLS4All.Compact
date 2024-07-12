@@ -1,0 +1,204 @@
+﻿@using System.Diagnostics
+@using SLS4All.Compact.Diagnostics;
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Power;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Numerics
+@inherits AppComponent
+@inject IPowerClient PowerClient
+@inject IInputClient InputClient
+@inject IJSRuntime JSRuntime
+@inject IToastProvider ToastProvider
+
+@{
+    var powerState = PowerClient.CurrentState;
+    var powermanState = powerState.Powerman;
+    var inputState = InputClient.CurrentState;
+    var now = SystemTimestamp.Now;
+    var minElapsedOff = TimeSpan.FromSeconds(1.5);
+}
+<div @key="this" @ref="ElementRef" id="@ElementId" class="@ClassNames" style="@StyleNames">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th class="text-right">Power</th>
+                <th>New power</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in powerState.Entries)
+            {
+                if (!_states.TryGetValue(entry.Id, out var state))
+                {
+                    state = new PowerData();
+                    _states.Add(entry.Id, state);
+                }
+
+                PowerClient.TryGetRecentPower(entry.Id, out var isCurrent, out var power);
+                state.CurrentValue = power;
+
+                <tr>
+                    <th class="py-1 align-middle" scope="row">@entry.Id</th>
+                    <td class="text-right align-middle py-1 w-100">
+                        <span @ref="state.Reference" @key="state" style="width: 5em; background: linear-gradient(to right, @(!isCurrent ? "rgba(128,255,255,0.2)" : "rgba(128,255,255,0.4)") @(state.CurrentValue * 100)%, transparent @(state.CurrentValue * 100)%); display: inline-block; border: solid white 1px; padding: 1px 3px; text-align: center;">
+                            @if (!isCurrent)
+                            {
+                                <i>@Round(state.CurrentValue * 100)%</i>
+                            }
+                            else
+                            {
+                                <text>@Round(state.CurrentValue * 100)%</text>
+                            }
+                        </span>
+                    </td>
+                    <td class="py-1 pl-3 align-middle">
+                        <form class="form-inline flex-nowrap text-nowrap" @onsubmit="@(() => SetPower(entry.Id, state.NewValue))">
+                            <label class="sr-only" for="command">Target</label>
+                            <input type="number" step="any" class="form-control form-control-sm mb-2 virtual-keyboard" style="width: 10ch" @bind="state.NewValue">
+                            <button type="submit" class="btn btn-sm btn-theme mb-2">Set</button>
+                            &nbsp;
+                            <button class="btn btn-sm btn-primary mb-2" @onclick="@(() => SetPower(entry.Id, 100))" @onclick:preventDefault="true">On</button>
+                            &nbsp;
+                            <button class="btn btn-sm btn-danger mb-2" @onclick="@(() => SetPower(entry.Id, 0))" @onclick:preventDefault="true">Off</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @foreach (var entry in inputState.Entries)
+            {
+                <tr>
+                    <th class="py-1 align-middle" scope="row">@entry.Id</th>
+                    <td class="text-right align-middle py-1 w-100">
+                        @if (entry.Value)
+                        {
+                            <span style="width: 5em; background: rgba(128,255,255,0.4); display: inline-block; border: solid white 1px; padding: 1px 3px; text-align: center;">
+                                ON
+                            </span>
+                        }
+                        else
+                        {
+                            <span style="width: 5em; display: inline-block; border: solid white 1px; padding: 1px 3px; text-align: center;">
+                                OFF
+                            </span>
+                        }
+                    </td>
+                    <td class="py-1 pl-3 align-middle">
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="text-right">Max power</th>
+                <th class="text-right">Current power</th>
+                <th class="text-right">Required power</th>
+                <th>New max power</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th class="py-1 text-right align-middle" scope="row">@Round(powermanState.MaxPower)</th>
+                <th class="py-1 text-right align-middle" scope="row">@Round(powermanState.CurrentPower)</th>
+                <th class="py-1 text-right align-middle" scope="row">@Round(powermanState.RequiredPower)</th>
+                <td class="py-1 pl-3 align-middle">
+                    <form class="form-inline flex-nowrap text-nowrap" @onsubmit="@(() => SetPowermanMax(NewPowermanMax))">
+                        <label class="sr-only" for="command">Target</label>
+                        <input type="number" step="any" class="form-control form-control-sm mb-2 virtual-keyboard" style="width: 10ch" @bind="NewPowermanMax">
+                        <button type="submit" class="btn btn-sm btn-theme mb-2">Set</button>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    @if (!string.IsNullOrWhiteSpace(powermanState.PoweredPinsDescription))
+    {
+        <div class="alert alert-secondary" role="alert">
+            @powermanState.PoweredPinsDescription
+        </div>
+    }
+</div>
+
+@code {
+    private sealed class PowerData
+    {
+        public ElementReference Reference { get; set; }
+        public decimal NewValue { get; set; }
+        public double CurrentValue { get; set; }
+    }
+
+    private readonly Dictionary<string, PowerData> _states = new();
+    private decimal? _newPowermanMax;
+
+    public decimal NewPowermanMax
+    {
+        get => _newPowermanMax ?? Round(PowerClient.CurrentState.Powerman.MaxPower);
+        set => _newPowermanMax = value;
+    }
+
+    private static decimal Round(double value)
+        => value.RoundToDecimal(3);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        PowerClient.StateChangedLowFrequency.AddHandler(OnPowerStateChanged);
+    }
+
+    private ValueTask OnPowerStateChanged(PowerState state, CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged();
+        return ValueTask.CompletedTask;
+    }
+
+    private async Task SetPower(string id, decimal value)
+    {
+        try
+        {
+            var setValue = value / 100;
+            if (setValue < 0)
+                setValue = 0;
+            else if (setValue > 1)
+                setValue = 1;
+            await PowerClient.SetPower(id, (double)setValue, false);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error setting power",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private async Task SetPowermanMax(decimal value)
+    {
+        try
+        {
+            await PowerClient.SetPowermanMax((double)value, default);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error setting powerman",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        PowerClient.StateChangedLowFrequency.RemoveHandler(OnPowerStateChanged);
+        return base.DisposeAsync();
+    }
+}

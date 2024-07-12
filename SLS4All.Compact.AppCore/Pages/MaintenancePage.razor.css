@@ -1,0 +1,107 @@
+﻿.dummy {
+}
+
+.properties-panel {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 20px;
+}
+
+    .properties-panel .hide-top-line td, .properties-panel .hide-top-line th {
+        border-top: none;
+    }
+
+    .properties-panel .nav-link {
+        font-size: 20px;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .properties-panel .nav-tabs {
+        border-bottom: 0px solid white;
+    }
+
+    .properties-panel .nav-item {
+    }
+
+.property-container {
+    position: relative;
+}
+
+.property-table {
+    background: #8080801E;
+    border-radius: 10px;
+    position: relative;
+    top: 0px;
+}
+
+    .property-table .property-name {
+        white-space: nowrap;
+        color: #ffffff;
+        font-size: 20px;
+        vertical-align: middle;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .property-table .property-value {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: right;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+        .property-table .property-value .property-value-set {
+            /*font-weight: bold;*/
+        }
+
+        .property-table .property-value .property-value-set-parent {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+        .property-table .property-value .property-value-not-set {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+    .property-table .property-suffix {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .property-table .property-separator {
+    }
+
+
+.quick-stats__item {
+    padding: 6px 10px 6px 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+}
+
+    .quick-stats__item.item-selected {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+.quick-stats__info h2 {
+    font-size: 15px;
+}
+
+.quick-stats__info small {
+    font-size: 15px;
+}
+
+.col-item {
+}
+
+.item-list {
+    overflow-y: auto;
+    position: relative;
+}

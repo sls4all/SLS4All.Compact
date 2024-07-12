@@ -1,0 +1,585 @@
+﻿@page "/status"
+@page "/status/{SelectedImagePageName}"
+@using System.Diagnostics
+@using SLS4All.Compact.Camera;
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.Printer;
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Diagnostics
+@using System.Globalization;
+@inherits AppPage
+@inject ITemperatureClient TemperatureClient
+@inject IHalogenClient LightsClient
+@inject ISurfaceHeater Surface
+@inject IMovementClient MovementClient
+@inject IPrinterClient PrinterClient
+@inject IPowerClient PowerClient
+@inject IBedProjection BedProjection
+@inject IPrintingService PrintingGlobal
+@inject ICameraClient CameraClient
+@inject IPrintSessionStorage PrintSessionStorage
+@inject ICodePlotter Plotter
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_stopModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Stop printing?
+            </h5>
+        </div>
+         <div class="modal-body">
+            Do you really want to stop the current print? You can <i>Stop immeditalely</i>, that will immediately end all procedures including cooling and will almost certanly spoil the print results. If you want to stop the printing but still go trough the <i>Print cap</i> and <i>Cooling procedure</i>, choose <i>Cap &amp; cool</i>.
+        </div>
+        <div class="modal-footer">
+            @if (!PrintingGlobal.SoftCancelToken.IsCancellationRequested)
+            {
+                <button class="btn btn-danger" @onclick="OnStopSoftConfirm">Cap &amp; cool!</button>
+            }
+            <button class="btn btn-danger" @onclick="OnStopHardConfirm">Stop immediately!</button>
+            <button class="btn btn-secondary" @onclick="() => modal.Close()">Continue printing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+@{
+    var imagePageNow = DisplayedImagePage;
+    var temperatures = TemperatureClient.CurrentState;
+    var position = MovementClient.CurrentPosition;
+    var power = PowerClient.CurrentState;
+    var laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
+    var halogenOn = LightsClient.HasRecentLightPower();
+    var warningTemp = GetUnits(_warningTempCelsius, Units.Celsius);
+    var surfaceTemperature = GetUnits(GetTemperature(temperatures, TemperatureClient.AvgSurfaceId), Units.Celsius);
+    var powderChamberTemperature = GetUnits(CalcAverageTemperature(temperatures, TemperatureClient.PowderChamberSensorIds), Units.Celsius);
+    var printChamberTemperature = GetUnits(CalcAverageTemperature(temperatures, TemperatureClient.PrintChamberSensorIds), Units.Celsius);
+    var slicingStatus = PrintingGlobal.BackgroundTask.Status;
+    var isActive = slicingStatus != null && !slicingStatus.IsCompleted;
+    var isCancelling = isActive && PrintingGlobal.BackgroundTask.IsCancelled;
+    var isSoftStop = isActive && PrintingGlobal.SoftCancelToken.IsCancellationRequested;
+    var progressStatus = slicingStatus?.ProgressStatus as PrintingStatus;
+    var canEjectCake = !isActive && PrintSessionStorage.CanEjectCake;
+    var progress = progressStatus?.Estimate.Incomplete == false ? progressStatus.Estimate.Progress : 0;
+    var progressInt = (int)Math.Round(progress);
+    var progressRemaining = progressStatus != null && progressStatus.Estimate.Remaining != TimeSpan.Zero /*&& !progressStatus.Estimate.Incomplete*/
+        ? (TimeSpan?)progressStatus.Estimate.Remaining
+        : null;
+    var shutdownReason = PrinterClient.ShutdownReason;
+    var connectionStatus = PrinterClient.GetConnectionStatus();
+    if (progressRemaining != null && slicingStatus != null)
+    {
+        var minProgressRemaining = TimeSpan.FromMinutes(1);
+        var elapsedSinceProgressReport = SystemTimestamp.Now - slicingStatus.CreatedAt;
+        if (progressRemaining.Value >= minProgressRemaining)
+        {
+            progressRemaining = progressRemaining.Value - elapsedSinceProgressReport;
+            if (progressRemaining.Value < minProgressRemaining) // do not go to zero, leave some leeway
+                progressRemaining = minProgressRemaining;
+        }
+    }
+}
+
+<img src onerror="window.AppHelpersInvoke('statusPageResizerLoad')">
+<div id="root_container" class="root-container" >
+    <div class="container status-panel">
+        <div class="row">
+            <div id="status_left" class="col-12 col-lg-7 p-0">
+                @* Left side *@
+                <table class="table table-sm m-0">
+                    <tbody>
+                        <tr class="hide-top-line">
+                            <td colspan="2" class="align-middle col-5 py-1 monitor-container-cell">
+                                <div class="monitor-container">
+                                    <table class="table table-sm value-table m-0">
+                                        <tbody>
+                                            <tr class="hide-top-line">
+                                                <th scope="row" class="status-text text-nowrap col-auto">
+                                                    Status:
+                                                </th>
+                                                <td class="status-value col" colspan="2">
+                                                    @if (!isActive)
+                                                    {
+                                                        if (shutdownReason != null)
+                                                        {
+                                                            <span class="text-danger">firmware shutdown</span>
+                                                        }
+                                                        else if (!PrinterClient.IsConnected)
+                                                        {
+                                                            <span class="text-warning">connecting to the firmware</span>
+                                                        }
+                                                        else if (canEjectCake)
+                                                        {
+                                                            <span class="text-warning">job finished, ready to eject the cake!</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>ready for a new job</span>
+                                                        }
+                                                    }
+                                                    else if (isCancelling)
+                                                    {
+                                                        <span class="text-warning">cancelling...</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        if (isSoftStop)
+                                                        {
+                                                            <span class="text-warning">Cap&amp;cool > </span>
+                                                        }
+                                                        switch (slicingStatus!.ProgressStatus)
+                                                        {
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.Init:
+                                                                <text>initializing printing</text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.BedPreparation:
+                                                                <text>bed preparation <span class="status-progress">(@(status.PhaseDone + 1)/@status.PhaseTotal)</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.Layers:
+                                                                <text>printing layers <span class="status-progress">(@(status.PhaseDone + 1)/@status.PhaseTotal)</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.PrintCap:
+                                                                <text>performing print cap <span class="status-progress">(@(status.PhaseDone + 1)/@status.PhaseTotal)</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.Heating:
+                                                                <text>heating up before print <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.Heating2:
+                                                                <text>heating up for bed prep. <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.Heating3:
+                                                                <text>heating up for layers <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.AnalyseHeating:
+                                                                <text>heating analysis <span class="status-progress">(@status.PhaseDone.RoundToDecimal(0)/@status.PhaseTotal.RoundToDecimal(0) steps)</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.Cooling:
+                                                                <text>cooling down after print <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
+                                                                break;
+                                                            default:
+                                                                <text>printing in progress...</text>
+                                                                break;
+                                                        }
+                                                    }
+                                                </td>
+                                            </tr>
+                                            @if (!PrinterClient.IsConnected && shutdownReason != null)
+                                            {
+                                                <tr>
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        Reason:
+                                                    </th>
+                                                    <td class="status-value col connection-status" colspan="2" rowspan="3">
+                                                        <span class="badge badge-danger m-1 ml-4 text-wrap">@shutdownReason</span>
+                                                    </td>
+                                                </tr>
+                                                <tr class="hide-top-line">
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        &nbsp;
+                                                    </th>
+                                                </tr>
+                                                <tr class="hide-top-line">
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        &nbsp;
+                                                    </th>
+                                                </tr>
+                                            }
+                                            else if (!PrinterClient.IsConnected && connectionStatus.Length > 0)
+                                            {
+                                                <tr>
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        Status:
+                                                    </th>
+                                                    <td class="status-value col connection-status" colspan="2" rowspan="3">
+                                                        @foreach (var item in connectionStatus)
+                                                        {
+                                                            <span class="badge badge-pill badge-warning m-1 text-wrap"><b>@item.Key</b>: @item.Message</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                                <tr class="hide-top-line">
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        &nbsp;
+                                                    </th>
+                                                </tr>
+                                                <tr class="hide-top-line">
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        &nbsp;
+                                                    </th>
+                                                </tr>
+                                            }
+                                            else
+                                            {
+                                                <tr>
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        Job name:
+                                                    </th>
+                                                    <td class="status-value col" colspan="2">
+                                                        @if (progressStatus != null)
+                                                        {
+                                                            @progressStatus.JobName
+                                                        }
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    @if (!PrinterClient.IsConnected && connectionStatus.Length > 0)
+                                                    {
+                                                    }
+                                                    else
+                                                    {
+                                                        <th scope="row" class="status-text text-nowrap col-auto">
+                                                            Progress:
+                                                        </th>
+                                                        @if (isActive)
+                                                        {
+                                                            <td class="status-value col" style="background: linear-gradient(to right, rgba(128,255,255,0.15) @progressInt%, rgba(128,255,255,0.05) @progressInt%)">
+                                                                @(progress.RoundToDecimal(2, true))&nbsp;
+                                                            </td>
+                                                            <td class="status-value-suffix col-auto">
+                                                                %
+                                                            </td>
+                                                        }
+                                                        else
+                                                        {
+                                                            <td colspan="2" class="col" />
+                                                        }
+                                                    }
+                                                </tr>
+                                                <tr>
+                                                    <th scope="row" class="status-text text-nowrap col-auto">
+                                                        Remaining:
+                                                    </th>
+                                                    @if (isActive)
+                                                    {
+                                                        <td class="status-value col">
+                                                            @if (progressRemaining != null)
+                                                            {
+                                                                var value = progressRemaining.Value;
+                                                                (var hours, var minutes) = value.ToHoursAndMinutes();
+                                                                @if (progressStatus?.Estimate.Incomplete == true)
+                                                                {
+                                                                    <span class="status-value-prefix">more than&nbsp;</span>
+                                                                    <text>@hours:@(minutes.ToString("00"))&nbsp;</text>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="status-estimate-absolute">
+                                                                        (<BrowserTime DateTime="DateTime.UtcNow + value" Format="t" EnableSmartDate="true" />)&nbsp;
+                                                                    </span>
+                                                                    <text>after @hours:@(minutes.ToString("00"))&nbsp;</text>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>calculating&nbsp;</text>
+                                                            }
+                                                        </td>
+                                                        <td class="status-value-suffix col-auto">
+                                                            h:m
+                                                        </td>
+                                                    }
+                                                    else
+                                                    {
+                                                        <td colspan="2" class="col" />
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr class="hide-top-line">
+                            <td class="align-middle col-auto"><SmartImage Source="/_content/SLS4All.Compact.AppCore/ui/img/status-laser.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
+                            <td class="align-middle col">
+                                <table class="table table-sm value-table m-0">
+                                    <tbody>
+                                        <tr class="hide-top-line">
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Laser:
+                                            </th>
+                                            <td class="status-value col-11" colspan="2">
+                                                <span class="laser-status @(laserOn ? "text-warning" : "")">@(laserOn ? "ON" : "OFF")</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Halogen heaters:
+                                            </th>
+                                            <td class="status-value col-11" colspan="2">
+                                                <span class="halogen-status @(halogenOn ? "text-warning" : "")">@(halogenOn ? "ON" : "OFF")</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Powder chamber:
+                                            </th>
+                                            <td class="status-value col-10 @(powderChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
+                                                @(powderChamberTemperature == null ? "N/A" : powderChamberTemperature.Value.Value.RoundToDecimal(0, true))&nbsp;
+                                            </td>
+                                            <td class="status-value-suffix col-1 @(powderChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
+                                                @powderChamberTemperature?.Unit
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Print chamber:
+                                            </th>
+                                            <td class="status-value col-10 @(printChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
+                                                @(printChamberTemperature == null ? "N/A" : printChamberTemperature.Value.Value.RoundToDecimal(0, true))&nbsp;
+                                            </td>
+                                            <td class="status-value-suffix col-1 @(printChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
+                                                @printChamberTemperature?.Unit
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Surface:
+                                            </th>
+                                            <td class="status-value col-10 @(surfaceTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
+                                                @(surfaceTemperature == null ? "N/A" : surfaceTemperature.Value.Value.RoundToDecimal(0, true))&nbsp;
+                                            </td>
+                                            <td class="status-value-suffix col-1 @(surfaceTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
+                                                @surfaceTemperature?.Unit
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="align-middle col-auto"><SmartImage Source="/_content/SLS4All.Compact.AppCore/ui/img/status-position.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
+                            <td class="align-middle col">
+                                <table class="table table-sm value-table m-0">
+                                    <tbody>
+                                        @{
+                                            var z1 = GetUnits(position.Z1 / 1000, Units.Millimeter);
+                                            var z2 = GetUnits(position.Z2 / 1000, Units.Millimeter);
+                                        }
+                                        <tr class="hide-top-line">
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Z1 (powder bed):
+                                            </th>
+                                            <td class="status-value col-10">
+                                                @(z1.Value.RoundToDecimal(3, true))&nbsp;
+                                            </td>
+                                            <td class="status-value-suffix col-1">
+                                                @z1.Unit
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row" class="status-text text-nowrap col-1">
+                                                Z2 (print bed):
+                                            </th>
+                                            <td class="status-value col-10">
+                                                @(z2.Value.RoundToDecimal(3, true))&nbsp;
+                                            </td>
+                                            <td class="status-value-suffix col-1">
+                                                @z2.Unit
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="status_right" class="col-12 col-lg-5 status-image-container">
+                @* Right side *@
+                <div class="container p-0">
+                    <div id="status_camera_plot" class="row">
+                        <div class="col status-plot-camera-container">
+                            <PlotterView @key="_plotterViewKey" class="status-any-view status-plot-view" style="@(imagePageNow == ImagePage.Plot ? "opacity: 100%": "opacity: 0%")" ExternalCssScope="@CssScope" />
+                            <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Thermo">
+                                <ThermoCameraView @key="_thermoCameraViewKey" class="status-any-view status-thermo-view" style="@(imagePageNow == ImagePage.Thermo ? "opacity: 100%": "opacity: 0%")" ExternalCssScope="@CssScope" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" />
+                            </TimeoutContainer>
+                            <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Live">
+                                <VideoCameraView @key="_cameraViewKey" class="status-any-view status-camera-view" style="@(imagePageNow == ImagePage.Live ? "opacity: 100%": "opacity: 0%")" LightsControlsEnabled="false" ExternalCssScope="@CssScope" />
+                            </TimeoutContainer>
+                        </div>
+                    </div>
+                    <div id="status_buttons" class="row pt-3 align-items-center print-controls">
+                        <div class="col-3">
+                            @if (canEjectCake)
+                            {
+                                <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-eject.png" OnClick="OnEject" Title="Eject" class="print-controls-button" ExternalCssScope="@CssScope" />
+                            }
+                            else
+                            {
+                                <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-stop.png" IsEnabled="isActive" OnClick="OnStop" Title="Stop" class="print-controls-button" ExternalCssScope="@CssScope" />
+                            }
+                        </div>
+                        <div class="col-3">
+                            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-plot.png" OnClick="() => ToggleImagePage(ImagePage.Plot)" Title="Plot" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Plot" SelectedColor="#03b4da" />
+                        </div>
+                        <div class="col-3">
+                            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" OnClick="() => ToggleImagePage(ImagePage.Live)" Title="Live" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Live" SelectedColor="#03b4da" />
+                        </div>
+                        <div class="col-3">
+                            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" OnClick="() => ToggleImagePage(ImagePage.Thermo)" Title="Temp" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Thermo" SelectedColor="#03b4da" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public enum ImagePage
+    {
+        NotSet = 0,
+        Plot,
+        Live,
+        Thermo,
+    }
+
+    private static readonly TimeSpan _statusPlotCameraViewTimeout = TimeSpan.FromSeconds(1);
+    public const string SelfPath = "/status";
+    private const string CssScope = "b-printer-status";
+    private const float _warningTempCelsius = 50.0f;
+    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private readonly object _plotterViewKey = new object();
+    private readonly object _cameraViewKey = new object();
+    private readonly object _thermoCameraViewKey = new object();
+    private Timer? _timer;
+    private ModalWrapper? _stopModal;
+    private ImagePage _selectedImagePage = ImagePage.NotSet;
+
+    protected ImagePage DisplayedImagePage
+    {
+        get
+        {
+            if (_selectedImagePage == ImagePage.NotSet)
+            {
+                if (!Plotter.IsEmpty)
+                    return ImagePage.Plot;
+                else if (!CameraClient.IsMostlyEmpty)
+                    return ImagePage.Live;
+                else
+                    return ImagePage.Thermo;
+            }
+            else
+                return _selectedImagePage;
+        }
+    }
+
+    [Parameter]
+    public string SelectedImagePageName
+    {
+        get => _selectedImagePage.ToString();
+        set
+        {
+            if (Enum.TryParse<ImagePage>(value, true, out var valueEnum))
+                _selectedImagePage = valueEnum;
+        }
+    }
+
+    private void ToggleImagePage(ImagePage page)
+    {
+        if (_selectedImagePage != page)
+            NavigationManager.NavigateTo($"{SelfPath}/{page}", new NavigationOptions{ ReplaceHistoryEntry = true });
+        else
+        {
+            _selectedImagePage = ImagePage.NotSet;
+            NavigationManager.NavigateTo(SelfPath, new NavigationOptions { ReplaceHistoryEntry = true });
+        }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _timer = new Timer(OnTimer, null, s_period, s_period);
+        }
+        base.OnAfterRender(firstRender);
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged();
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        return base.DisposeAsync();
+    }
+
+    private static double? GetTemperature(TemperatureState state, string id)
+    {
+        if (state.TryGetValue(id, out var entry))
+            return entry.CurrentTemperature;
+        else
+            return null;
+    }
+
+    private static double? CalcAverageTemperature(TemperatureState state, TemperatureClientSensorPair[] sensors)
+    {
+        var count = 0;
+        var sum = 0.0;
+        foreach (var entry in state.Entries)
+        {
+            if (sensors.Any(x => x.Id == entry.Id))
+            {
+                count++;
+                sum += entry.CurrentTemperature;
+            }
+        }
+        if (count == 0)
+            return null;
+        else
+            return sum / count;
+    }
+
+    private void OnPlay()
+    {
+        var status = PrintingGlobal.BackgroundTask.Status;
+        if (status != null && !status.IsCompleted)
+            return;
+        NavigationManager.NavigateTo(Jobs.SelfPath);
+    }
+
+    private Task OnEject()
+    {
+        NavigationManager.NavigateTo($"{PrintWizard.SelfPath}/{PrintWizard.Step.Eject}");
+        return Task.CompletedTask;
+    }
+
+    private async Task OnStop()
+    {
+        var status = PrintingGlobal.BackgroundTask.Status;
+        if (status == null || status.IsCompleted)
+            return;
+        await _stopModal!.Show();
+    }
+
+    private void OnVideoCamera()
+    {
+        NavigationManager.NavigateTo(VideoCamera.SelfPath);
+    }
+
+    private void OnThermoCamera()
+    {
+        NavigationManager.NavigateTo(ThermoCamera.SelfPath);
+    }
+
+    private async Task OnStopSoftConfirm()
+    {
+        PrintingGlobal.SoftCancel();
+        await _stopModal!.Close();
+    }
+
+    private async Task OnStopHardConfirm()
+    {
+        PrintingGlobal.BackgroundTask.Cancel();
+        await _stopModal!.Close();
+    }
+
+}

@@ -1,0 +1,13 @@
+﻿.dummy {
+}
+
+.print-profile {
+}
+
+    .print-profile.disabled {
+        opacity: 0.5;
+    }
+
+    .print-profile img {
+        height: 30px;
+    }

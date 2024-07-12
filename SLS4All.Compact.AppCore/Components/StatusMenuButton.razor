@@ -1,0 +1,16 @@
+﻿@inherits AppComponent
+
+<div @ref="@ElementRef" id="@ElementId" class="container status-button @(!IsEnabled ? "disabled-button" : "") p-0 @ClassNames" style="@StyleNames" @attributes="@Attributes" oncontextmenu="return false;">
+    <div class="row justify-content-center">
+        <div class="col-auto">
+            <SmartImage Source="@Image" class="img-fluid" />
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Image { get; set; } = "";
+    [Parameter]
+    public bool IsEnabled { get; set; } = true;
+}

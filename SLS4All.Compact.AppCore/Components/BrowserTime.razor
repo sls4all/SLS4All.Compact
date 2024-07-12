@@ -1,0 +1,71 @@
+﻿@using SLS4All.Compact.Printer
+@inherits AppComponent
+@inject IPrinterTimeManager TimeManager
+
+@{
+    if (DateTime == null)
+        return;
+    var now = TimeZoneInfo.ConvertTimeFromUtc(System.DateTime.UtcNow, TimeZone);
+    var value = TimeZoneInfo.ConvertTimeFromUtc(DateTime.Value.ToUniversalTime(), TimeZone);
+    var days = (int)(value.Date - now.Date).TotalDays;
+}
+
+<span @ref="@ElementRef" id="@ElementId" class="@ClassNames" style="@StyleNames" @attributes="@Attributes">
+    @if (EnableSmartDate)
+    {
+        switch (days)
+        {
+            case 0:
+                <text>today </text>
+                break;
+            case 1:
+                <text>tomorrow </text>
+                break;
+            case 2:
+                <text>overmorrow </text>
+                break;
+            case -1:
+                <text>yesterday </text>
+                break;
+            case int v when v > 0:
+                <text>+@days days </text>
+                break;
+            case int v when v < 0:
+                <text>@days days </text>
+                break;
+        }        
+    }
+    @value.ToString(Format)
+</span>
+
+@code {
+    private TimeZoneInfo? _timeZoneCache;
+
+    [Parameter]
+    public DateTime? DateTime { get; set; } = System.DateTime.UtcNow;
+    [Parameter]
+    public bool EnableSmartDate { get; set; }
+    [Parameter]
+    public string? Format { get; set; }
+    [CascadingParameter]
+    protected IMainLayout? MainLayout { get; set; }
+
+    public TimeZoneInfo TimeZone
+    {
+        get
+        {
+            var task = TimeManager.GetTimeZone(MainLayout?.IsLocalSession ?? false, true);
+            if (task.IsCompleted)
+                _timeZoneCache = task.GetAwaiter().GetResult();
+            else
+                _ = UpdateTimeZoneInBackground(task!);
+            return _timeZoneCache ?? TimeZoneInfo.Local;
+        }
+    }
+
+    private async Task UpdateTimeZoneInBackground(ValueTask<TimeZoneInfo> task)
+    {
+        _timeZoneCache = await task;
+        StateHasChanged();
+    }
+}

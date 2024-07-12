@@ -1,0 +1,836 @@
+﻿@page "/movement"
+@using System.Threading
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Numerics
+@inherits AppPage
+@inject IPrinterClient PrinterClient
+@inject IMovementClient MovementClient
+@inject ILayerClient LayerClient
+@inject ValuesContainer Values
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+
+<PrinterPageTitle IconClass="zwicon-controller" IsFullPage="true" />
+
+<Modal @ref="_bedPreparationModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Bed preparation setup
+            </h5>
+        </div>
+         <div class="modal-body">
+            <table class="table table-sm">
+                <tbody>
+                    <tr>
+                        <td class="col-8">Layer thickness</td>
+                        <td class="col">
+                            <ValueEditor Title="Layer thickness" Unit="μm" @bind-Value="Values.LayerThickness" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Temperature target</td>
+                        <td class="col">
+                            <ValueEditor Title="Temperature target" Unit="°C" @bind-Value="Values.BedPreparationTemperatureTarget" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Temperature settle delay</td>
+                        <td class="col">
+                            <ValueEditor Title="Temperature settle delay" Unit="sec" @bind-Value="Values.TemperatureDelay" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Bed preparation height</td>
+                        <td class="col">
+                            <ValueEditor Title="Bed preparation height" Unit="μm" @bind-Value="Values.BedPreparationHeight" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => BedPreparation()" class="btn btn-primary">Bed preparation!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
+<Modal @ref="_printCapModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Print cap setup
+            </h5>
+        </div>
+         <div class="modal-body">
+            <table class="table table-sm">
+                <tbody>
+                    <tr>
+                        <td class="col-8">Layer thickness</td>
+                        <td class="col">
+                            <ValueEditor Title="Layer thickness" Unit="μm" @bind-Value="Values.LayerThickness" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Temperature target</td>
+                        <td class="col">
+                            <ValueEditor Title="Temperature target" Unit="°C" @bind-Value="Values.PrintCapTemperatureTarget" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Temperature settle delay</td>
+                        <td class="col">
+                            <ValueEditor Title="Temperature settle delay" Unit="sec" @bind-Value="Values.TemperatureDelay" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Print cap height</td>
+                        <td class="col">
+                            <ValueEditor Title="Print cap height" Unit="μm" @bind-Value="Values.PrintCapHeight" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => PrintCap()" class="btn btn-primary">Print cap!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
+<Modal @ref="_beginLayerModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Begin layer setup
+            </h5>
+        </div>
+         <div class="modal-body">
+            <table class="table table-sm">
+                <tbody>
+                    <tr>
+                        <td class="col-8">Layer thickness</td>
+                        <td class="col">
+                            <ValueEditor Title="Layer thickness" Unit="μm" @bind-Value="Values.LayerThickness" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Temperature target</td>
+                        <td class="col">
+                            <ValueEditor Title="Temperature target" Unit="°C" @bind-Value="Values.BeginLayerTemperatureTarget" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Temperature settle delay</td>
+                        <td class="col">
+                            <ValueEditor Title="Temperature settle delay" Unit="sec" @bind-Value="Values.TemperatureDelay" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Fill area of previous layer</td>
+                        <td class="col">
+                            <ValueEditor Title="Fill area of previous layer" Unit="mm²" @bind-Value="Values.PrevLayerFillArea" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Sintered volume factor</td>
+                        <td class="col">
+                            <ValueEditor Title="How many times is sintered volume denser over non-sintered volume" @bind-Value="Values.SinteredVolumeFactor" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-8">Use slow recoater speed</td>
+                        <td class="col">
+                            <ValueEditor Title="Use slow recoater speed" @bind-Value="Values.UseSlowRecoaterSpeed" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => BeginLayer()" class="btn btn-primary">Begin layer!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
+@{
+    var isPrinting = IsPrinting;
+}
+
+@if (isPrinting)
+{
+    <div class="printing-notification">
+        <p>
+            <span class="badge badge-dark text-wrap">
+                <i class="bi bi-play" /> Printing is in progress, movement cannot be controlled at this time.
+            </span>
+        </p>
+        <p>
+            <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+        </p>
+    </div>
+    return;
+}
+
+<div @key="this" class="container movement-container">
+    <div class="row justify-content-center align-items-center">
+        <div class="col-4 my-border-right">
+            <table class="table table-sm table-borderless">
+                <tbody>
+                    <tr>
+                        <th colspan="2" class="h5 text-center">
+                            X / Y (laser)
+                        </th>
+                    </tr>
+                    <tr class="@(Values.DirectMovement ? "invisible" : "visible")">
+                        <td class="col-6">
+                            Step
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="X/Y Step" @bind-Value="Values.StepXY" Unit="‰" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <div class="container-fluid movement-controls">
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-primary btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveXY(0, -Values.StepXY)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.Y, false, (double)Values.SpeedXY, cancel)">
+                                            <i class="zwicon-arrow-up"></i>
+                                        </MovementKey>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-primary btn--icon"
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveXY(-Values.StepXY, 0)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.X, false, (double)Values.SpeedXY, cancel)">
+                                            <i class="zwicon-arrow-left"></i>
+                                        </MovementKey>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <a class="btn btn-outline-primary btn--icon" @onclick="HomeXY"><i class="zwicon-home"></i></a>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-primary btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveXY(+Values.StepXY, 0)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.X, true, (double)Values.SpeedXY, cancel)">
+                                            <i class="zwicon-arrow-right"></i>
+                                        </MovementKey>
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-primary btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveXY(0, +Values.StepXY)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.Y, true, (double)Values.SpeedXY, cancel)">
+                                            <i class="zwicon-arrow-down"></i>
+                                        </MovementKey>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Speed
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="X/Y Speed" @bind-Value="Values.SpeedXY" Unit="‰/m" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            X
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="X Position" @bind-Value="Values.MoveXPos" Unit="‰" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Y
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="Y Position" @bind-Value="Values.MoveYPos" Unit="‰" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <a class="btn btn-sm btn-theme btn--icon-text w-100" @onclick="MoveXYPos"><i class="zwicon-checkmark"></i> Go</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <a class="btn btn-sm btn-theme btn--icon-text w-100" @onclick="MeasureXYPos"><i class="zwicon-clock"></i> Time</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-4 my-border-right">
+            <table class="table table-sm table-borderless">
+                <tbody>
+                    <tr>
+                        <th colspan="2" class="h5 text-center">
+                            Z1 / Z2 (chambers)
+                        </th>
+                    </tr>
+                    <tr class="@(Values.DirectMovement ? "invisible" : "visible")">
+                        <td class="col-6">
+                            Step
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="Z1/Z2 Step" @bind-Value="Values.StepZ" Unit="µm" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <div class="container-fluid movement-controls">
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-success btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveAux(MovementAxis.Z1, -Values.StepZ, Values.SpeedZ, 0)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.Z1, false, (double)Values.SpeedZ, cancel)">
+                                            <i class="zwicon-arrow-up"></i>
+                                        </MovementKey>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-warning btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveAux(MovementAxis.Z2, -Values.StepZ, Values.SpeedZ, 0)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.Z2, false, (double)Values.SpeedZ, cancel)">
+                                            <i class="zwicon-arrow-up"></i>
+                                        </MovementKey>
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                        <a class="btn btn-outline-success btn--icon" @onclick="() => HomeAux(MovementAxis.Z1, Values.HomeZDistance, Values.SpeedZ)"><i class="zwicon-home"></i></a>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <a class="btn btn-outline-warning btn--icon" @onclick="() => HomeAux(MovementAxis.Z2, Values.HomeZDistance, Values.SpeedZ)"><i class="zwicon-home"></i></a>
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-success btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveAux(MovementAxis.Z1, +Values.StepZ, Values.SpeedZ, 0)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.Z1, true, (double)Values.SpeedZ, cancel)">
+                                            <i class="zwicon-arrow-down"></i>
+                                        </MovementKey>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-warning btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveAux(MovementAxis.Z2, +Values.StepZ, Values.SpeedZ, 0)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.Z2, true, (double)Values.SpeedZ, cancel)">
+                                            <i class="zwicon-arrow-down"></i>
+                                        </MovementKey>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Home
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="Z1/Z2 Home Distance" @bind-Value="Values.HomeZDistance" Unit="µm" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Speed
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="Z1/Z2 Speed" @bind-Value="Values.SpeedZ" Unit="µm/s" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Z1
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="Z1 Position" @bind-Value="Values.MoveZ1Pos" Unit="µm" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Z2
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="Z2 Position" @bind-Value="Values.MoveZ2Pos" Unit="µm" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <a class="btn btn-sm btn-theme btn--icon-text w-100" @onclick="MoveZPos"><i class="zwicon-checkmark"></i> Go</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-4">
+            <table class="table table-sm table-borderless">
+                <tbody>
+                    <tr>
+                        <th colspan="2" class="h5 text-center">
+                            Recoater
+                        </th>
+                    </tr>
+                    <tr class="@(Values.DirectMovement ? "invisible" : "visible")">
+                        <td class="col-6">
+                            Step
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="R Step" @bind-Value="Values.StepR" Unit="mm" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <div class="container-fluid movement-controls">
+                                <div class="row justify-content-center invisible">
+                                    <div class="col-auto text-center p-1">
+                                        <a class="btn btn-danger btn--icon"><i class="zwicon-arrow-up"></i></a>
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center">
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-danger btn--icon" 
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveAux(MovementAxis.R, -Values.StepR, Values.SpeedR, Values.AccelR)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.R, false, (double)Values.SpeedR, cancel)">
+                                            <i class="zwicon-arrow-left"></i>
+                                        </MovementKey>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <a class="btn btn-outline-danger btn--icon" @onclick="() => HomeAux(MovementAxis.R, Values.HomeRDistance, Values.SpeedR)"><i class="zwicon-home"></i></a>
+                                    </div>
+                                    <div class="col-auto text-center p-1">
+                                        <MovementKey
+                                            b-movement="b-movement"
+                                            class="btn btn-danger btn--icon"
+                                            ClickedEnabled="!Values.DirectMovement"
+                                            Clicked="() => MoveAux(MovementAxis.R, +Values.StepR, Values.SpeedR, Values.AccelR)"
+                                            Clicking="cancel => MoveContinuous(MovementAxis.R, true, (double)Values.SpeedR, cancel)">
+                                            <i class="zwicon-arrow-right"></i>
+                                        </MovementKey>
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center invisible">
+                                    <div class="col-auto text-center p-1">
+                                        <a class="btn btn-danger btn--icon"><i class="zwicon-arrow-down"></i></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Home
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="R Home Distance" @bind-Value="Values.HomeRDistance" Unit="mm" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Speed
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="R Speed" @bind-Value="Values.SpeedR" Unit="mm/s" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            Acceleration
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="R Acceleration" @bind-Value="Values.AccelR" Unit="mm/s²" ExternalCssScope="@CssScope"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-4">
+                            R
+                        </td>
+                        <td class="col">
+                            <ValueEditor Title="R Position" @bind-Value="Values.MoveRPos" Unit="mm" ExternalCssScope="@CssScope" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <a class="btn btn-sm btn-theme btn--icon-text w-100" @onclick="MoveRPos"><i class="zwicon-checkmark"></i> Go</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-auto p-1 @(_backgroundCount > 0 ? "visible" : "invisible")">
+            <div class="page-loader__spinner">
+                <svg viewBox="25 25 50 50">
+                    <circle cx="50" cy="50" r="20" fill="none" stroke-width="2" stroke-miterlimit="10"></circle>
+                </svg>
+            </div>
+        </div>
+        <div class="col-auto p-1">
+            <div class="btn-group">
+                <button type="button" class="btn btn-theme" @onclick="() => Values.DirectMovement = !Values.DirectMovement">
+                    @if (Values.DirectMovement)
+                    {
+                        <text><i class="zwicon-press"></i> Direct push movement</text>
+                    }
+                    else
+                    {
+                        <text><i class="zwicon-drag"></i> Step based movement</text>
+                    }
+                </button>
+            </div>
+        </div>
+        <div class="col-auto p-1">
+            <div class="btn-group">
+                <button type="button" class="btn btn-theme dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Layers
+                </button>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="BeginPrint">Begin print</a>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _bedPreparationModal!.Show()">Bed preparation...</a>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _beginLayerModal!.Show()">Begin layer...</a>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="EndLayer">End layer</a>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _printCapModal!.Show()">Print cap...</a>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="EndPrint">End print</a>
+                </div>
+            </div>
+        </div>
+        @if (_info != null)
+        {
+            <div class="col-auto p-1">
+                <div class="badge badge-info text-wrap">
+                    @_info
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    public class ValuesContainer
+    {
+        public Position? LastPosition;
+        public bool DirectMovement = false;
+        public decimal StepXY = 10;
+        public decimal StepZ = 50000;
+        public decimal StepR = 483;
+        public decimal MoveXPos = 0;
+        public decimal MoveYPos = 0;
+        public decimal MoveZ1Pos = 0;
+        public decimal MoveZ2Pos = 0;
+        public decimal MoveRPos = 0;
+        public decimal HomeZDistance = -220000;
+        public decimal HomeRDistance = -500;
+        public decimal SpeedXY = 75000;
+        public decimal SpeedZ = 15000;
+        public decimal SpeedR = 50;
+        public decimal AccelR = 150;
+        public int UseSlowRecoaterSpeed = 0;
+        public decimal LayerThickness = 100;
+        public decimal BedPreparationTemperatureTarget = 0;
+        public decimal BedPreparationHeight = 100;
+        public decimal BeginLayerTemperatureTarget = 0;
+        public decimal PrintCapTemperatureTarget = 0;
+        public decimal PrintCapHeight = 100;
+        public decimal PrevLayerFillArea = 0;
+        public decimal TemperatureDelay = 5;
+        public decimal SinteredVolumeFactor = 2;
+
+        public void InvalidateLastPosition()
+            => LastPosition = null;
+    }
+    private const string CssScope = "b-movement";
+    public const string SelfPath = "/movement";
+    private string? _info = null;
+    private int _backgroundCount = 0;
+    private Modal? _beginLayerModal;
+    private Modal? _bedPreparationModal;
+    private Modal? _printCapModal;
+
+    private bool IsPrinting => PrintingGlobal.BackgroundTask.Status?.IsCompleted == false;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        MovementClient.PositionChangedLowFrequency.AddHandler(OnCurrentPositionChanged);
+        UpdatePosition();
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        MovementClient.PositionChangedLowFrequency.RemoveHandler(OnCurrentPositionChanged);
+        return base.DisposeAsync();
+    }
+
+    private static decimal Round(double value)
+        => value.RoundToDecimal(3);
+
+    private void UpdatePosition()
+    {
+        var pos = MovementClient.CurrentPosition;
+        if (Values.LastPosition != pos)
+        {
+            Values.LastPosition = pos;
+            Values.MoveXPos = Round(pos.X);
+            Values.MoveYPos = Round(pos.Y);
+            Values.MoveZ1Pos = Round(pos.Z1);
+            Values.MoveZ2Pos = Round(pos.Z2);
+            Values.MoveRPos = Round(pos.R);
+        }
+    }
+
+    private ValueTask OnCurrentPositionChanged(Position state, CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            UpdatePosition();
+            return ValueTask.CompletedTask;
+        });
+        return ValueTask.CompletedTask;
+    }
+
+    private Task MoveContinuous(MovementAxis axis, bool positive, double speed, CancellationToken cancel)
+    {
+        if (Values.DirectMovement)
+        {
+            _ = BackgroundTask(async cancel =>
+                {
+                    await MovementClient.FinishMovement(cancel: cancel);
+                    await MovementClient.MoveContinuous(axis, positive, speed, cancel: cancel);
+                }, cancel);
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task MoveXY(decimal stepX, decimal stepY)
+    {
+        await BackgroundTask(async cancel =>
+            {
+                await MovementClient.MoveXY((double)stepX, (double)stepY, true, speed: (double)Values.SpeedXY, cancel: cancel);
+            });
+    }
+
+    private async Task HomeXY()
+    {
+        await BackgroundTask(async cancel =>
+        {
+            await MovementClient.HomeXY(cancel: cancel);
+        });
+    }
+
+    private async Task MoveAux(MovementAxis axis, decimal step, decimal speed, decimal acceleration)
+    {
+        await BackgroundTask(async cancel =>
+        {
+            await MovementClient.MoveAux(axis, (double)step, true, speed: (double)speed, acceleration: (double)acceleration, cancel: cancel);
+        });
+    }
+
+    private async Task HomeAux(MovementAxis axis, decimal maxDistance, decimal speed)
+    {
+        await BackgroundTask(async cancel =>
+        {
+            await MovementClient.HomeAux(axis, (double)maxDistance, (double)speed, cancel: cancel);
+        });
+    }
+
+    private async Task MoveXYPos()
+    {
+        await BackgroundTask(async cancel =>
+        {
+            Values.InvalidateLastPosition();
+            await MovementClient.MoveXY((double)Values.MoveXPos, (double)Values.MoveYPos, false, speed: (double)Values.SpeedXY, cancel: cancel);
+        });
+    }
+
+    private async Task MeasureXYPos()
+    {
+        await BackgroundTask(async cancel =>
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Values.InvalidateLastPosition();
+            await MovementClient.MoveXY((double)Values.MoveXPos, (double)Values.MoveYPos, false, speed: (double)Values.SpeedXY, cancel: cancel);
+            await MovementClient.FinishMovement(cancel: cancel);
+            _info = watch.Elapsed.ToString();
+        });
+    }
+
+    private async Task MoveZPos()
+    {
+        await BackgroundTask(async cancel =>
+        {
+            var z1 = Values.MoveZ1Pos;
+            var z2 = Values.MoveZ2Pos;
+            Values.InvalidateLastPosition();
+            await MovementClient.MoveAux(MovementAxis.Z1, (double)z1, false, speed: (double)Values.SpeedZ, cancel: cancel);
+            await MovementClient.MoveAux(MovementAxis.Z2, (double)z2, false, speed: (double)Values.SpeedZ, cancel: cancel);
+        });
+    }
+
+    private async Task MoveRPos()
+    {
+        await BackgroundTask(async cancel =>
+        {
+            Values.InvalidateLastPosition();
+            await MovementClient.MoveAux(MovementAxis.R, (double)Values.MoveRPos, false, speed: (double)Values.SpeedR, acceleration: (double)Values.AccelR, cancel: cancel);
+        });
+    }
+
+    private async Task BeginPrint()
+    {
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.BeginPrint(cancel: cancel);
+            });
+    }
+
+    private async Task EndPrint()
+    {
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.EndPrint(cancel: cancel);
+            });
+    }
+
+    private async Task BedPreparation()
+    {
+        var setup = new Movement.BedPreparationSetup
+            {
+                Enabled = true,
+                LayerThickness = (double)Values.LayerThickness,
+                TotalThickness = (double)Values.BedPreparationHeight,
+                TemperatureTarget = Values.BedPreparationTemperatureTarget != 0 ? (double)Values.BedPreparationTemperatureTarget : null,
+                TemperatureDelay = TimeSpan.FromSeconds((double)Values.TemperatureDelay),
+            };
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.BedPreparation(setup, null, cancel: cancel);
+            });
+    }
+
+    private async Task PrintCap()
+    {
+        var setup = new Movement.PrintCapSetup
+            {
+                Enabled = true,
+                LayerThickness = (double)Values.LayerThickness,
+                TotalThickness = (double)Values.BedPreparationHeight,
+                TemperatureTarget = Values.PrintCapTemperatureTarget != 0 ? (double)Values.PrintCapTemperatureTarget : null,
+                TemperatureDelay = TimeSpan.FromSeconds((double)Values.TemperatureDelay),
+            };
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.PrintCap(setup, null, cancel: cancel);
+            });
+    }
+
+    private async Task BeginLayer()
+    {
+        var setup = new Movement.BeginLayerSetup
+            {
+                Enabled = true, 
+                UseSlowRecoaterSpeed = Values.UseSlowRecoaterSpeed != 0,
+                LayerThickness = (double)Values.LayerThickness,
+                TemperatureTarget = Values.BeginLayerTemperatureTarget != 0 ? (double)Values.BeginLayerTemperatureTarget : null,
+                TemperatureDelay = TimeSpan.FromSeconds((double)Values.TemperatureDelay),
+                PrevLayerFillArea = Values.PrevLayerFillArea != 0 ? (double)Values.PrevLayerFillArea : null,
+                SinteredVolumeFactor = (double)Values.SinteredVolumeFactor,
+            };
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.BeginLayer(setup, cancel: cancel);
+            });
+    }
+
+    private async Task EndLayer()
+    {
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.EndLayer(cancel: cancel);
+            });
+    }
+
+    private Task BackgroundTask(Func<System.Threading.CancellationToken, Task> func, CancellationToken cancel = default)
+    {
+        async Task Inner()
+        {
+            _backgroundCount++;
+            try
+            {
+                _info = null;
+                StateHasChanged();
+                await func(cancel);
+            }
+            catch (Exception ex)
+            {
+                if (!cancel.IsCancellationRequested)
+                {
+                    ToastProvider.Show(new ToastMessage
+                        {
+                            Type = ToastMessageType.Error,
+                            HeaderText = "Movement error",
+                            BodyText = ex.Message,
+                            Key = this,
+                            Exception = ex,
+                        });
+                }
+            }
+            finally
+            {
+                _backgroundCount--;
+            }
+            StateHasChanged();
+        }
+        var task = Inner();
+        return Task.CompletedTask;
+    }
+}

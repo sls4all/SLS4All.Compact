@@ -1,0 +1,78 @@
+﻿@inherits AppComponent
+@using SLS4All.Compact.Camera;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Slicing;
+@using SLS4All.Compact.Temperature;
+@using System.Text
+@using System.Buffers.Text
+@using SLS4All.Compact.Threading
+@using System.Diagnostics
+@inject ImageStreamingHelper ImageStreamingHelper
+@inject IJSRuntime JSRuntime
+
+<div @ref="@ElementRef" id="@ElementId" class="d-flex flex-column camera-view @ClassNames" style="@StyleNames" @attributes="@AttributesWithCssScope">
+    <div class="video-image-container" @attributes="@JustAttributesWithCssScope">
+        <img id="@_id" @key="_streamKey" class="video-image" src="@StreamUri" @attributes="@JustAttributesWithCssScope" />
+    </div>
+</div>
+
+@code {
+    public const string CssScope = "b-thermo-camera-view";
+    private readonly object _streamKey = new();
+    private readonly string _id = Guid.NewGuid().ToString();
+    private Timer _timer;
+    private const int _timerPeriod = 500;
+    private ImageStreamingHandle? _streamHandle;
+    private long _streamCounter;
+
+    private string StreamUri => 
+        $"/api/bedmatrix/image/{_id}?cropped=true&units={(int)UnitConverterFlags}&c={_streamCounter}";
+
+    [Parameter]
+    public UnitConverterFlags UnitConverterFlags { get; set; }
+
+    public ThermoCameraView()
+    {
+        _timer = new Timer(OnTimer);
+    }
+
+    private bool TryRegisterImageReady()
+    {
+        if (_streamHandle == null)
+            _streamHandle = new ImageStreamingHandle(JSRuntime, ImageStreamingHelper, _id, () =>
+            {
+                _streamCounter++;
+                return StreamUri;
+            });
+        return _streamHandle.TryRegisterImageReady();
+    }
+
+    private void TryUnregisterImageReady()
+    {
+        _streamHandle?.TryUnregisterImageReady();
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            return ValueTask.FromResult(TryRegisterImageReady());
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+        if (firstRender)
+            _timer.Change(0, _timerPeriod);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        TryUnregisterImageReady();
+        _timer.Dispose();
+        await base.DisposeAsync();
+    }
+}

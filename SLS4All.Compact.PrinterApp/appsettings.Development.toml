@@ -1,0 +1,67 @@
+﻿DetailedErrors = true
+ 
+[Application]
+PrinterClient = "Fake"
+VideoCameraClient = "Fake"
+TemperatureCameraClient = "Mlx90640Fake"
+NetworkManager = "Fake"
+Plotter = "Image"
+UseIdealCircleHotspotCalculator = false
+PushTemperatureCameraGCode = true
+
+  [Application.Dependencies.RockPI-McuClient]
+  After = "appsettings.Development"
+  Filename = "appsettings.Inova-RaspberryPi5-McuClient"
+
+[Logging.LogLevel]
+"Default" = "Debug"
+"Microsoft" = "Warning"
+"Microsoft.Hosting.Lifetime" = "Information"
+"SLS4All.Compact.McuClient.McuClockSync" = "Debug"
+
+[SystemPrinterAuthentication]
+NeedsInitializedSystemPasswords = true
+
+[KlipperApiClient]
+#UnixSocketPath = "/tmp/klippy_uds"
+TcpHost = "192.168.10.93"
+TcpPort = 10_000
+LogStreaming = true
+
+[FakeTemperatureClient]
+FakeBedMatrix = false
+
+[KlipperTemperatureClient]
+FakeCurrentTemperatures = false
+FakeBedMatrix = false
+
+[MjpegVideoDeviceCameraClient]
+UseFakeStream = true
+
+[ImageCodePlotter]
+IncreasePixelSize = false
+PlotWidth = 1_750
+PlotHeight = 1_750
+StoreLayers = true
+DrawLaserCompensation = false
+AntialiasFactor = 2
+ProjectionPrecision = 0.5
+
+[PrintingService]
+PlotWidth = 8_750
+PlotHeight = 8_750
+PlotIncreasePixelSize = false
+PlotAntialiasFactor = 1
+ProcessParallel = 8
+
+[ControlledHeating.DefaultHeatingSetup]
+MinimumTimeAfterAnalysis = "0:0:10"
+
+[SLS4AllUpdateChecker]
+CheckDueTime = "0:0:0"
+CheckPeriod = "0:1:0"
+TestDelay = "0:0:3"
+
+[Frontend]
+ShowAdvancedDebugFeatures = true
+ShowAdvancedNestingFeatures = true

@@ -1,0 +1,696 @@
+﻿@using Microsoft.Extensions.Options;
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Power;
+@using SLS4All.Compact.Printer;
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Numerics
+@inherits AppComponent
+@inject IJSRuntime JSRuntime
+@inject ITemperatureHistory TemperatureHistory
+@inject ITemperatureClient TemperatureClient
+@inject IHalogenClient HalogenClient
+@inject ITemperatureLogger TemperatureLogger
+@inject IAnalyseHeating AnalyseHeating
+@inject IMeasureHeating MeasureHeating
+@inject ISoftSurfaceHeater SoftSurfaceHeater
+@inject IControlledHeating ControlledHeating
+@inject ValuesContainer Values
+@inject IToastProvider ToastProvider
+@inject IPrinterFileProvider FileProvider
+@inject IPowerClient PowerClient
+@inject IEmergencyHelper EmergencyHelper
+@inject IOptionsMonitor<FrontendOptions> FrontendOptions
+
+@{
+    var powerState = PowerClient.CurrentState;
+    var powermanState = powerState.Powerman;
+    var lastTargetInfo = SoftSurfaceHeater.LastTargetInfo;
+    var measureReport = MeasureHeating.Report;
+    if (_lastMeasureReport != measureReport)
+    {
+        _prevMeasureReport = _lastMeasureReport;
+        _lastMeasureReport = measureReport;
+    }
+    var prevMeasureReport = _prevMeasureReport;
+}
+
+<Modal @ref="_heatingModal" class="fade" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Heating target
+            </h5>
+        </div>
+        <div class="modal-body">
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating target (powder) [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingTargetPowder" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating target (print) [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingTargetPrint" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating target (print bed) [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingTargetPrintBed" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating surface threshold [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingSurfaceThreshold" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating surface target [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingSurfaceTarget" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating surface target 2 [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingSurfaceTarget2" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating surface target 2 time [min]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.HeatingSurfaceTarget2Time" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Temperature to begin layering [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control" style="width: 11ch" @bind="Values.LayersTemperatureStart" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Temperature to end layering [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control" style="width: 11ch" @bind="Values.LayersTemperatureEnd" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Period for layering [sec]</span>
+                </div>
+                <input type="number" step="any" class="form-control" style="width: 11ch" @bind="Values.LayersPeriodSeconds" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Minumum heating time [mins]</span>
+                </div>
+                <input type="number" step="any" class="form-control" style="width: 11ch" @bind="Values.MinimumTimeMinutes" />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => HeatOrCool(modal, true)" class="btn btn-primary">Start heating!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
+<Modal @ref="_coolingModal" class="fade" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Cooling target
+            </h5>
+        </div>
+         <div class="modal-body">
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Cooling target [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.CoolingTarget" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Cooling surface threshold 1 [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.CoolingSurfaceThreshold1" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Cooling surface threshold 2 [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.CoolingSurfaceThreshold2" />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => HeatOrCool(modal, false)" class="btn btn-primary">Start cooling!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
+<Modal @ref="_softSurfaceHeaterModal" class="fade" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Soft surface heater
+            </h5>
+        </div>
+         <div class="modal-body">
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Target temperature [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control" style="width: 11ch" @bind="Values.SoftTargetTemperature" />
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Heating analysis profile</span>
+                </div>
+                <input type="text" class="form-control" style="width: 11ch" @bind="Values.SoftSurfaceHeaterFilename" />
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="button" @onclick="() => _fileBrowser!.Show(Values.SoftSurfaceHeaterFilename)">Browse...</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => SoftSurfaceHeatStart(true)" class="btn btn-primary">Start/update heating!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
+<FileBrowserModal @ref="_fileBrowser"
+    MaxSelectedCount="1"
+    Masks="@(new[] { "*.csv.br", "*.csv.gz", "*.csv", "*.mlnet", "*.s4a-sha" })"
+    OpenClicked="(selection) => { Values.SoftSurfaceHeaterFilename = selection[0]; StateHasChanged(); }"/>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col col-auto p-0">
+            <div class="btn-group">
+                <button type="button" class="btn btn-theme dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Actions
+                </button>
+                <div class="dropdown-menu">
+                    @if (!TemperatureLogger.IsRunning)
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="StartLogging">Start logging</a>
+                    }
+                    else
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="StopLogging">Stop logging</a>
+                        <a class="dropdown-item disabled" href="javascript:void(0)">@TemperatureLogger.Filename</a>
+                    }
+                    @if (!ControlledHeating.IsRunning)
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _heatingModal!.Show()">Start controlled heating...</a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _coolingModal!.Show()">Start controlled cooling...</a>
+                    }
+                    else
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => ControlledHeating.Cancel()">Stop controlled heating/cooling</a>
+                    }
+                    @if (!AnalyseHeating.IsRunning)
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="StartAnalyseHeating">Start heating analysis</a>
+                    }
+                    else
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="StopAnalyseHeating">Stop heating analysis</a>
+                    }
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SoftSurfaceHeatStart(false)">Start/update soft surface heater...</a>
+                    @if (SoftSurfaceHeater.IsRunning)
+                    {
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SoftSurfaceHeater.Stop()">Stop soft surface heater</a>
+                    }
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => EmergencyHelper.EmergencyPowerOffHeaters()">Turn off all heaters</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col col-auto p-0">
+            @if (TemperatureLogger.IsRunning)
+            {
+                <span class="badge badge-pill badge-warning">Logger</span>
+            }
+            @if (ControlledHeating.IsRunning)
+            {
+                <span class="badge badge-pill badge-warning">Controlled</span>
+            }
+            @if (AnalyseHeating.IsRunning)
+            {
+                <span class="badge badge-pill badge-warning">Analyse</span>
+            }
+            @if (SoftSurfaceHeater.IsRunning)
+            {
+                <span class="badge badge-pill badge-warning">Soft-surface</span>
+            }
+        </div>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col col-8">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th class="text-right">Current</th>
+                        <th class="text-right">Average</th>
+                        <th class="text-right">Target</th>
+                        <th>New target</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in TemperatureHistory.LastItem.Entries)
+                    {
+                        var targetTemp = entry.Id == TemperatureClient.SurfaceId ? SoftSurfaceHeater.TargetTemperature : entry.TargetTemperature;
+                        var reachedTemp = entry.Id == TemperatureClient.SurfaceId ? SoftSurfaceHeater.TargetReached : entry.TargetReached;
+                        if (!_newTargetValues.ContainsKey(entry.Id))
+                            _newTargetValues.Add(entry.Id, targetTemp ?? 0);
+                        <tr>
+                            <th class="py-1 align-middle" scope="row">@entry.Id</th>
+                            <td class="text-right align-middle py-1 w-100">@entry.CurrentTemperature.ToString("0.0")°C</td>
+                            <td class="text-right align-middle py-1 w-100">@entry.AverageTemperature.ToString("0.0")°C</td>
+                            @if (entry.Settable)
+                            {
+                                <td class="text-right align-middle py-1">@((targetTemp ?? 0).ToString("0.0"))°C</td>
+                                <td class="py-1 pl-3 align-middle">
+                                    <form class="form-inline flex-nowrap text-nowrap" @onsubmit="() => SetTemperatureTarget(entry.Id, _newTargetValues[entry.Id])">
+                                        <input type="number" step="any" class="form-control form-control-sm mb-2 virtual-keyboard" style="width: 10ch" @bind="_newTargetValues[entry.Id]">
+                                        <i class="bi @(reachedTemp ? "bi-check" : "bi-x")" />
+                                        <button type="submit" class="btn btn-sm btn-theme mb-2">Set</button>
+                                        <button class="btn btn-sm btn-danger mb-2" @onclick="() => SetTemperatureTarget(entry.Id, 0)" @onclick:preventDefault="true">Off</button>
+                                    </form>
+                                </td>
+                            }
+                        </tr>
+                    }
+            </tbody>
+        </table>
+        </div>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="text-right">Max power</th>
+                <th class="text-right">Current power</th>
+                <th class="text-right">Required power</th>
+                <th>New max power</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th class="py-1 text-right align-middle" scope="row">@Round(powermanState.MaxPower)</th>
+                <th class="py-1 text-right align-middle" scope="row">@Round(powermanState.CurrentPower)</th>
+                <th class="py-1 text-right align-middle" scope="row">@Round(powermanState.RequiredPower)</th>
+                <td class="py-1 pl-3 align-middle">
+                    <form class="form-inline flex-nowrap text-nowrap" @onsubmit="@(() => SetPowermanMax(NewPowermanMax))">
+                        <label class="sr-only" for="command">Target</label>
+                        <input type="number" step="any" class="form-control form-control-sm mb-2 virtual-keyboard" style="width: 10ch" @bind="NewPowermanMax">
+                        <button type="submit" class="btn btn-sm btn-theme mb-2">Set</button>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    @if (lastTargetInfo != "" && MainLayout!.IsDeveloperMode)
+    {
+        <div class="alert alert-secondary" role="alert">
+            Surface target info: @lastTargetInfo
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(powermanState.PoweredPinsDescription))
+    {
+        <div class="alert alert-secondary" role="alert">
+            @powermanState.PoweredPinsDescription
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(measureReport))
+    {
+        <div class="alert alert-secondary" role="alert">
+            Measure report (T+0): @measureReport<br/>
+            Measure report (T-1): @prevMeasureReport
+        </div>
+    }
+</div>
+
+
+@code {
+    public class ValuesContainer
+    {
+        public decimal HeatingTargetPowder = 140;
+        public decimal HeatingTargetPrint = 164;
+        public decimal HeatingTargetPrintBed = 164;
+        public decimal HeatingSurfaceThreshold = 85;
+        public decimal HeatingSurfaceTarget = 160;
+        public decimal HeatingSurfaceTarget2 = 165;
+        public decimal HeatingSurfaceTarget2Time = 50;
+        public decimal CoolingTarget = 60;
+        public decimal CoolingSurfaceThreshold1 = 164;
+        public decimal CoolingSurfaceThreshold2 = 100;
+        public decimal SoftTargetTemperature = 0;
+        public string SoftSurfaceHeaterFilename = "";
+        public decimal LayersTemperatureStart = 0;
+        public decimal LayersTemperatureEnd = 0;
+        public decimal LayersPeriodSeconds = 60;
+        public decimal MinimumTimeMinutes = 70;
+    }
+
+    private readonly Dictionary<string, double> _newTargetValues = new();
+    private Modal? _heatingModal;
+    private Modal? _coolingModal;
+    private Modal? _softSurfaceHeaterModal;
+    private FileBrowserModal? _fileBrowser;
+    private decimal? _newPowermanMax;
+    private string? _lastMeasureReport;
+    private string? _prevMeasureReport;
+
+    [CascadingParameter]
+    protected IMainLayout? MainLayout { get; set; }
+
+    public decimal NewPowermanMax
+    {
+        get => _newPowermanMax ?? Round(PowerClient.CurrentState.Powerman.MaxPower);
+        set => _newPowermanMax = value;
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        TemperatureHistory.HistoryItemsChanged += OnTemperatureHistoryChanged;
+    }
+
+    private void OnTemperatureHistoryChanged(object? sender, EventArgs e)
+    => InvokeAsync(() =>
+    {
+        try
+        {
+            StateHasChanged();
+        }
+        catch (ObjectDisposedException)
+        {
+        /* swallow */
+        }
+    });
+
+    private async Task SetTemperatureTarget(string id, double value)
+    {
+        try
+        {
+            _newTargetValues[id] = value;
+            await SetTargetInner(id, value != 0 ? value : null, default);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error setting temperature",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private Task SetTargetInner(string id, double? value, CancellationToken cancel)
+    {
+        if (id == TemperatureClient.SurfaceId)
+            return SoftSurfaceHeater.SetTarget(value, cancel: cancel);
+        else
+            return TemperatureClient.SetTarget(id, value, cancel: cancel);
+    }
+
+    private async Task StartLogging()
+    {
+        try
+        {
+            await TemperatureLogger.Start();
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error starting logging",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private async Task StopLogging()
+    {
+        try
+        {
+            await TemperatureLogger.Stop();
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error stopping logging",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private async Task StartAnalyseHeating()
+    {
+        try
+        {
+            await AnalyseHeating.Start(null, ex =>
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    HeaderText = "Error during analyse",
+                    BodyText = ex.Message,
+                    Key = this,
+                    Exception = ex,
+                });
+            }, ToastAnalyseSuccess);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error starting analyse",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private async Task StopAnalyseHeating()
+    {
+        try
+        {
+            await AnalyseHeating.Stop();
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error stopping analyse",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private async Task HeatOrCool(Modal modal, bool heatOrCool)
+    {
+        await modal.Close();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (heatOrCool)
+                    await ControlledHeating.HeatUp(new ControlledHeatingSetup
+                        {
+                            TargetPowder = (double)Values.HeatingTargetPowder,
+                            TargetPrint = (double)Values.HeatingTargetPrint,
+                            TargetPrintBed = (double)Values.HeatingTargetPrintBed,
+                            SurfaceThreshold = (double)Values.HeatingSurfaceThreshold,
+                            SurfaceTarget = (double)Values.HeatingSurfaceTarget,
+                            SurfaceTarget2 = (double)Values.HeatingSurfaceTarget2,
+                            SurfaceTarget2Time = TimeSpan.FromMinutes((double)Values.HeatingSurfaceTarget2Time),
+                            LayersTemperatureStart = Values.LayersTemperatureStart != 0 ? (double?)Values.LayersTemperatureStart : null,
+                            LayersTemperatureEnd = Values.LayersTemperatureEnd != 0 ? (double?)Values.LayersTemperatureEnd : null,
+                            LayersPeriod = Values.LayersPeriodSeconds != 0 ? TimeSpan.FromSeconds((double)Values.LayersPeriodSeconds) : null,
+                            MinimumTime = Values.MinimumTimeMinutes != 0 ? TimeSpan.FromMinutes((double)Values.MinimumTimeMinutes) : null
+                        });
+                else
+                    await ControlledHeating.CoolDown(new ControlledCoolingSetup
+                        {
+                            Target = (double)Values.CoolingTarget,
+                            SurfaceThreshold1 = (double)Values.CoolingSurfaceThreshold1,
+                            SurfaceThreshold2 = (double)Values.CoolingSurfaceThreshold2,
+                        });
+                if (heatOrCool)
+                    ToastHeatingSuccess();
+                else
+                    ToastCoolingSuccess();
+            }
+            catch (Exception ex)
+            {
+                if (ex is not OperationCanceledException)
+                {
+                    ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = heatOrCool ? "Error during heating" : "Error during cooling",
+                        BodyText = ex.Message,
+                        Key = null, // not keyed, important!
+                        Exception = ex,
+                    });
+                }
+            }
+        });
+    }
+
+    private async Task SoftSurfaceHeatStart(bool confirmed)
+    {
+        if (!confirmed)
+        {
+            Values.SoftTargetTemperature = (SoftSurfaceHeater.SoftSurfaceTargetTemperature ?? 0).RoundToDecimal(1);
+            await _softSurfaceHeaterModal!.Show();
+            return;
+        }
+        try
+        {
+            await _softSurfaceHeaterModal!.Close();
+
+            SoftSurfaceHeater.SoftSurfaceTargetTemperature = (double)Values.SoftTargetTemperature;
+            if (SoftSurfaceHeater.IsRunning)
+                return;
+
+            var filename = new PrinterPath(false, Values.SoftSurfaceHeaterFilename);
+            await SoftSurfaceHeater.Start(filename, null, (data, cancel) => 
+                {
+                    ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Information,
+                        HeaderText = "Soft surface heater",
+                        BodyText = "Loaded profile, starting heating.",
+                        Key = this,
+                    });
+                    return Task.CompletedTask;
+                },
+                ex =>
+                {
+                    ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Error during soft heating",
+                        BodyText = ex.Message,
+                        Key = this,
+                        Exception = ex,
+                    });
+                });
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    HeaderText = "Error during soft heating",
+                    BodyText = ex.Message,
+                    Key = this,
+                    Exception = ex,
+                });
+            }
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        TemperatureHistory.HistoryItemsChanged -= OnTemperatureHistoryChanged;
+        return base.DisposeAsync();
+    }
+
+    private void ToastHeatingSuccess()
+    {
+        RenderFragment message =
+    @<span>Heating finished successfully at <BrowserTime /></span>;
+        ToastProvider.Show(new ToastMessage
+        {
+            Type = ToastMessageType.Information,
+            HeaderText = "Heating completed",
+            Body = message,
+            Key = null, // not keyed, important!
+        });
+    }
+
+    private void ToastCoolingSuccess()
+    {
+        RenderFragment message = @<span>Cooling finished successfully at <BrowserTime /></span>;
+        ToastProvider.Show(new ToastMessage
+        {
+            Type = ToastMessageType.Information,
+            HeaderText = "Cooling completed",
+            Body = message,
+            Key = null, // not keyed, important!
+        });
+    }
+
+    private void ToastAnalyseSuccess()
+    {
+        RenderFragment message = @<span>Analyse heating finished successfully at <BrowserTime /></span>;
+        ToastProvider.Show(new ToastMessage
+        {
+            Type = ToastMessageType.Information,
+            HeaderText = "Analyse heating completed",
+            Body = message,
+            Key = null, // not keyed, important!
+        });
+    }
+
+    private void ToastMeasureSuccess()
+    {
+        RenderFragment message = @<span>Measure heating finished successfully at <BrowserTime /></span>;
+        ToastProvider.Show(new ToastMessage
+        {
+            Type = ToastMessageType.Information,
+            HeaderText = "Measure heating completed",
+            Body = message,
+            Key = null, // not keyed, important!
+        });
+    }
+
+    private async Task SetPowermanMax(decimal value)
+    {
+        try
+        {
+            await PowerClient.SetPowermanMax((double)value, default);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+            {
+                Type = ToastMessageType.Error,
+                HeaderText = "Error setting powerman",
+                BodyText = ex.Message,
+                Key = this,
+                Exception = ex,
+            });
+        }
+    }
+
+    private static decimal Round(double value)
+        => value.RoundToDecimal(3);
+}

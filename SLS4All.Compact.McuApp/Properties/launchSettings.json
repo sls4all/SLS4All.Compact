@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SLS4All.Compact.McuApp": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+﻿@code {
+    private IMainLayout? _mainLayout;
+
+    [CascadingParameter]
+    protected IMainLayout? MainLayout
+    {
+        get => _mainLayout;
+        set
+        {
+            _mainLayout = value;
+            value?.SetTitle(this);
+        }
+    }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? Image { get; set; }
+
+    [Parameter]
+    public string? IconClass { get; set; }
+
+    [Parameter]
+    public bool IsFullPage { get; set; }
+}

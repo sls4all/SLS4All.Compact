@@ -1,0 +1,30 @@
+﻿@page "/power"
+@inherits AppPage
+@implements IDisposable
+@inject IJSRuntime JSRuntime
+
+<PrinterPageTitle IconClass="zwicon-battery-v"/>
+
+<h6>
+    Current state and manual control of power.
+</h6>
+
+<div class="d-flex justify-content-center">
+    <PowerControl style="max-width: 50em"/>
+</div>
+
+@code{
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    public void Dispose()
+    {
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+    }
+}

@@ -1,0 +1,11 @@
+﻿[Application]
+McuSerialDeviceFactory = "ProxySerial"
+
+[McuProxySerialDeviceFactory]
+Host = "192.168.1.73"
+Port = 5001
+
+[McuSshSerialDeviceFactory]
+Host = "192.168.1.73"
+UserName = "root"
+Password = "password"

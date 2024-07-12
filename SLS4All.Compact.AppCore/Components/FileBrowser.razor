@@ -1,0 +1,1194 @@
+﻿@using Lexical.FileSystem
+@using System.Collections.Concurrent
+@using SLS4All.Compact.IO;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Collections
+@inherits AppComponent
+@inject IJSRuntime JSRuntime
+@inject IToastProvider Toasts
+@inject IPrinterFileProvider FileProvider
+@inject ILogger<FileBrowser> Logger
+
+<InputFile @ref="_uploadFile" OnChange="OnUploadFiles" class="d-none" multiple />
+<CancelModal @ref="_cancelModal" />
+
+<ModalWrapper @ref="_uploadModal" class="fade app-modal" Closed="() => _action?.TrySetResult(Action.Stop)">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                File already exists
+            </h5>
+        </div>
+         <div class="modal-body">
+            File with the same name <i>@_renamedFrom</i> already exists in this directory or there has been a problem processing it in this directory.
+            Either skip it, overwrite it, stop the whole operation or rename it to <ValueEditor Title="New file name" @bind-Value="RenamedTo" />
+        </div>
+        <div class="modal-footer">
+            <a @onclick="() => _action?.TrySetResult(Action.Rename)" class="btn btn-warning">Rename</a>
+            <a @onclick="() => _action?.TrySetResult(Action.Skip)" class="btn btn-primary">Skip</a>
+            @if (!_force)
+            {
+                <a @onclick="() => _force = true" class="btn btn-danger">Overwrite</a>
+            }
+            else
+            {
+                <a @onclick="() => _action?.TrySetResult(Action.Overwrite)" class="btn btn-danger" style="font-weight: bold">Really overwrite!</a>
+            }
+            <a @onclick="() => _action?.TrySetResult(Action.Stop)" class="btn btn-secondary">Stop</a>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_newDirectoryModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Create new directory
+            </h5>
+        </div>
+         <div class="modal-body">
+            Choose new directory name <ValueEditor Title="New directory name" @bind-Value="_newDirectoryName" />
+        </div>
+        <div class="modal-footer">
+            <a @onclick="() => NewDirectory(_newDirectoryName)" class="btn btn-primary">Create directory</a>
+            <a @onclick="() => modal.Close()" class="btn btn-secondary">Do nothing</a>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_renameModal" class="fade app-modal" Closed="() => _action?.TrySetResult(Action.Stop)">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Rename item
+            </h5>
+        </div>
+         <div class="modal-body">
+            Choose new name for <i>@_renamedFrom</i>
+            @if (_renameExists)
+            {
+                <br />
+                <text>Item with the chosen name already exists in this directory or there has been a problem processing it in this directory. Change the name, skip it, overwrite it or stop the whole operation.</text>
+            }
+            <ValueEditor Title="New item name" @bind-Value="RenamedTo" />
+        </div>
+        <div class="modal-footer">
+            <a @onclick="() => _action?.TrySetResult(Action.Rename)" class="btn btn-warning">Rename</a>
+            <a @onclick="() => _action?.TrySetResult(Action.Skip)" class="btn btn-primary">Skip</a>
+            @if (_renameExists)
+            {
+                @if (!_force)
+                {
+                    <a @onclick="() => _force = true" class="btn btn-danger">Overwrite</a>
+                }
+                else
+                {
+                    <a @onclick="() => _action?.TrySetResult(Action.Overwrite)" class="btn btn-danger" style="font-weight: bold">Really overwrite!</a>
+                }
+            }
+            <a @onclick="() => _action?.TrySetResult(Action.Stop)" class="btn btn-secondary">Stop</a>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_deleteModal" class="fade app-modal" Closed="() => _deleteEntries = Array.Empty<Entry>()" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Do you really want to delete items below?
+            </h5>
+        </div>
+         <div class="modal-body">
+            @foreach (var entry in _deleteEntries)
+            {
+                <div class="badge badge-danger m-1 text-wrap">
+                    @if (entry.IsDirectory)
+                    {
+                        <i class="bi bi-folder-fill"></i>
+                    }
+                    else if (entry.IsPackage)
+                    {
+                        <i class="bi bi-file-earmark-zip-fill"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-file-earmark"></i>
+                    }
+                    &nbsp;@entry.Name
+                </div>
+            }
+        </div>
+        <div class="modal-footer">
+            @if (!_force)
+            {
+                <a @onclick="() => _force = true" class="btn btn-danger">Delete items</a>
+            }
+            else
+            {
+                <a @onclick="() => Delete(_deleteEntries)" class="btn btn-danger" style="font-weight: bold">Really delete these items!</a>
+            }
+            <a @onclick="() => modal.Close()" class="btn btn-secondary">Do nothing</a>
+        </div>
+    </div>
+</ModalWrapper>
+
+
+<div @ref="@ElementRef" id="@ElementId" class="browser-container @ClassNames" style="@StyleNames" @attributes="@Attributes">
+    <div class="container-fluid header-row">
+        <div class="row">
+            <div class="col-auto">
+                <a class="btn btn-theme btn--icon-text" @onclick="() => GoBack()">
+                    <i class="bi bi-arrow-left" />
+                </a>
+            </div>
+            <div class="col-auto">
+                <a class="btn btn-theme btn--icon-text" @onclick="() => GoUp()">
+                    <i class="bi bi-arrow-90deg-up" /> Up
+                </a>
+            </div>
+            <div class="col-auto">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-theme dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="bi bi-activity" /> Action
+                    </button>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="ToggleShowAllFiles">
+                            @if (_showAllFiles)
+                            {
+                                <i class="bi bi-check-square" />
+                            }
+                            else
+                            {
+                                <i class="bi bi-square" />
+                            }
+                            &nbsp;Show all files
+                        </a>
+                        @if (!_currentDirectoryReadOnly)
+                        {
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item @(_currentDirectoryReadOnly ? "disabled" : "")" href="javascript:void(0)" @onclick="() => NewDirectory()">
+                                <i class="bi bi-folder-plus" />&nbsp;Create new directory...
+                            </a>
+                            <a class="dropdown-item @(!IsAnySelected || _currentDirectoryReadOnly ? "disabled" : "")" href="javascript:void(0)" @onclick="() => Rename()">
+                                <i class="bi bi-type" />&nbsp;Rename selected items...
+                            </a>
+                            <a class="dropdown-item @(!IsAnySelected || _currentDirectoryReadOnly ? "disabled" : "")" href="javascript:void(0)" @onclick="() => Delete()">
+                                <i class="bi bi-trash" />&nbsp;Delete selected items...
+                            </a>
+                        }
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item @(!IsAnyFileSelected ? "disabled" : "")" href="javascript:void(0)" @onclick="() => CopyToClipboard()">
+                            <i class="bi bi-clipboard2-plus" />&nbsp;Copy files to clipboard
+                        </a>
+                        @if (!_currentDirectoryReadOnly)
+                        {
+                            <a class="dropdown-item @(_clipboardPaths.Length == 0 || _currentDirectoryReadOnly ? "disabled" : "")" href="javascript:void(0)" @onclick="() => PasteFromClipboard()">
+                                <i class="bi bi-clipboard2" />&nbsp;Paste files from clipboard...
+                            </a>
+                        }
+                        @if (!MainLayout!.IsLocalSession)
+                        {
+                            <div class="dropdown-divider"></div>
+                            @if (!_currentDirectoryReadOnly)
+                            {
+                                <a class="dropdown-item @(_currentDirectoryReadOnly ? "disabled" : "")" href="javascript:void(0)" @onclick="Upload">
+                                    <i class="bi bi-upload" />&nbsp;Upload files here...
+                                </a>
+                            }
+                            <a class="dropdown-item @(!IsAnyFileSelected ? "disabled" : "")" href="javascript:void(0)" @onclick="Download">
+                                <i class="bi bi-download" />&nbsp;Download selected files
+                            </a>
+                        }
+                        @if (_currentDirectoryEjectableDrive)
+                        {
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="javascript:void(0)" @onclick="Eject">
+                                <i class="bi bi-eject" />&nbsp;Eject drive
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-theme dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="bi bi-hdd-rack" />
+                    </button>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => CurrentDirectory = PrinterPath.Root">
+                            <i class="bi bi-slash" />&nbsp;Root
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => CurrentDirectory = PrinterPath.Home">
+                            <i class="bi bi-house-door" />&nbsp;Home
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => CurrentDirectory = PrinterPath.Downloads">
+                            <i class="bi bi-download" />&nbsp;Downloads
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => CurrentDirectory = PrinterPath.Jobs">
+                            <i class="bi bi-box" />&nbsp;Jobs
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => CurrentDirectory = PrinterPath.Objects">
+                            <i class="bi bi-badge-3d" />&nbsp;Objects
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        @foreach (var drive in _drives)
+                        {
+                            var path = drive.Path;
+                            <a @key="path" class="dropdown-item" href="javascript:void(0)" @onclick="() => CurrentDirectory = path">
+                                <i class="bi bi-hdd" />&nbsp;@drive.Name <i>drive</i>
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col current-directory">
+                <ValueEditor Title="Current directory" @bind-Value="CurrentDirectory" style="overflow-wrap: anywhere" />
+            </div>
+            @if (ShowOpen)
+            {
+                <div class="col-auto">
+                    <a class="btn btn-primary btn--icon-text @(!IsAnySelected ? "disabled" : "")" @onclick="OnOpenClicked">
+                        <i class="bi bi-check-circle" /> Open
+                    </a>
+                </div>
+            }
+            <div class="col-auto">
+                <a class="btn btn-secondary btn--icon-text" @onclick="OnCloseClicked">
+                    <i class="bi bi-x-circle" />
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="container-fluid content-row">
+        @if (_entries.Count == 0)
+        {
+            <div class="row h-100">
+                <div class="col table-empty">
+                    @if (_masks.Length > 0 && !_showAllFiles)
+                    {
+                        <p>Directory is empty or contains no files matching the filter:</p>
+                        @foreach (var mask in _masks)
+                        {
+                            <p><b>@mask.Pattern</b></p>
+                        }
+                    }
+                    else
+                    {
+                        <p>Directory is empty</p>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var __entry in _entries)
+                {
+                    var entry = __entry;
+                    <a @key="entry" @ref="entry.Element" class="col-4 col-xl-3 table-entry @(entry.IsSelectable ? "table-entry-selectable" : "") @(entry.IsSelected ? "table-entry-selected" : "") @(entry.IsDirectory ? "table-entry-directory" : "table-entry-file") @(entry.IsPackage ? "table-entry-package" : "")">
+                        <div class="table-entry-icon" @onclick="() => OnSelect(entry)">
+                            @if (entry.IsDirectory && !entry.IsSelected)
+                            {
+                                <i class="bi bi-folder-fill table-entry-icon"></i>
+                            }
+                            else if (entry.IsDirectory && entry.IsSelected)
+                            {
+                                <i class="bi bi-folder-check table-entry-icon"></i>
+                            }
+                            else if (entry.IsSelected)
+                            {
+                                <i class="bi bi-file-earmark-check-fill table-entry-icon"></i>
+                            }
+                            else if (entry.IsPackage)
+                            {
+                                <i class="bi bi-file-earmark-zip-fill table-entry-icon"></i>
+                            }
+                            else
+                            {
+                                <i class="bi bi-file-earmark table-entry-icon"></i>
+                            }
+                        </div>
+                        <a class="table-entry-name" @onclick="() => OnClick(entry)" @onclick:stopPropagation="true">
+                            <span>@entry.Name</span>
+                        </a>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private record class DriveEntry
+    {
+        public required string Path { get; init; }
+        public required string Name { get; init; }
+    }
+
+    private sealed class Entry
+    {
+        public string Path { get; set; } = default!;
+        public string Name { get; set; } = default!;
+        public bool IsDirectory { get; set; }
+        public bool IsPackage { get; set; }
+        public bool IsSelectable { get; set; }
+        public bool IsSelected { get; set; }
+        public long SelectedVersion { get; set; }
+        public ElementReference Element { get; set; }
+    }
+
+    private enum Action
+    {
+        NotSet = 0,
+        Rename,
+        Skip,
+        Overwrite,
+        Stop,
+    }
+
+    private Wildcard[] _masks = Array.Empty<Wildcard>();
+    private static readonly Wildcard[] _packageMasksDefault = PrinterPath.PackageMasks.Select(x => new Wildcard(x, true)).ToArray();
+    private Wildcard[] _packageMasks = _packageMasksDefault;
+    private Wildcard[] _packageMasksExcept = Array.Empty<Wildcard>();
+    private string[] _clipboardPaths = Array.Empty<string>();
+    private long _selectedVersion;
+    private static readonly TimeSpan s_timerPeriod = TimeSpan.FromSeconds(3);
+    private readonly List<string> _history = new();
+    private List<DriveEntry> _drives = new();
+    private List<Entry> _entries = new();
+    private Entry[] _deleteEntries = Array.Empty<Entry>();
+    private string _currentDirectory = default!;
+    private bool _currentDirectoryReadOnly;
+    private bool _currentDirectoryEjectableDrive;
+    private bool _focusSelection;
+    private bool _showAllFiles;
+    private InputFile? _uploadFile;
+    private CancelModal? _cancelModal;
+    private ModalWrapper? _uploadModal;
+    private ModalWrapper? _deleteModal;
+    private ModalWrapper? _newDirectoryModal;
+    private ModalWrapper? _renameModal;
+    private string _renamedFrom = "";
+    private string? _renamedTo;
+    private bool _renameExists;
+    private TaskCompletionSource<Action>? _action;
+    private Timer _timer = default!;
+    private bool _force;
+    private string _newDirectoryName = "";
+
+    private string RenamedTo
+    {
+        get => _renamedTo ?? "";
+        set
+        {
+            if (_renamedTo == value)
+                return;
+            _renamedTo = value;
+            _action?.TrySetResult(Action.Rename);
+        }
+    }
+
+    private string CurrentDirectory
+    {
+        get => _currentDirectory;
+        set
+        {
+            var normalized = FileProvider.Normalize(value);
+            if (_currentDirectory == value || normalized == null)
+                return;
+            _currentDirectory = normalized;
+            UpdateEntries();
+            StateHasChanged();
+        }
+    }
+
+    [Parameter]
+    public bool ShowOpen { get; set; } = true;
+
+    [Parameter]
+    public int? MaxSelectedCount { get; set; }
+
+    [Parameter]
+    public string? Directory { get; set; }
+
+    [Parameter]
+    public string[]? Selection { get; set; }
+
+    [Parameter]
+    public bool AllowSelectDirectories { get; set; } = false;
+
+    [Parameter]
+    public bool AllowSelectFilesOutsideMask { get; set; } = false;
+
+    [Parameter]
+    public bool? ShowAllFiles { get; set; } = false;
+
+    [Parameter]
+    public string[]? Masks
+    {
+        get => _masks?.Select(x => x.Pattern).ToArray();
+        set => _masks = value?.Select(x => new Wildcard(x, true)).ToArray() ?? _masks;
+    }
+
+    [Parameter]
+    public string[]? PackageMasks
+    {
+        get => _packageMasks.Select(x => x.Pattern).ToArray();
+        set => _packageMasks = value?.Select(x => new Wildcard(x, true)).ToArray() ?? _packageMasks;
+    }
+
+    [Parameter]
+    public string[]? PackageMasksExcept
+    {
+        get => _packageMasksExcept.Select(x => x.Pattern).ToArray();
+        set => _packageMasksExcept = value?.Select(x => new Wildcard(x, true)).ToArray() ?? _packageMasksExcept;
+    }
+
+    [Parameter]
+    public EventCallback<string[]> OpenClicked { get; set; }
+
+    [Parameter]
+    public EventCallback CloseClicked { get; set; }
+
+    [CascadingParameter]
+    public IMainLayout? MainLayout { get; set; }
+
+    private bool IsAnySelected => _entries.Any(x => x.IsSelected);
+    private bool IsAnyFileSelected => _entries.Any(x => x.IsSelected && (!x.IsDirectory || x.IsPackage));
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Reset();
+        _timer = new Timer(OnTimer, null, s_timerPeriod, s_timerPeriod);
+    }
+
+    public void Reset()
+    {
+        var directory = FileProvider.Normalize(Directory);
+        if (directory == null && Selection?.Length > 0)
+        {
+            var firstSelection = Selection.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+            if (firstSelection != null)
+                directory = FileProvider.Normalize(PrinterPath.GetDirectoryName(firstSelection));
+        }
+        if (directory == null)
+            directory = "/";
+        _currentDirectory = directory;
+        _showAllFiles = ShowAllFiles ?? false;
+        if (Selection?.Length > 0)
+            UpdateEntriesAndSelectFiles(Selection);
+        else
+            UpdateEntries();
+    }
+
+    private void UpdateEntriesAndSelectFiles(IEnumerable<string> files)
+    {
+        var set = files
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => FileProvider.Normalize(x))
+            .Where(x => x != null)
+            .ToHashSet();
+        var oldShowAllFiles = _showAllFiles;
+        var listAll = new List<Entry>();
+        var foundCountAll = 0;
+        _showAllFiles = true;
+        UpdateEntries(listAll);
+        foreach (var entry in listAll)
+        {
+            var inSet = set.Contains(entry.Path);
+            entry.IsSelected = false; // be pesimistic
+            if (inSet)
+            {
+                foundCountAll++;
+                if (AllowSelectFilesOutsideMask || IsMasked(entry.Name))
+                    entry.IsSelected = true;
+            }
+        }
+        if (oldShowAllFiles)
+        {
+            _entries = listAll;
+        }
+        else
+        {
+            var listMask = new List<Entry>();
+            var foundCountMask = 0;
+            _showAllFiles = false;
+            UpdateEntries(listMask);
+            foreach (var entry in listMask)
+            {
+                var inSet = set.Contains(entry.Path);
+                entry.IsSelected = false; // be pesimistic
+                if (inSet)
+                {
+                    foundCountMask++;
+                    if (AllowSelectFilesOutsideMask || IsMasked(entry.Name))
+                        entry.IsSelected = true;
+                }
+            }
+            if (foundCountAll > foundCountMask)
+            {
+                _entries = listAll;
+                _showAllFiles = true;
+            }
+            else
+            {
+                _entries = listMask;
+                _showAllFiles = false;
+            }
+        }
+        _focusSelection = true;
+    }
+
+    private void OnTimer(object? state)
+    {
+        try
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    if (UpdateEntries())
+                        StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, $"Failed to update state");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Failed to update state");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (_focusSelection)
+        {
+            _focusSelection = false;
+            foreach (var entry in _entries.AsEnumerable().Reverse())
+            {
+                if (entry.IsSelected)
+                    await entry.Element.TryFocusAsync();
+            }
+        }
+    }
+
+    private void GoBack()
+    {
+        var count = _history.Count;
+        if (count > 1)
+        {
+            _currentDirectory = _history[count - 2];
+            _history.RemoveRange(count - 2, 2);
+            UpdateEntries();
+        }
+    }
+
+    private void GoUp()
+    {
+        if (_currentDirectory == "/")
+            return;
+        var parentDir = PrinterPath.GetParent(_currentDirectory);
+        var parent = FileProvider.Normalize(parentDir);
+        if (parent != null)
+        {
+            _currentDirectory = parent;
+            UpdateEntries();
+        }
+    }
+
+    private bool IsMasked(string name)
+    {
+        if (_masks.Length == 0)
+            return true;
+        foreach (var mask in _masks)
+        {
+            if (mask.IsMatch(name))
+                return true;
+        }
+        return false;
+    }
+
+    private bool IsPackageOfAnyKind(string name)
+    {
+        foreach (var mask in _packageMasks.Concat(_packageMasksDefault))
+        {
+            if (mask.IsMatch(name))
+                return true;
+        }
+        return false;
+    }
+
+    private bool IsPackage(string name)
+    {
+        foreach (var mask in _packageMasksExcept)
+        {
+            if (mask.IsMatch(name))
+                return false;
+        }
+        foreach (var mask in _packageMasks)
+        {
+            if (mask.IsMatch(name))
+                return true;
+        }
+        return false;
+    }
+
+    private bool UpdateEntries(List<Entry>? targetList = null)
+    {
+        var entries = new List<Entry>();
+        var filenames = new HashSet<string>();
+        var packages = new HashSet<string>();
+        var dirnames = new HashSet<string>();
+        var hasChanges = false;
+
+        if (_history.Count == 0 || _history[^1] != _currentDirectory)
+            _history.Add(_currentDirectory);
+
+        try
+        {
+            var drivesOld = _drives.ToHashSet();
+            _drives.Clear();
+            foreach (var drive in FileProvider.FileSystem.Browse(PrinterPath.Drives))
+            {
+                _drives.Add(new DriveEntry
+                    {
+                        Name = drive.Name,
+                        Path = drive.Path,
+                    });
+            }
+            if (!drivesOld.SetEquals(_drives))
+                hasChanges = true;
+
+            _currentDirectoryReadOnly =
+                _currentDirectory == "/" ||
+                _currentDirectory.Split('/').Any(x => IsPackageOfAnyKind(x));
+            _currentDirectoryEjectableDrive = FileProvider.IsEjectable(_currentDirectory);
+
+            foreach (var entry in FileProvider.FileSystem.Browse(_currentDirectory))
+            {
+                if (entry.Name.StartsWith('.'))
+                    continue;
+                if (entry is IEntryFileAttributes attr &&
+                     (attr.FileAttributes.HasFlag(FileAttributes.System) ||
+                      attr.FileAttributes.HasFlag(FileAttributes.Hidden) ||
+                      attr.FileAttributes.HasFlag(FileAttributes.Temporary) ||
+                      attr.FileAttributes.HasFlag(FileAttributes.Device)))
+                    continue;
+                if (entry.IsDirectory())
+                    dirnames.Add(entry.Path);
+                else if (_showAllFiles || IsMasked(entry.Name) || IsPackage(entry.Name))
+                    filenames.Add(entry.Path);
+            }
+        }
+        catch (Exception)
+        {
+            // swallow
+        }
+        var oldEntries = _entries.ToDictionary(x => x.Path);
+
+        Entry GetEntry(string path, bool isDirectory)
+        {
+            if (oldEntries.TryGetValue(path, out var entry))
+            {
+                oldEntries.Remove(path);
+                return entry;
+            }
+            var name = isDirectory ? (PrinterPath.GetLastDirectoryName(path) ?? "") : PrinterPath.GetFileName(path);
+            var isPackage = !isDirectory && IsPackage(name);
+            hasChanges = true;
+            entry = new Entry
+                {
+                    Path = path,
+                    Name = name,
+                    IsDirectory = isDirectory,
+                    IsPackage = isPackage,
+                    IsSelectable = (isDirectory && AllowSelectDirectories) || AllowSelectFilesOutsideMask || (!isDirectory && IsMasked(name)),
+                };
+            return entry;
+        }
+
+        var parentDirectory = PrinterPath.Combine(_currentDirectory, "..");
+        var list = targetList ?? _entries;
+        list.Clear();
+        foreach (var dirname in dirnames.OrderByNatural(x => x))
+            list.Add(GetEntry(dirname, true));
+        foreach (var filename in filenames.OrderByNatural(x => x))
+            list.Add(GetEntry(filename, false));
+        if (oldEntries.Count > 0)
+            hasChanges = true;
+        return hasChanges;
+    }
+
+    private void OnSelect(Entry entry)
+    {
+        if (!entry.IsSelectable && (entry.IsPackage || entry.IsDirectory))
+        {
+            _currentDirectory = entry.Path;
+            UpdateEntries();
+        }
+        else if (entry.IsSelectable)
+        {
+            if (entry.IsSelected)
+                entry.IsSelected = false;
+            else
+            {
+                entry.IsSelected = true;
+                entry.SelectedVersion = ++_selectedVersion;
+                if (MaxSelectedCount != null)
+                {
+                    foreach (var deselected in _entries
+                        .Where(x => x.IsSelected)
+                        .OrderByDescending(x => x.SelectedVersion)
+                        .Skip(MaxSelectedCount.Value))
+                        deselected.IsSelected = false;
+                }
+            }
+        }
+    }
+
+    private void OnClick(Entry entry)
+    {
+        if (entry.IsDirectory || entry.IsPackage)
+        {
+            _currentDirectory = entry.Path;
+            UpdateEntries();
+        }
+        else if (entry.IsSelectable)
+        {
+            foreach (var other in _entries)
+            {
+                if (other != entry)
+                    other.IsSelected = false;
+            }
+            entry.IsSelected = true;
+            entry.SelectedVersion = ++_selectedVersion;
+        }
+    }
+
+    private async Task OnOpenClicked()
+    {
+        var selected = _entries
+            .Where(x => x.IsSelected)
+            .Select(x => x.Path)
+            .ToArray();
+        if (selected.Length > 0)
+            await OpenClicked.InvokeAsync(selected);
+    }
+
+    private async Task OnCloseClicked()
+    {
+        await CloseClicked.InvokeAsync();
+    }
+
+    private async Task Download()
+    {
+        await _cancelModal!.Execute(
+            async cancel =>
+            {
+                var tasks = new List<Task>();
+                foreach (var _entry in _entries)
+                {
+                    var entry = _entry;
+                    if (entry.IsSelected && !entry.IsDirectory)
+                    {
+                        tasks.Add(Task.Factory.StartNew(async () =>
+                        {
+                            using (var stream = FileProvider.OpenRead(entry.Path))
+                            using (var streamRef = new DotNetStreamReference(stream))
+                            {
+                                await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "downloadFileFromStream", entry.Name, streamRef);
+                            }
+                        }, default, TaskCreationOptions.None, TaskScheduler.Current).Unwrap());
+                    }
+                }
+                await Task.WhenAll(tasks);
+            },
+            titleText: "Downloading files",
+            bodyText: "Files are being downloaded, this dialog will automatically close when done...",
+            cancelText: "Cancel the download",
+            errorToastHeaderText: "Failed to download file(s)");
+    }
+
+    private async Task Upload()
+    {
+        await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "triggerElement", _uploadFile!.Element, "click");
+    }
+
+    private async Task Eject()
+    {
+        await _cancelModal!.Execute(
+            async cancel =>
+            {
+                await FileProvider.Eject(_currentDirectory, cancel);
+                CurrentDirectory = PrinterPath.Root;
+            },
+            titleText: "Ejecting drive",
+            bodyText: "Please wait while drive is being ejected...",
+            cancelText: "Cancel eject",
+            errorToastHeaderText: "Failed to eject the drive");
+    }
+
+    private Task OnUploadFiles(InputFileChangeEventArgs e)
+        => InsertFilesInternal(e.GetMultipleFiles(int.MaxValue).Select(x => (x.Name, new Func<CancellationToken, Stream>(cancel => x.OpenReadStream(long.MaxValue, cancel)))));
+
+    private async Task InsertFilesInternal(IEnumerable<(string name, Func<CancellationToken, Stream> factory)> sources)
+    {
+        if (_currentDirectoryReadOnly)
+            return;
+        var uploadedFiles = new List<string>();
+        await _cancelModal!.Execute(
+            async cancel =>
+            {
+                foreach (var file in sources)
+                {
+                    var name = CompactPathExtensions.GetFileNameOSUniversal(file.name);
+                    if (string.IsNullOrWhiteSpace(name))
+                        continue;
+                    _renamedFrom = name;
+                    var action = Action.NotSet;
+                    while (true)
+                    {
+                        var targetFilename = PrinterPath.Combine(_currentDirectory, name);
+                        if (action == Action.Stop)
+                            goto Finished;
+                        if (action == Action.Skip)
+                            break;
+                        if (action == Action.Overwrite ||
+                        action == Action.Rename)
+                        {
+                            var tempFilename = $"{targetFilename}.{Guid.NewGuid()}.appUpload";
+                            try
+                            {
+                                try
+                                {
+                                    await Task.Run(async () =>
+                                {
+                                    using (var output = FileProvider.FileSystem.Open(tempFilename, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                                    using (var input = file.factory(cancel))
+                                    {
+                                        await input.CopyToAsync(output, cancel);
+                                    }
+                                });
+                                    if (action == Action.Overwrite)
+                                    {
+                                        // TODO: move with overwrite / atomic
+                                        FileProvider.FileSystem.Delete(targetFilename);
+                                        FileProvider.FileSystem.Move(tempFilename, targetFilename);
+                                        uploadedFiles.Add(targetFilename);
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        try
+                                        {
+                                            FileProvider.FileSystem.Move(tempFilename, targetFilename);
+                                            uploadedFiles.Add(targetFilename);
+                                            break;
+                                        }
+                                        catch (Exception)
+                                        {
+                                            // swallow and show the user
+                                        }
+                                    }
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    goto Finished;
+                                }
+                            }
+                            finally
+                            {
+                                try
+                                {
+                                    if (FileProvider.FileExists(tempFilename))
+                                        FileProvider.FileSystem.Delete(tempFilename);
+                                }
+                                catch
+                                {
+                                    // swallow
+                                }
+                            }
+                        }
+                        var showModal = false;
+                        try
+                        {
+                            if (FileProvider.FileExists(targetFilename))
+                                showModal = true;
+                        }
+                        catch (Exception)
+                        {
+                            showModal = true;
+                        }
+                        if (showModal)
+                        {
+                            string newName;
+                            for (int i = 1; ; i++)
+                            {
+                                var candidateName = $"{PrinterPath.GetFileNameWithoutExtension(name)} ({i}){PrinterPath.GetExtension(name)}";
+                                try
+                                {
+                                    var candidateTarget = PrinterPath.Combine(_currentDirectory, candidateName);
+                                    if (FileProvider.FileExists(candidateTarget))
+                                        continue;
+                                }
+                                catch (Exception)
+                                {
+                                    // just try it as is
+                                }
+                                newName = candidateName;
+                                break;
+                            }
+                            _renamedTo = newName;
+                            try
+                            {
+                                _action = new TaskCompletionSource<Action>(TaskCreationOptions.RunContinuationsAsynchronously);
+                                _force = false;
+                                await _uploadModal!.Show();
+                                action = await _action.Task;
+                                await _uploadModal!.Close();
+                            }
+                            finally
+                            {
+                                _action = null;
+                            }
+                            if (action == Action.Rename)
+                            {
+                                if (!string.IsNullOrWhiteSpace(_renamedTo))
+                                    name = _renamedTo;
+                                else
+                                    action = Action.NotSet; // try again
+                            }
+                        }
+                        else
+                            action = Action.Rename;
+                    }
+                }
+            Finished:;
+            },
+            titleText: "Copying files",
+            bodyText: "Files are being copied, this dialog will automatically close when done...",
+            cancelText: "Cancel the upload",
+            errorToastHeaderText: "Failed to copy file(s)");
+        UpdateEntriesAndSelectFiles(uploadedFiles);
+        StateHasChanged();
+    }
+
+    private async Task Rename()
+    {
+        if (_currentDirectoryReadOnly)
+            return;
+        try
+        {
+            foreach (var entry in _entries.Where(x => x.IsSelected).ToArray())
+            {
+                var oldName = entry.Name;
+                var newName = oldName;
+                _renamedFrom = oldName;
+                _renameExists = false;
+                var action = Action.Rename;
+                while (true)
+                {
+                    if (action == Action.Stop)
+                        goto Finished;
+                    if (action == Action.Skip)
+                        break;
+                    var oldFilename = PrinterPath.Combine(_currentDirectory, oldName);
+                    var newFilename = PrinterPath.Combine(_currentDirectory, newName);
+                    if (!string.IsNullOrWhiteSpace(newName) &&
+                        oldName != newName &&
+                        FileProvider.Normalize(oldFilename) != FileProvider.Normalize(newFilename) && // not changing to same EXISTING item
+                        (action == Action.Overwrite ||
+                         action == Action.Rename))
+                    {
+                        try
+                        {
+                            if (action == Action.Overwrite)
+                            {
+                                // TODO: move with overwrite / atomic
+                                if (FileProvider.Exists(newFilename))
+                                    FileProvider.FileSystem.Delete(newFilename);
+                                FileProvider.FileSystem.Move(oldFilename, newFilename);
+                                break;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    FileProvider.FileSystem.Move(oldFilename, newFilename);
+                                    break;
+                                }
+                                catch (Exception)
+                                {
+                                    // swallow and show the user
+                                    _renameExists = true;
+                                }
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            goto Finished;
+                        }
+                    }
+                    _renamedTo = newName;
+                    try
+                    {
+                        _action = new TaskCompletionSource<Action>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        _force = false;
+                        await _renameModal!.Show();
+                        action = await _action.Task;
+                        await _renameModal!.Close();
+                    }
+                    finally
+                    {
+                        _action = null;
+                    }
+                    if (action == Action.Rename)
+                        newName = _renamedTo;
+                }
+            }
+        Finished:;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(new ToastMessage
+                {
+                    Key = this,
+                    HeaderText = "Failed to rename file(s)",
+                    BodyText = ex.Message,
+                    Type = ToastMessageType.Error,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+        }
+        UpdateEntries();
+        StateHasChanged();
+    }
+
+    private async Task Delete(Entry[]? entries = null)
+    {
+        if (_currentDirectoryReadOnly)
+            return;
+        try
+        {
+            if (entries == null)
+            {
+                _deleteEntries = _entries
+                    .Where(entry => entry.IsSelected)
+                    .ToArray();
+                if (_deleteEntries.Length == 0)
+                    return;
+                _force = false;
+                await _deleteModal!.Show();
+            }
+            else
+            {
+                await _deleteModal!.Close();
+                foreach (var entry in entries)
+                {
+                    if (FileProvider.Exists(entry.Path))
+                        FileProvider.FileSystem.Delete(entry.Path);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(new ToastMessage
+                {
+                    Key = this,
+                    HeaderText = "Failed to delete items(s)",
+                    BodyText = ex.Message,
+                    Type = ToastMessageType.Error,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+        }
+        UpdateEntries();
+        StateHasChanged();
+    }
+
+    private void CopyToClipboard(Entry[]? entries = null)
+    {
+        if (entries == null)
+        {
+            entries = _entries
+                .Where(entry => entry.IsSelected)
+                .ToArray();
+        }
+        _clipboardPaths = entries?.Where(x => !x.IsDirectory || x.IsPackage).Select(x => x.Path).ToArray() ?? Array.Empty<string>();
+        StateHasChanged();
+    }
+
+    private async Task PasteFromClipboard()
+    {
+        if (_clipboardPaths.Length == 0)
+            return;
+        await InsertFilesInternal(_clipboardPaths.Select(x => (x, new Func<CancellationToken, Stream>(cancel => FileProvider.OpenRead(x)))));
+    }
+
+    private async Task NewDirectory(string? name = null)
+    {
+        if (_currentDirectoryReadOnly)
+            return;
+        if (name == null)
+        {
+            string newName;
+            for (int i = 1; ; i++)
+            {
+                newName = i == 1 ? "New directory" : $"New directory ({i})";
+                try
+                {
+                    var candidateTarget = PrinterPath.Combine(_currentDirectory, newName);
+                    if (FileProvider.Exists(candidateTarget))
+                        continue;
+                }
+                catch (Exception)
+                {
+                    // just try it as is
+                }
+                break;
+            }
+            _newDirectoryName = newName;
+            await _newDirectoryModal!.Show();
+        }
+        else
+        {
+            await _newDirectoryModal!.Close();
+            try
+            {
+                var candidateTarget = PrinterPath.Combine(_currentDirectory, name);
+                FileProvider.FileSystem.CreateDirectory(candidateTarget);
+            }
+            catch (Exception ex)
+            {
+                Toasts.Show(new ToastMessage
+                    {
+                        Key = this,
+                        HeaderText = "Failed to create directory",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Exception = ex,
+                        Silent = true, // user is interacting, no need for beeping
+                    });
+            }
+            UpdateEntries();
+            StateHasChanged();
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        return base.DisposeAsync();
+    }
+
+    private void ToggleShowAllFiles()
+    {
+        _showAllFiles = !_showAllFiles;
+        UpdateEntries();
+    }
+}

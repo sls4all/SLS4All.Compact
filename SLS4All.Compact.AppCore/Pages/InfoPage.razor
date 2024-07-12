@@ -1,0 +1,91 @@
+﻿@page "/info"
+@inherits AppPage
+@using System.Numerics
+@using SLS4All.Compact.ComponentModel;
+@using SLS4All.Compact.Power;
+@using SLS4All.Compact.Printer;
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Threading
+@inject IJSRuntime JSRuntime
+@inject IPrinterClient PrinterClient
+@inject IToastProvider ToastProvider
+@inject IMelodyClient Buzzer
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-home.png" IsFullPage="false" />
+
+Window size @_width x @_height
+<br/>
+<button class="btn btn-danger" @onclick="DoShutdown">Shutdown MCU</button>
+@foreach (var melody_ in Enum.GetValues<Melody>().Where(x => x != Melody.NotSet))
+{
+    var melody = melody_;
+    <br />
+    <button class="btn btn-info" @onclick="() => TestMelody(melody)">Melody <b>@melody</b></button>
+}
+@foreach (var toastType_ in Enum.GetValues<ToastMessageType>().Where(x => x != ToastMessageType.NotSet))
+{
+    var toastType = toastType_;
+    <br />
+    <button class="btn btn-info" @onclick="() => TestToast(toastType)">Toast <b>@toastType</b></button>
+}
+<br />
+<button class="btn btn-info" @onclick="() => TestToast(ToastMessageType.Information, true)">Toast <b>Info with click</b></button>
+<br />
+<button class="btn btn-danger" @onclick="() => ThrowError()">Throw error</button>
+<br />
+<button class="btn btn-warning" @onclick="() => PrinterGC.CollectGarbageBlockingAggressive()">GC Collect aggressive</button>
+<br />
+
+@code {
+    public const string SelfPath = "/info";
+
+    private float _width;
+    private float _height;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _width = await JSRuntime.InvokeAsync<float>("AppHelpersInvoke", "getWindowWidth");
+            _height = await JSRuntime.InvokeAsync<float>("AppHelpersInvoke", "getWindowHeight");
+        }
+        catch (Exception)
+        {
+            // swallow
+        }
+        await base.OnInitializedAsync();
+    }
+
+    private void DoShutdown()
+    {
+        PrinterClient.Shutdown("UI user request", null);
+    }
+
+    private void TestToast(ToastMessageType type, bool hasClick = false)
+    {
+        ToastProvider.Show(new ToastMessage { Type = type, BodyText = "Test", HeaderText = "Test", TargetUri = hasClick ? SelfPath : null });
+    }
+
+    private async Task TestMelody(Melody melody)
+    {
+        try
+        {
+            await Buzzer.Play(melody);
+        }
+        catch (Exception ex)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    HeaderText = "Failed to play melody",
+                    BodyText = ex.Message,
+                    Exception = ex,
+                });
+        }
+    }
+
+    private void ThrowError()
+    {
+        throw new ApplicationException("User invoked error");
+    }
+}

@@ -1,0 +1,95 @@
+﻿.dummy {
+}
+
+.snackbar-container {
+    position: fixed;
+    width: calc(100% - 10px);
+    left: 0;
+    z-index: 2000;
+}
+
+.snackbar-container-child {
+    pointer-events: none;
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    height: 80vh;
+    mask-image: linear-gradient(black 0%, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(black 0%, black 90%, transparent 100%);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-top: 80px;
+}
+
+.text-muted {
+    color: gray !important;
+}
+
+.snackbar-toast {
+    pointer-events: all;
+    max-width: calc(100vw - 50px);
+    animation: slide-in 0.5s;
+    position: relative;
+    cursor: pointer;
+}
+
+    .snackbar-toast .snackbar-toast-header {
+        font-size: 20px;
+    }
+
+        .snackbar-toast .snackbar-toast-header button {
+            font-size: 40px;
+        }
+
+        .snackbar-toast .snackbar-toast-header small {
+            min-width: 15ch;
+            font-size: 17px;
+            text-align: right;
+        }
+
+    .snackbar-toast .toast-body {
+        font-size: 20px;
+    }
+
+        .snackbar-toast .toast-body .toast-body-text {
+            white-space: pre-wrap;
+        }
+
+
+
+@keyframes slide-in {
+    0% {
+        right: -100%;
+        opacity: 0;
+    }
+
+    100% {
+        right: 0%;
+        opacity: 1;
+    }
+}
+
+.snackbar-toast-header-warning {
+    background-color: #ffc1077f;
+    transition: background-color 2.0s ease;
+}
+
+.snackbar-toast-header-error {
+    background-color: #dc35457f;
+    transition: background-color 2.0s ease;
+}
+
+.snackbar-toast-header-info {
+    background-color: #17a2b87f;
+    transition: background-color 2.0s ease;
+}
+
+.snackbar-toast-header-seen {
+    background-color: rgba(255, 255, 255, 0.85);
+}
+
+.close {
+    background: #0003;
+    border-radius: 5px;
+    width: 1em;
+}

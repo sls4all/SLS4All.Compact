@@ -1,0 +1,144 @@
+﻿@using SLS4All.Compact.Temperature;
+@inherits AppComponent
+@inject IJSRuntime JSRuntime
+@inject ITemperatureHistory TemperatureHistory
+
+<div @key="this" @ref="ElementRef" id="@ElementId" class="@ClassNames" style="@StyleNames">
+</div>
+
+@code {
+    private IJSObjectReference? _flot;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        TemperatureHistory.HistoryItemsChanged += OnTemperatureHistoryChanged;
+    }
+
+    private void OnTemperatureHistoryChanged(object? sender, EventArgs e)
+        => InvokeAsync(() =>
+        {
+            try
+            {
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+                /* swallow */
+            }
+        });
+
+    public override ValueTask DisposeAsync()
+    {
+        TemperatureHistory.HistoryItemsChanged -= OnTemperatureHistoryChanged;
+        return base.DisposeAsync();
+    }
+
+    private Array GenerateFlotData()
+    {
+        var dict = new Dictionary<string, List<TemperatureEntry>>();
+        var items = TemperatureHistory.HistoryItems;
+        foreach (var item in items)
+        {
+            foreach (var entry in item.Entries)
+            {
+                if (!dict.TryGetValue(entry.Id, out var list))
+                {
+                    list = new List<TemperatureEntry>();
+                    dict.Add(entry.Id, list);
+                }
+                list.Add(entry);
+            }
+        }
+        return dict
+            .Select(x => new
+            {
+                label = x.Key,
+                data = x.Value.Select(item => new[] { (item.Timestamp - x.Value[^1].Timestamp).TotalSeconds, item.CurrentTemperature }).ToArray()
+            })
+            .ToArray();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        var data = GenerateFlotData();
+        try
+        {
+            if (_flot == null && data.Length > 0)
+            {
+                _flot = await JSRuntime.InvokeAsync<IJSObjectReference>("flotPlot",
+                    ElementRef,
+                    data,
+                    new
+                    {
+                        series = new
+                        {
+                            lines = new
+                            {
+                                show = 1,
+                                lineWidth = 1,
+                                fill = 0,
+                            },
+                            shadowSize = 0,
+                        },
+                        yaxis = new
+                        {
+                            min = 0,
+                            max = 200,
+                            tickColor = "rgba(255,255,255,0.1)",
+                            font = new
+                            {
+                                lineHeight = 13,
+                                style = "normal",
+                                color = "rgba(255,255,255,0.75)",
+                                size = 11
+                            },
+                            shadowSize = 0
+                        },
+                        xaxis = new
+                        {
+                            tickColor = "rgba(255,255,255,0.1)",
+                            show = 1,
+                            font = new
+                            {
+                                lineHeight = 13,
+                                style = "normal",
+                                color = "rgba(255,255,255,0.75)",
+                                size = 11
+                            },
+                            shadowSize = 0,
+                            min = -200,
+                            max = 0
+                        },
+                        grid = new
+                        {
+                            borderWidth = 1,
+                            borderColor = "rgba(255,255,255,0.1)",
+                            labelMargin = 10,
+                            hoverable = 1,
+                            clickable = 0,
+                            mouseActiveRadius = 6,
+                        },
+                        legend = new
+                        {
+                            show = 1,
+                            backgroundOpacity = .5,
+                            noColumns = 0,
+                            lineWidth = 0,
+                            labelBoxBorderColor = "rgba(255,255,255,0)",
+                            backgroundColor = "rgba(255,255,255,0.9)",
+                        }
+                    });
+            }
+            else if (_flot != null)
+            {
+                await JSRuntime.InvokeVoidAsync("flotRedraw", _flot, data);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // prerendering
+        }
+    }
+}

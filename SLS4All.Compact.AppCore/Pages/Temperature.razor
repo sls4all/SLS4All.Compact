@@ -1,0 +1,41 @@
+﻿@page "/temperature"
+@inherits AppPage
+@using SLS4All.Compact.Power;
+@using SLS4All.Compact.Printer;
+@implements IDisposable
+@inject IPrinterClient Client
+@inject IJSRuntime JSRuntime
+@inject IPowerClient TemperatureClient
+
+<PrinterPageTitle IconClass="zwicon-temperature"/>
+
+<h6>
+    Current state and manual control of temperature.
+</h6>
+
+<div class="d-flex justify-content-center">
+    <TemperatureControl />
+</div>
+
+<h4>Temperature graph</h4>
+<h6>
+    Graph of all current temperatures.
+</h6>
+
+<TemperatureGraph style="width:100%; height:250px" />
+
+@code{
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    public void Dispose()
+    {
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+    }
+}

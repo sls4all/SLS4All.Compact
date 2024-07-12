@@ -1,0 +1,87 @@
+﻿@page "/plot"
+@using SLS4All.Compact.Slicing;
+@inherits AppPage
+@implements IDisposable
+@inject ICodePlotter Plotter
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-layer-geometry.png" IsFullPage="true" />
+
+<div class="d-flex h-100 py-3 flex-column">
+    <div class="d-flex flex-row m-auto">
+        <a class="btn btn-danger btn--icon-text" @onclick="Clear">
+            <i class="bi bi-eraser-fill" /> Clear
+        </a>
+        <a class="btn btn-theme btn--icon-text" href="@PanZoom.SelfPath?image=@Uri.EscapeDataString(LayerUrl)" target="_blank">
+            <i class="bi bi-fullscreen" /> Open tab
+        </a>
+        <label class="m-auto">
+            Layer:
+            <input type="range" min="1" max="@_layerCount" style="width: 300px" @bind="LayerIndex" @bind:event="oninput" />
+            <input type="number" @bind="LayerIndex" @bind:event="oninput" style="width: 6em" />
+        </label>
+        @if (Plotter.OutsideDraw)
+        {
+            <div class="alert alert-danger" role="alert">
+                Outside draw!
+            </div>
+        }
+    </div>
+
+    <img class="pt-3" style="height:0px; flex-grow: 1; object-fit: contain" src="@LayerUrl" />
+</div>
+
+@code {
+    public const string SelfPath = "/plot";
+    private System.Threading.Timer? _timer;
+    private const int _period = 500;
+    private int _layerIndex = 0;
+    private int _layerCount = 1;
+
+    public int LayerIndex
+    {
+        get => _layerIndex;
+        set
+        {
+            if (value == _layerIndex)
+                return;
+            _layerIndex = value;
+            Refresh();
+        }
+    }
+
+    public string LayerUrl
+        => $"/api/PlottedImage/{Plotter.Version}/{_layerIndex - 1}";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _timer = new System.Threading.Timer(OnTimer, null, _period, _period);
+        Refresh();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    private void Refresh()
+    {
+        var layerCount = Plotter.LayerCount;
+        if (_layerIndex <= 0 || 
+            _layerIndex >= layerCount ||
+            (layerCount > _layerCount && _layerIndex == _layerCount))
+            _layerIndex = layerCount;
+        _layerCount = layerCount;
+        StateHasChanged();
+    }
+
+    private void OnTimer(object? state)
+        => InvokeAsync(Refresh);
+
+    private void Clear()
+    {
+        _layerIndex = 0;
+        Plotter.Clear();
+        Refresh();
+    }
+}

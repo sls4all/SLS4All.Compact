@@ -1,0 +1,176 @@
+﻿@using System.Collections.Concurrent
+@using SLS4All.Compact.ComponentModel
+@inherits AppComponent
+@inject IToastProvider Toasts
+
+<ModalWrapper @ref="_modal" class="fade app-modal" Closed="() => _cancelSource?.Cancel()" ExternalCssScope="@ExternalCssScope" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                @if (_titleText != null)
+                {
+                    @_titleText
+                }
+                else
+                {
+                    @Title
+                }
+            </h5>
+        </div>
+        <div class="modal-body">
+            @if (_bodyText != null)
+            {
+                @_bodyText
+            }
+            else
+            {
+                @Body
+            }
+            @if (ProgressCurrent != null && ProgressTotal != null)
+            {
+                var progressInt = (int)(ProgressCurrent.Value * 100 / ProgressTotal.Value);
+                <div class="modal-progress" style="background: linear-gradient(to right, rgba(128,255,255,0.15) @progressInt%, rgba(128,255,255,0.05) @progressInt%)">
+                    @(progressInt)&nbsp;%
+                </div>
+            }
+            @if (ShowSpinner)
+            {
+                <div class="modal-ellipsis">
+                    <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+                </div>
+            }
+        </div>
+        @if (_cancelText != null || CancelText != null)
+        {
+            <div class="modal-footer">
+                <a @onclick="() => modal.Close()" class="btn btn-danger">
+                    @if (_cancelText != null)
+                    {
+                        @_cancelText
+                    }
+                    else if (CancelText != null)
+                    {
+                        @CancelText
+                    }
+                </a>
+            </div>
+        }
+    </div>
+</ModalWrapper>
+
+@code {
+    private ModalWrapper? _modal;
+    private CancellationTokenSource? _cancelSource;
+    private string? _titleText;
+    private string? _bodyText;
+    private string? _cancelText;
+
+    [Parameter]
+    public RenderFragment? Title { get; set; }
+
+    [Parameter]
+    public RenderFragment? Body { get; set; }
+
+    [Parameter]
+    public RenderFragment? CancelText { get; set; }
+
+    [Parameter]
+    public double? ProgressCurrent { get; set; }
+
+    [Parameter]
+    public double? ProgressTotal { get; set; }
+
+    [Parameter]
+    public bool ShowSpinner { get; set; } = true;
+
+    public async Task Execute(Func<CancellationToken, Task> func, string? titleText = null, string? bodyText = null, string? cancelText = null, string? errorToastHeaderText = null)
+    {
+        _cancelSource = new CancellationTokenSource();
+        var cancel = _cancelSource.Token;
+        try
+        {
+            _titleText = titleText;
+            _bodyText = bodyText;
+            _cancelText = cancelText;
+            await _modal!.Show();
+            await func(cancel);
+        }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested)
+            {
+                if (errorToastHeaderText == null)
+                    throw;
+                else
+                {
+                    Toasts.Show(new ToastMessage
+                        {
+                            Key = this,
+                            HeaderText = errorToastHeaderText,
+                            BodyText = ex.Message,
+                            Type = ToastMessageType.Error,
+                            Exception = ex,
+                            Silent = true, // user is interacting, no need for beeping
+                        });
+                }
+            }
+        }
+        finally
+        {
+            _titleText = null;
+            _bodyText = null;
+            _cancelText = null;
+            _cancelSource = null;
+            await _modal!.Close();
+        }
+    }
+
+    public async Task<T> Execute<T>(Func<CancellationToken, Task<T>> func, T defaultResult, string? titleText = null, string? bodyText = null, string? cancelText = null, string? errorToastHeaderText = null)
+    {
+        _cancelSource = new CancellationTokenSource();
+        var cancel = _cancelSource.Token;
+        try
+        {
+            _titleText = titleText;
+            _bodyText = bodyText;
+            _cancelText = cancelText;
+            await _modal!.Show();
+            return await func(cancel);
+        }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested)
+            {
+                if (errorToastHeaderText == null)
+                    throw;
+                else
+                {
+                    Toasts.Show(new ToastMessage
+                        {
+                            Key = func.Target,
+                            HeaderText = errorToastHeaderText,
+                            BodyText = ex.Message,
+                            Type = ToastMessageType.Error,
+                            Exception = ex,
+                            Silent = true, // user is interacting, no need for beeping
+                        });
+                }
+            }
+        }
+        finally
+        {
+            _titleText = null;
+            _bodyText = null;
+            _cancelText = null;
+            _cancelSource = null;
+            await _modal!.Close();
+        }
+        return defaultResult;
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _cancelSource?.Cancel();
+        return base.DisposeAsync();
+    }
+}

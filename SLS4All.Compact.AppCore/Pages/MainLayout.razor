@@ -1,0 +1,832 @@
+﻿@inherits LayoutComponentBase
+@implements IMainLayout
+@implements IDisposable
+@using Microsoft.Extensions.Options
+@using System.Numerics
+@using System.Globalization
+@using SLS4All.Compact.Graphics
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Pages
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.UpdateModel
+@using SLS4All.Compact.Text
+@inject IJSRuntime JSRuntime
+@inject IOptionsMonitor<FrontendOptions> Options
+@inject NavigationManager Navigation
+@inject IFirstRenderHandler FirstRenderHandler
+@inject IApplicationUpdate ApplicationUpdate
+@inject IPrinterSettingsStorage PrinterSettingsStorage
+@inject IMemberManager MemberManager
+@inject IPrinterAuthentication PrinterAuthentication
+@inject ISafeShutdownManager SafeShutdownManager
+@inject IPrinterMaintenanceManager MaintenanceManager
+@inject AppThemeManager AppTheme
+@inject ILogger<MainLayout> Logger
+
+@{
+    var isFullPage = _title?.IsFullPage == true;
+    var scaleXStr = _scale.X.ToString(CultureInfo.InvariantCulture);
+    var scaleYStr = _scale.Y.ToString(CultureInfo.InvariantCulture);
+    var widthStr = (100 / _scale.X).ToString(CultureInfo.InvariantCulture) + "%";
+    var heightStr = (100 / _scale.Y).ToString(CultureInfo.InvariantCulture) + "%";
+    var hasMemberId = MemberManager.HasMemberId;
+    var hasInitializedSystemPassword = PrinterAuthentication.HasInitializedSystemPasswords;
+    var currentVersion = ApplicationUpdate.CurrentInfo;
+    var isShutdownScheduled = SafeShutdownManager.IsShutdownScheduled;
+    var isMaintenanceRequired = MaintenanceManager.IsMaintenanceRequired;
+    var latestUpdate = _updateLastState?.NewerInfos.Length > 0
+        ? _updateLastState?.NewerInfos.OrderByDescending(x => x.PublishedAt.UtcDateTime).First()
+        : null;
+}
+
+<CascadingValue Value="(IMainLayout)this" IsFixed="true">
+    <div class="app-component"
+         style="transform: scale(@scaleXStr, @scaleYStr); @(isFullPage ? $"min-height: {heightStr} !important; height: {heightStr} !important" : ""); width: @widthStr !important; transform-origin: top left; overflow: hidden"
+         data-sa-theme="@_theme">
+        <main class="main @(isFullPage ? "h-100" : "")">
+            <div class="page-loader">
+                <div class="page-loader__spinner">
+                    <svg viewBox="25 25 50 50">
+                        <circle cx="50" cy="50" r="20" fill="none" stroke-width="2" stroke-miterlimit="10" />
+                    </svg>
+                </div>
+            </div>
+
+            <header class="header">
+                @if (_isDeveloperMode)
+                {
+                    <div class="navigation-trigger d-none d-lg-flex" data-sa-action="aside-open" data-sa-target=".sidebar">
+                        <i class="zwicon-hamburger-menu"></i>
+                    </div>
+                }
+
+                <div class="logo">
+                    @if (_title != null && _title.ChildContent != null)
+                    {
+                        @_title.ChildContent
+                    }
+                    else if (_title != null)
+                    {
+                        <div class="page-title" style="font-family: 'Audiowide', sans-serif; font-size: 24px;">
+                            @if (_title.Image != null)
+                            {
+                                <img src="@_title.Image" class="img-fluid main-title-image" />
+                            }
+                            else if (_title.IconClass != null)
+                            {
+                                <i class="main-title-icon @_title.IconClass"></i>
+                            }
+                            <div class="page-name-version d-none d-sm-block ">
+                                <span class="pr-3 page-name">SLS4All Compact</span>
+                                @if (currentVersion != null)
+                                {
+                                    <span class="page-version">@currentVersion.Identity.VersionString (@currentVersion.Identity.Channel)</span>
+                                }
+                                else
+                                {
+                                    <span class="page-version">0.0.0 (local)</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @*<form class="search">
+                <div class="search__inner">
+                <input type="text" class="search__text" placeholder="Search for people, files, documents...">
+                <i class="zwicon-search search__helper"></i>
+                <i class="zwicon-arrow-left search__reset" data-sa-action="search-close"></i>
+                </div>
+                </form>*@
+
+                <ul class="top-nav">
+                    @*<li class="d-xl-none"><a href="" data-sa-action="search-open"><i class="zwicon-search"></i></a></li>*@
+
+                    @if (!hasInitializedSystemPassword || !hasMemberId || latestUpdate != null || _updateLastState?.HadForbidden == true || isShutdownScheduled || _watchdogDisabled || isMaintenanceRequired)
+                    {
+                        <li class="dropdown d-none d-lg-inline-block">
+                            <a href="" data-toggle="dropdown" class="top-nav__notify"><i class="zwicon-bell"></i></a>
+                            <div class="dropdown-menu dropdown-menu-right dropdown-menu--block system-notifications">
+                                <div class="dropdown-header">
+                                    System notifications
+                                </div>
+
+                                <div class="listview listview--hover">
+                                    @if (isShutdownScheduled)
+                                    {
+                                        <a href="@ShutdownPage.SelfPath" class="listview__item">
+                                            <i class="bi bi-power avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    Automatic shutdown
+                                                </div>
+                                                <p>Automatic shutdown is scheduled! Click here to disable it.</p>
+                                            </div>
+                                        </a>
+                                    }
+                                    @if (_watchdogDisabled)
+                                    {
+                                        <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.Advanced" class="listview__item">
+                                            <i class="bi bi-shield-exclamation avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    Watch Dog disabled
+                                                </div>
+                                                <p>Watch Dog is disabled. You should enable it in the settings after clicking here.</p>
+                                            </div>
+                                        </a>
+                                    }
+                                    @if (!hasInitializedSystemPassword)
+                                    {
+                                        <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.SystemPassword" class="listview__item">
+                                            <i class="bi bi-lock avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    System passwords not changed
+                                                </div>
+                                                <p>System passwords are set to default, to secure the printer for remote system access, please change the value to your preference.</p>
+                                            </div>
+                                        </a>
+                                    }
+                                    @if (isMaintenanceRequired)
+                                    {
+                                        <a href="@MaintenancePage.SelfPath/@MaintenancePage.TabIndex.Maintenance" class="listview__item">
+                                            <i class="bi bi-tools avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    Printer maintenance required
+                                                </div>
+                                                <p>Some maintenance procedures are planned, click here to view required tasks.</p>
+                                            </div>
+                                        </a>
+                                    }
+                                    @if (!hasMemberId)
+                                    {
+                                        <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.MemberId" class="listview__item">
+                                            <i class="bi bi-cloud-download avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    Member Id is not set
+                                                </div>
+                                                <p>To receive and download updates, a Member Id has to be set. It can be freely obtained by registering at <a class="link-primary" href="@(!IsLocalSession ? "https://sls4all.com" : "javascript:void(0)")">sls4all.com</a></p>
+                                            </div>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        if (_updateLastState?.HadForbidden == true)
+                                        {
+                                            <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.MemberId" class="listview__item">
+                                                <i class="bi bi-cloud-download avatar-img" />
+
+                                                <div class="listview__content">
+                                                    <div class="listview__heading">
+                                                        Member Id may not be valid
+                                                    </div>
+                                                    <p>Some update sources had returned <i>Forbidden</i> status code which may indicate that the currenty set<i>Member Id</i> is not valid.</p>
+                                                </div>
+                                            </a>
+                                        }
+
+                                        if (latestUpdate != null)
+                                        {
+                                            <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.Software" class="listview__item">
+                                                <i class="bi bi-cloud-download avatar-img" />
+
+                                                <div class="listview__content">
+                                                    <div class="listview__heading">
+                                                        Software update <small><BrowserTime DateTime="latestUpdate.PublishedAt.UtcDateTime" /></small>
+                                                    </div>
+                                                    <p>Software update is ready to be downloaded. <small>(@latestUpdate.Identity.VersionString / @latestUpdate.Identity.Channel)</small></p>
+                                                </div>
+                                            </a>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </li>
+                    }
+
+                    @*<li class="dropdown">
+                    <a href="" data-toggle="dropdown" class="top-nav__notify"><i class="zwicon-mail"></i></a>
+                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block">
+                    <div class="dropdown-header">
+                    Messages
+
+                    <div class="actions">
+                    <a href="messages.html" class="actions__item zwicon-plus"></a>
+                    </div>
+                    </div>
+
+                    <div class="listview listview--hover">
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/1.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">
+                    David Belle <small>12:01 PM</small>
+                    </div>
+                    <p>Cum sociis natoque penatibus et magnis dis parturient montes</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/2.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">
+                    Jonathan Morris
+                    <small>02:45 PM</small>
+                    </div>
+                    <p>Nunc quis diam diamurabitur at dolor elementum, dictum turpis vel</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/3.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">
+                    Fredric Mitchell Jr.
+                    <small>08:21 PM</small>
+                    </div>
+                    <p>Phasellus a ante et est ornare accumsan at vel magnauis blandit turpis at augue ultricies</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/4.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">
+                    Glenn Jecobs
+                    <small>08:43 PM</small>
+                    </div>
+                    <p>Ut vitae lacus sem ellentesque maximus, nunc sit amet varius dignissim, dui est consectetur neque</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/5.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">
+                    Bill Phillips
+                    <small>11:32 PM</small>
+                    </div>
+                    <p>Proin laoreet commodo eros id faucibus. Donec ligula quam, imperdiet vel ante placerat</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="view-more">View all messages</a>
+                    </div>
+                    </div>
+                    </li>*@
+
+                    @*<li class="dropdown top-nav__notifications">
+                    <a href="" data-toggle="dropdown" class="top-nav__notify">
+                    <i class="zwicon-bell"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block">
+                    <div class="dropdown-header">
+                    Notifications
+
+                    <div class="actions">
+                    <a href="" class="actions__item zwicon-checkmark-square" data-sa-action="notifications-clear"></a>
+                    </div>
+                    </div>
+
+                    <div class="listview listview--hover">
+                    <OverlayScrollbars class="listview__scroll">
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/1.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">David Belle</div>
+                    <p>Cum sociis natoque penatibus et magnis dis parturient montes</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/2.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">Jonathan Morris</div>
+                    <p>Nunc quis diam diamurabitur at dolor elementum, dictum turpis vel</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/3.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">Fredric Mitchell Jr.</div>
+                    <p>Phasellus a ante et est ornare accumsan at vel magnauis blandit turpis at augue ultricies</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/4.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">Glenn Jecobs</div>
+                    <p>Ut vitae lacus sem ellentesque maximus, nunc sit amet varius dignissim, dui est consectetur neque</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/5.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">Bill Phillips</div>
+                    <p>Proin laoreet commodo eros id faucibus. Donec ligula quam, imperdiet vel ante placerat</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/1.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">David Belle</div>
+                    <p>Cum sociis natoque penatibus et magnis dis parturient montes</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/2.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">Jonathan Morris</div>
+                    <p>Nunc quis diam diamurabitur at dolor elementum, dictum turpis vel</p>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <img src="demo/img/profile-pics/3.jpg" class="avatar-img" alt="">
+
+                    <div class="listview__content">
+                    <div class="listview__heading">Fredric Mitchell Jr.</div>
+                    <p>Phasellus a ante et est ornare accumsan at vel magnauis blandit turpis at augue ultricies</p>
+                    </div>
+                    </a>
+                    </OverlayScrollbars>
+
+                    <div class="p-1"></div>
+                    </div>
+                    </div>
+                    </li>
+
+                    <li class="dropdown d-none d-sm-inline-block">
+                    <a href="" data-toggle="dropdown"><i class="zwicon-checkmark-circle"></i></a>
+
+                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block" role="menu">
+                    <div class="dropdown-header">Tasks</div>
+
+                    <div class="listview listview--hover">
+                    <a href="" class="listview__item">
+                    <div class="listview__content">
+                    <div class="listview__heading">HTML5 Validation Report</div>
+
+                    <div class="progress mt-1">
+                    <div class="progress-bar bg-primary" role="progressbar" style="width: 25%" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <div class="listview__content">
+                    <div class="listview__heading">Google Chrome Extension</div>
+
+                    <div class="progress mt-1">
+                    <div class="progress-bar bg-warning" style="width: 43%" aria-valuenow="43" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <div class="listview__content">
+                    <div class="listview__heading">Social Intranet Projects</div>
+
+                    <div class="progress mt-1">
+                    <div class="progress-bar bg-success" style="width: 20%" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <div class="listview__content">
+                    <div class="listview__heading">Bootstrap Admin Template</div>
+
+                    <div class="progress mt-1">
+                    <div class="progress-bar bg-info" style="width: 60%" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    </div>
+                    </a>
+
+                    <a href="" class="listview__item">
+                    <div class="listview__content">
+                    <div class="listview__heading">Youtube Client App</div>
+
+                    <div class="progress mt-1">
+                    <div class="progress-bar bg-danger" style="width: 80%" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    </div>
+                    </a>
+
+                    <a href="" class="view-more">View all Tasks</a>
+                    </div>
+                    </div>
+                    </li>
+
+                    <li class="dropdown d-none d-sm-inline-block">
+                    <a href="" data-toggle="dropdown"><i class="zwicon-grid"></i></a>
+
+                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block" role="menu">
+                    <div class="row app-shortcuts">
+                    <a class="col-4 app-shortcuts__item" href="">
+                    <i class="zwicon-calendar-never"></i>
+                    <small class="">Calendar</small>
+                    </a>
+                    <a class="col-4 app-shortcuts__item" href="">
+                    <i class="zwicon-document"></i>
+                    <small class="">Files</small>
+                    </a>
+                    <a class="col-4 app-shortcuts__item" href="">
+                    <i class="zwicon-mail"></i>
+                    <small class="">Email</small>
+                    </a>
+                    <a class="col-4 app-shortcuts__item" href="">
+                    <i class="zwicon-line-chart"></i>
+                    <small class="">Reports</small>
+                    </a>
+                    <a class="col-4 app-shortcuts__item" href="">
+                    <i class="zwicon-broadcast"></i>
+                    <small class="">News</small>
+                    </a>
+                    <a class="col-4 app-shortcuts__item" href="">
+                    <i class="zwicon-image"></i>
+                    <small class="">Gallery</small>
+                    </a>
+                    </div>
+                    </div>
+                    </li>
+
+                    <li class="dropdown d-none d-sm-inline-block">
+                    <a href="" data-toggle="dropdown"><i class="zwicon-more-h"></i></a>
+
+                    <div class="dropdown-menu dropdown-menu-right">
+                    <a href="" class="dropdown-item" data-sa-action="fullscreen">Fullscreen</a>
+                    <a href="" class="dropdown-item">Clear Local Storage</a>
+                    <a href="" class="dropdown-item">Settings</a>
+                    </div>
+                    </li>*@
+
+                    <li>
+                        <a class="home-button" href="@IndexPage.SelfPath">
+                            <i class="zwicon-home"></i>
+                        </a>
+                    </li>
+
+                    <li>
+                        <a onclick="history.back(); return false;">
+                            <i class="zwicon-arrow-circle-left"></i>
+                        </a>
+                    </li>
+
+                    <li>
+                        <a onclick="history.forward(); return false;">
+                            <i class="zwicon-arrow-circle-right"></i>
+                        </a>
+                    </li>
+
+                    @*                    <li>
+                    <a href="" class="top-nav__themes" data-sa-action="aside-open" data-sa-target=".themes"><i class="zwicon-palette"></i></a>
+                    </li>*@
+                </ul>
+
+                <div class="dropdown d-none d-md-inline-block">
+                    <div class="clock" data-toggle="dropdown">
+                        <div class="time">
+                            <CurrentTime />
+                        </div>
+                    </div>
+
+                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block system-notifications">
+                        <div class="dropdown-header">
+                            System Performance
+                        </div>
+
+                        <div class="listview listview--hover">
+                            <PerformanceView />
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <aside class="sidebar sidebar--hidden">
+                <div>
+                    <div class="user">
+                        <div class="user__info">
+                            <i class="bi bi-bug-fill" style="font-size: 40px; padding-right: 10px"></i>
+                            <div>
+                                <div class="user__name">SLS4All Compact</div>
+                                <div class="user__email">Developer tools</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <ul class="navigation">
+                        <li><a href="/" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-home"></i> Home</a></li>
+
+                        <li><a href="/status" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-exclamation-triangle"></i> Status</a></li>
+
+                        <li><a href="@MovementPage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-controller"></i> Movement</a></li>
+
+                        <li><a href="/temperature" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-temperature"></i> Temperature</a></li>
+
+                        <li><a href="/power" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-battery-v"></i> Power</a></li>
+
+                        <li><a href="@VideoCameraDebug.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-video-camera"></i> Video camera DEBUG</a></li>
+
+                        <li><a href="@VideoCamera.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-video-camera"></i> Video camera</a></li>
+
+                        <li><a href="@ThermoCameraDebug.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-ruler-h"></i> Thermo camera DEBUG</a></li>
+
+                        <li><a href="@ThermoCamera.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-ruler-h"></i> Thermo camera</a></li>
+
+                        <li><a href="/test2d" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-play"></i> Test 2D</a></li>
+
+                        <li><a href="/plot" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-edit-pencil"></i> Plot</a></li>
+
+                        <li><a href="@Jobs.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-list-bullet"></i> Jobs</a></li>
+
+                        <li><a href="@PrintProfiles.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-list-bullet"></i> Print Profiles</a></li>
+
+                        <li><a href="/nesting" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-shape-cube"></i> Nesting</a></li>
+
+                        <li><a href="/slicing" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-expand-up"></i> Slicing</a></li>
+
+                        <li><a href="@MaintenancePage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-cog"></i> Maintenance</a></li>
+
+                        <li><a href="@InfoPage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-info-circle"></i> Info</a></li>
+
+                        <li><a href="@ShutdownPage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-sign-out"></i> Shutdown</a></li>
+                    </ul>
+                </div>
+            </aside>
+            <div class="themes">
+                <div>
+                    @{
+                        foreach (var __theme in AppTheme.AllThemeIds)
+                        {
+                            var theme = __theme;
+                            <a href="javascript:void(0)" class="themes__item @(_theme == theme ? "active" : "")" @onclick="() => SetTheme(theme)"><img src="/_content/SLS4All.Compact.AppCore/img/bg/@(theme).jpg" alt=""></a>
+                        }
+                    }
+                </div>
+            </div>
+
+            <ToastComponent />
+            <FileBrowserModal @ref="_browseModal" AllowSelectDirectories="true" AllowSelectFilesOutsideMask="true" />
+
+            <section id="main-body" class="content content--full @(isFullPage ? "h-100 content--full-page" : "")">
+                <BodyErrorBoundary>
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent Context="Exception">
+                        <div class="unhandled-error-notification">
+                            <span class="badge badge-danger text-wrap">
+                                <i class="bi bi-exclamation-triangle" /> Unhandled UI error occurred: @(Exception.Message). <a class="text-primary" @onclick="() => Reload()" target="_self">Click here to reload the page</a> or <a class="text-primary" @onclick="() => Reload(IndexPage.SelfPath)" target="_self">Go to home page</a>
+                            </span>
+                        </div>
+                    </ErrorContent>
+                </BodyErrorBoundary>
+            </section>
+        </main>
+    </div>
+</CascadingValue>
+
+@code {
+    private const string CssScope = "b-main-layout";
+
+    private string _theme = default!;
+    private PrinterPageTitle? _title;
+    private Vector2 _scale = Vector2.One;
+    private bool _isLocalSession;
+    private ApplicationUpdateReport? _updateLastState;
+    private bool _isDeveloperMode;
+    private FileBrowserModal? _browseModal;
+    private bool _watchdogDisabled;
+
+    public Vector2 Scale => _scale;
+    public bool IsLocalSession => _isLocalSession;
+    public bool IsDeveloperMode
+    {
+        get => _isDeveloperMode;
+        set
+        {
+            if (_isDeveloperMode == value)
+                return;
+            _isDeveloperMode = value;
+            StateHasChanged();
+        }
+    }
+    public RgbaF BackgroundColor => AppTheme.GetBackgroundColor(_theme);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        string queryString = new System.Uri(Navigation.Uri).Query;
+        var queryDictionary = System.Web.HttpUtility.ParseQueryString(queryString);
+        var sx = queryDictionary[FrontendHelpers.UIScaleXKey];
+        var sy = queryDictionary[FrontendHelpers.UIScaleYKey];
+        var isLocalSessionStr = queryDictionary[FrontendHelpers.IsLocalSessionKey];
+        var options = Options.CurrentValue;
+        if (FrontendHelpers.IsEnabled(isLocalSessionStr))
+        {
+            _isLocalSession = true;
+            if (options.LocalScaleX != null)
+                _scale.X = options.LocalScaleX.Value;
+            if (options.LocalScaleY != null)
+                _scale.Y = options.LocalScaleY.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(sx))
+            _scale.X = Convert.ToSingle(sx, CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(sy))
+            _scale.Y = Convert.ToSingle(sy, CultureInfo.InvariantCulture);
+
+        await base.OnParametersSetAsync();
+    }
+
+    public async Task SetPageLoader()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var refreshUri = uri.AbsolutePath == ShutdownPage.SelfPath
+            ? IndexPage.SelfPath
+            : uri.PathAndQuery;
+        await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "appExitShowLoader", refreshUri);
+    }
+
+    public void SetTitle(PrinterPageTitle? title)
+    {
+        _title = title;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender)
+        {
+            try
+            {
+                await UpdateReloadUriInJS();
+                await JSRuntime.InvokeVoidAsync("fadeOutPageLoader");
+                await FirstRenderHandler.HandleFirstRender();
+            }
+            catch (InvalidOperationException)
+            {
+                // prerendering
+            }
+        }
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _theme = AppTheme.ThemeIdDefault;
+        if (Options.CurrentValue.ShowAdvancedDebugFeatures)
+            _isDeveloperMode = true;
+        var watchdogSettings = PrinterSettingsStorage.GetWatchDogSettings();
+        _watchdogDisabled = !watchdogSettings.IsWatchDogEnabled;
+        _theme = AppTheme.ThemeId ?? AppTheme.ThemeIdDefault;
+        _updateLastState = ApplicationUpdate.LastReport;
+        ApplicationUpdate.StateChanged.AddHandler(OnApplicationUpdateLastStateChanged);
+        PrinterSettingsStorage.SettingsChanged.AddHandler(OnPrinterSettingsChanged);
+        MemberManager.StateChanged.AddHandler(OnMemberManagerStateChanged);
+        AppTheme.ThemeChanged.AddHandler(OnThemeChanged);
+        SafeShutdownManager.ShutdownScheduledChangedEvent.AddHandler(OnShutdownScheduledChanged);
+        Navigation.LocationChanged += OnLocationChanged;
+        await base.OnInitializedAsync();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _ = InvokeAsync(UpdateReloadUriInJS);
+    }
+
+    private async Task UpdateReloadUriInJS()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "setReloadUri", GetReloadUri());
+        }
+        catch (InvalidOperationException)
+        {
+            // prerendering
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        ApplicationUpdate.StateChanged.RemoveHandler(OnApplicationUpdateLastStateChanged);
+        MemberManager.StateChanged.RemoveHandler(OnMemberManagerStateChanged);
+        AppTheme.ThemeChanged.RemoveHandler(OnThemeChanged);
+        SafeShutdownManager.ShutdownScheduledChangedEvent.AddHandler(OnShutdownScheduledChanged);
+    }
+
+    private Task TryInvokeStateHasChanged(Action? action = null)
+    {
+        try
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    action?.Invoke();
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, $"Failed to update state");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Failed to update state");
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task OnApplicationUpdateLastStateChanged(CancellationToken cancel)
+    {
+        return TryInvokeStateHasChanged(() =>
+        {
+            _updateLastState = ApplicationUpdate.LastReport;
+        });
+    }
+
+    private Task OnPrinterSettingsChanged(CancellationToken cancel)
+    {
+        return TryInvokeStateHasChanged(() =>
+        {
+            var watchdogSettings = PrinterSettingsStorage.GetWatchDogSettings();
+            _watchdogDisabled = !watchdogSettings.IsWatchDogEnabled;
+        });
+    }
+
+    private Task OnShutdownScheduledChanged(CancellationToken cancel)
+    {
+        return TryInvokeStateHasChanged();
+    }
+
+    private Task OnMemberManagerStateChanged(CancellationToken cancel)
+    {
+        return TryInvokeStateHasChanged();
+    }
+
+    private Task OnThemeChanged(CancellationToken cancel)
+    {
+        return TryInvokeStateHasChanged(() =>
+        {
+            _theme = AppTheme.ThemeId;
+        });
+    }
+
+    private async Task SetTheme(string theme)
+    {
+        _theme = theme;
+        await AppTheme.SetTheme(theme, default);
+    }
+
+    public Task BrowseFiles()
+        => _browseModal!.Show();
+
+    private void Reload(string? relative = null)
+    {
+        Navigation.NavigateTo(GetReloadUri(relative), true);
+    }
+
+    public string GetReloadUri(string? relative = null)
+    {
+        var uri = new Uri(Navigation.Uri);
+        if (relative != null)
+            uri = new Uri(uri, relative);
+        string queryString = uri.GetLeftPart(UriPartial.Path);
+        if (_scale.X != 1)
+            queryString = PrinterStringExtensions.AppendQueryString(queryString, FrontendHelpers.UIScaleXKey, _scale.X);
+        if (_scale.Y != 1)
+            queryString = PrinterStringExtensions.AppendQueryString(queryString, FrontendHelpers.UIScaleYKey, _scale.Y);
+        if (_isLocalSession)
+            queryString = PrinterStringExtensions.AppendQueryString(queryString, FrontendHelpers.IsLocalSessionKey, _isLocalSession);
+        return queryString;
+    }
+}

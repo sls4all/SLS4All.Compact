@@ -1,0 +1,97 @@
+﻿@page "/videocameradebug"
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Temperature;
+@using SLS4All.Compact.Threading
+@using System.Diagnostics
+@inherits AppPage
+@inject ILightsClient Lights
+@inject ImageStreamingHelper ImageStreamingHelper
+@inject IJSRuntime JSRuntime
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" IsFullPage="true" />
+
+<div class="d-flex h-100 flex-column position-relative">
+    <img id="@_id" @key="_streamKey" src="@StreamUri" style="height:0px; flex-grow: 1; object-fit: contain" />
+    <div class="btn-group" style="position: absolute; top: 10px; left: 10px; z-index:3">
+        <button type="button" class="btn btn-theme dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Actions
+        </button>
+        <div class="dropdown-menu">
+            <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetLightsOn(true)">Lights on</a>
+            @for (int _i = 0; _i < Lights.LightCount; _i++)
+            {
+                var i = _i;
+                <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetLightsOn(true, 1 << i, 1.0f)">Light @(i+1) to 100%</a>
+            }
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetLightsOn(false)">Lights off</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string SelfPath = "/videocameradebug";
+    private readonly object _streamKey = new();
+    private readonly string _id = Guid.NewGuid().ToString();
+    private Timer _timer;
+    private const int _timerPeriod = 500;
+    private ImageStreamingHandle? _streamHandle;
+    private long _streamCounter;
+
+    private string StreamUri => $"/api/videocamera/image/{_id}?c={_streamCounter}";
+
+    public VideoCameraDebug()
+    {
+        _timer = new Timer(OnTimer);
+    }
+
+    private bool TryRegisterImageReady()
+    {
+        if (_streamHandle == null)
+            _streamHandle = new ImageStreamingHandle(JSRuntime, ImageStreamingHelper, _id, () =>
+            {
+                _streamCounter++;
+                return StreamUri;
+            });
+        return _streamHandle.TryRegisterImageReady();
+    }
+
+    private void TryUnregisterImageReady()
+    {
+        _streamHandle?.TryUnregisterImageReady();
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            return ValueTask.FromResult(TryRegisterImageReady());
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+        if (firstRender)
+            _timer.Change(0, _timerPeriod);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        TryUnregisterImageReady();
+        _timer.Dispose();
+        await base.DisposeAsync();
+    }
+
+    private async Task SetLightsOn(bool enabled, int? mask = null, float? power = null)
+    {
+        try
+        {
+            await Lights.SetLights(enabled, mask: mask, power: power);
+        }
+        catch (Exception)
+        {
+            // swallow
+        }
+    }
+}

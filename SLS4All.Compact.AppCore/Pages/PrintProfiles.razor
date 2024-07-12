@@ -1,0 +1,693 @@
+﻿@page "/print-profiles"
+@page "/print-profiles/{ProfileId}/{TabIndexName}"
+@using System.Diagnostics
+@using SLS4All.Compact.ComponentModel;
+@using SLS4All.Compact.Helpers;
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage;
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Collections
+@inherits AppPage
+@inject IPrintProfileStorage Storage
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IToastProvider ToastProvider
+@inject IAnalyseHeating AnalyseHeating
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" IsFullPage="true" />
+
+@{
+    var profile = _selectedItem.Profile;
+    var profileDefault = _defaultItem.Profile;
+}
+
+<ModalWrapper @ref="_deleteModal" class="app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Delete profile?
+            </h5>
+        </div>
+        <div class="modal-body">
+            Do you really want to delete profile <b>@_selectedItem.Profile.Name</b>?
+        </div>
+        <div class="modal-footer">
+            <button @onclick="OnDeleteConfirm" class="btn btn-danger">Delete profile!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Keep</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<CascadingValue IsFixed="true" Value="Validate">
+    <div class="container h-100 py-3 pr-0">
+        <div class="row align-items-end h-100">
+            <div class="col h-100 p-0">
+                <div class="d-flex align-items-start flex-column h-100">
+                    <div class="flex-grow-1 container profile-list">
+                        <div class="row profile-list">
+                            @foreach (var item_ in _items)
+                            {
+                                var item = item_;
+                                var isSelected = _selectedItem == item;
+                                <div @key="item" class="col-auto pb-1">
+                                    <ImageTitleButton Image="@(!item.IsDefault ? "/_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" : "/_content/SLS4All.Compact.AppCore/ui/img/print-profile-default.png")"
+                                                      SelectedColor="#00d1ff"
+                                                      IsSelected="@isSelected"
+                                                      class="profile-button"
+                                                      OnClick="() => SelectProfile(item)"
+                                                      ExternalCssScope="@CssScope"
+                                                      Title="@item.Profile.Name" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="container properties-panel">
+                        <div class="row">
+                            <div class="col">
+                                <ul class="nav nav-tabs">
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.General ? "active" : "")" @onclick="() => SelectTab(TabIndex.General)">General</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Nesting ? "active" : "")" @onclick="() => SelectTab(TabIndex.Nesting)">Nesting</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Slicing ? "active" : "")" @onclick="() => SelectTab(TabIndex.Slicing)">Slicing</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Heating1 ? "active" : "")" @onclick="() => SelectTab(TabIndex.Heating1)">Heating 1</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Heating2 ? "active" : "")" @onclick="() => SelectTab(TabIndex.Heating2)">Heating 2</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Cooling ? "active" : "")" @onclick="() => SelectTab(TabIndex.Cooling)">Cooling</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Power ? "active" : "")" @onclick="() => SelectTab(TabIndex.Power)">Power</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @(_tabIndex == TabIndex.Layers ? "active" : "")" @onclick="() => SelectTab(TabIndex.Layers)">Layers</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                                <form class="property-container">
+                                    <table class="table table-sm property-table">
+                                        <tbody>
+                                            @if (_tabIndex == TabIndex.General)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] { 
+                                                        nameof(profile.Name),
+                                                        nameof(profile.LayerThickness),
+                                                        nameof(profile.SlowRecoaterThickness),
+                                                        nameof(profile.PrintableWidth),
+                                                        nameof(profile.PrintableHeight),
+                                                        nameof(profile.PrintableDepth),
+                                                        nameof(profile.IsAutoHeatingEnabled),
+                                                        nameof(profile.IsAutoCoolingEnabled)
+                                                    }
+                                                )
+                                            }
+                                            else if (_tabIndex == TabIndex.Nesting)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] { 
+                                                        nameof(profile.PrintableXDiameter),
+                                                        nameof(profile.PrintableYDiameter),
+                                                        nameof(profile.CutCornerDistanceTopLeft),
+                                                        nameof(profile.CutCornerDistanceTopRight),
+                                                        nameof(profile.CutCornerDistanceBottomLeft),
+                                                        nameof(profile.CutCornerDistanceBottomRight),
+                                                        nameof(profile.NestingSpacing),
+                                                    }
+                                                )
+                                            }
+                                            else if (_tabIndex == TabIndex.Heating1)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] { 
+                                                        nameof(profile.HeatingTargetPowder),
+                                                        nameof(profile.HeatingTargetPrint),
+                                                        nameof(profile.HeatingTargetPrintBed),
+                                                        nameof(profile.HeatingRate),
+                                                        nameof(profile.HeatingMinimumTime),
+                                                        nameof(profile.HeatingLayerStartTemperature),
+                                                        nameof(profile.HeatingLayerEndTemperature),
+                                                        nameof(profile.HeatingLayerPeriod),
+                                                    }
+                                               )
+                                            }
+                                            else if (_tabIndex == TabIndex.Heating2)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] {
+                                                        nameof(profile.HeatingThreshold),
+                                                        nameof(profile.SurfaceTarget),
+                                                        nameof(profile.SurfaceTarget2),
+                                                        nameof(profile.SurfaceTarget2Time),
+                                                        nameof(profile.SurfaceHeatingRate),
+                                                        nameof(profile.HeatingTargetPrintBed2),
+                                                        nameof(profile.HeatingTargetPrintBed2Thickness1),
+                                                        nameof(profile.HeatingTargetPrintBed2Thickness2),
+                                                        nameof(profile.UseSoftHeater),
+                                                        profile.UseSoftHeater == true ? nameof(profile.SoftHeaterFilename) : null,
+                                                    }
+                                               )
+                                            }
+                                            else if (_tabIndex == TabIndex.Cooling)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] { 
+                                                        nameof(profile.CoolingThreshold1),
+                                                        nameof(profile.CoolingThreshold2),
+                                                        nameof(profile.CoolingTarget),
+                                                        nameof(profile.CoolingRate1),
+                                                        nameof(profile.CoolingRate2),
+                                                        nameof(profile.CoolingMinimumTime),
+                                                        nameof(profile.CoolingTimePercent),
+                                                    }
+                                                )
+                                            }
+                                            else if (_tabIndex == TabIndex.Power)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] {
+                                                        nameof(profile.LaserOnPercent),
+                                                        nameof(profile.LaserFirstOutlineEnergyDensity),
+                                                        nameof(profile.LaserOtherOutlineEnergyDensity),
+                                                        nameof(profile.LaserFillEnergyDensity),
+                                                        nameof(profile.TotalIncreasedEnergyDensity),
+                                                        nameof(profile.OutlinePowerPrecision),
+                                                        nameof(profile.OutlinePowerIncrease),
+                                                    }
+                                                )
+                                            }
+                                            else if (_tabIndex == TabIndex.Slicing)
+                                            {
+                                                var correction = profile.ShrinkageCorrectionStandard ??= new PrintProfileShrinkageCorrectionStandard();
+                                                var correctionDefault = profileDefault.ShrinkageCorrectionStandard ?? new PrintProfileShrinkageCorrectionStandard();
+                                                profile.ShrinkageCorrectionType = PrintProfileShrinkageCorrectionType.Standard;
+                                                @RenderValues(
+                                                    new (object, object, string?)[] {
+                                                        (profile, profileDefault, nameof(profile.OutlineCount)),
+                                                        (profile, profileDefault, nameof(profile.FillOutlineSkipCount)),
+                                                        (profile, profileDefault, nameof(profile.IsFillEnabled)),
+                                                        (profile, profileDefault, nameof(profile.HotspotOverlapPercent)),
+                                                        (profile, profileDefault, nameof(profile.XProjectionPercent)),
+                                                        (profile, profileDefault, nameof(profile.YProjectionPercent)),
+                                                        (correction, correctionDefault, nameof(correction.XScalePercent)),
+                                                        (correction, correctionDefault, nameof(correction.YScalePercent)),
+                                                        (correction, correctionDefault, nameof(correction.ZScalePercent)),
+                                                    }
+                                                )
+                                            }
+                                            else if (_tabIndex == TabIndex.Layers)
+                                            {
+                                                @RenderValues(
+                                                    profile,
+                                                    profileDefault,
+                                                    new[] {
+                                                        nameof(profile.BeginLayerTemperatureTarget),
+                                                        nameof(profile.BeginLayerTemperatureDelay),
+                                                        nameof(profile.BedPreparationTemperatureTarget),
+                                                        nameof(profile.BedPreparationTemperatureDelay),
+                                                        nameof(profile.BedPreparationThickness),
+                                                        nameof(profile.PrintCapTemperatureTarget),
+                                                        nameof(profile.PrintCapTemperatureDelay),
+                                                        nameof(profile.PrintCapThickness),
+                                                        nameof(profile.SinteredVolumeFactor),
+                                                        nameof(profile.AddPowderDepth),
+                                                    }
+                                                )
+                                            }
+                                        </tbody>
+                                    </table>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-auto p-0">
+                <table class="table table-borderless table-sm">
+                    <tbody>
+                        <tr>
+                            <td>
+                                <ImageTitleButton class="profile-action-button" Image="/_content/SLS4All.Compact.AppCore/ui/img/edit-add.png" OnClick="OnAdd" ExternalCssScope="@CssScope" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <ImageTitleButton class="profile-action-button" Image="/_content/SLS4All.Compact.AppCore/ui/img/edit-delete.png" IsEnabled="@(!_selectedItem.IsDefault)" OnClick="OnDelete" ExternalCssScope="@CssScope" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</CascadingValue>
+
+@code {
+    public enum TabIndex
+    {
+        NotSet = 0,
+        General,
+        Nesting,
+        Heating1,
+        Heating2,
+        Cooling,
+        Power,
+        Slicing,
+        Layers,
+    }
+
+    private sealed class Item
+    {
+        public PrintProfile Profile { get; set; } = null!;
+        public PrintProfile Original { get; set; } = null!;
+        public bool IsDefault { get; set; }
+        public bool IsAdded { get; set; }
+        public bool IsChanged => !Profile.Equals(Original);
+
+        public static Item CreateDummy()
+        {
+            var profile = new PrintProfile();
+            return new Item
+            {
+                Profile = profile,
+                Original = profile,
+            };
+        }
+    }
+
+    public const string SelfPath = "/print-profiles";
+    private const string CssScope = "b-print-profiles";
+    private const int _minRows = 5;
+    private static readonly TimeSpan s_saveDelay = TimeSpan.FromSeconds(5);
+    private int _saveIndex;
+    private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
+    private Item[] _items = Array.Empty<Item>();
+    private Item _defaultItem = Item.CreateDummy();
+    private Item _selectedItem = Item.CreateDummy();
+    private Guid _selectedId = default;
+    private TabIndex _tabIndex = TabIndex.General;
+    private ModalWrapper? _deleteModal;
+    private IDisposable? _locationChangingSubscription;
+
+    [Parameter]
+    public string ProfileId
+    {
+        get => _selectedItem.Profile.Id.ToString();
+        set
+        {
+            if (Guid.TryParse(value, out var id))
+            {
+                var item = _items.FirstOrDefault(x => x.Profile.Id == id);
+                if (item != null)
+                    _selectedItem = item;
+                else
+                    _selectedId = id;
+            }
+        }
+    }
+
+    [Parameter]
+    public string TabIndexName
+    {
+        get => _tabIndex.ToString();
+        set
+        {
+            if (Enum.TryParse<TabIndex>(value, true, out var tabIndex))
+                _tabIndex = tabIndex;
+        }
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        Storage.ProfilesChanged.AddHandler(OnProfilesChanged);
+        _locationChangingSubscription = NavigationManager.RegisterLocationChangingHandler(OnLocationChanging);
+        await ReloadProfiles();
+        if (_selectedId != Guid.Empty)
+        {
+            var item = _items.FirstOrDefault(x => x.Profile.Id == _selectedId);
+            if (item != null)
+                _selectedItem = item;
+        }
+    }
+
+    private Task OnProfilesChanged(CancellationToken cancel)
+    {
+        TryInvokeStateHasChanged(async () =>
+        {
+            await ReloadProfiles();
+            StateHasChanged();
+        }, cancel);
+        return Task.CompletedTask;
+    }
+
+    private static Item UpdateItem(Dictionary<Guid, Item> oldDict, PrintProfile profile)
+    {
+        if (!oldDict.TryGetValue(profile.Id, out var res))
+        {
+            res = new Item
+                {
+                    Original = profile.Clone(),
+                    Profile = profile,
+                };
+        }
+        else if (!res.IsChanged)
+        {
+            res.Original = profile.Clone();
+            res.Profile = profile;
+        }
+        else
+        {
+            // keep current changes
+        }
+        return res;
+    }
+
+    private async Task ReloadProfiles()
+    {
+        var defaultProfile = await Storage.GetDefaultProfile();
+        var userProfiles = await Storage.GetUserProfiles();
+        var oldDict = _items.ToDictionary(x => x.Profile.Id);
+        _defaultItem = UpdateItem(oldDict, defaultProfile);
+        _defaultItem.IsDefault = true;
+        var userItems = userProfiles.Select(profile =>
+        {
+            var item = UpdateItem(oldDict, profile);
+            item.IsDefault = false;
+            return item;
+        }).Concat(oldDict.Values.Where(x => x.IsAdded)).Distinct();
+        _items = new[] { _defaultItem }.Concat(userItems.OrderByNatural(x => x.Profile.Name)).ToArray();
+        if (Array.IndexOf(_items, _selectedItem) == -1)
+            _selectedItem = _defaultItem;
+        await ValidateInner(false);
+    }
+
+    private async Task SaveProfiles(bool delayed)
+    {
+        var index = ++_saveIndex;
+        if (delayed)
+        {
+            _ = Task.Delay(s_saveDelay).ContinueWith(prev =>
+            {
+                _ = InvokeAsync(async () =>
+                {
+                    if (_saveIndex == index)
+                        await SaveProfiles(false); // will not throw
+                });
+            });
+        }
+        else
+        {
+            try
+            {
+                foreach (var item in _items)
+                {
+                    if (item.IsChanged)
+                    {
+                        if (item.IsDefault)
+                            await Storage.SetDefaultProfile(item.Profile);
+                        else
+                            await Storage.UpsertUserProfile(item.Profile);
+                        item.Original = item.Profile.Clone();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to save the profiles",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+        }
+    }
+
+    private async ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        await SaveProfiles(false);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await SaveProfiles(false);
+        _locationChangingSubscription?.Dispose();
+        Storage.ProfilesChanged.RemoveHandler(OnProfilesChanged);
+        await base.DisposeAsync();
+    }
+
+    private Task SelectProfile(Item item)
+    {
+        _selectedItem = item;
+        StateHasChanged();
+        UpdateUri();
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ValidateInner(false);
+        await base.OnParametersSetAsync();
+    }
+
+    private async Task ValidateInner(bool save)
+    {
+        var stacked = _defaultItem.Profile.Clone();
+        var profile = _selectedItem.Profile;
+        stacked.MergeFrom(profile);
+        var validationContext = ValidationContextFactory.CreateContext() with
+            {
+                OverrideObj = x =>
+                {
+                    if (x == stacked)
+                        return profile;
+                    if (x == stacked.ShrinkageCorrectionStandard)
+                        return profile.ShrinkageCorrectionStandard;
+                    return null;
+                }
+            };
+        validationContext.SetState(new PrintProfileValidationState { IsDefaultProfile = _selectedItem.IsDefault });
+        var helper = await stacked.Validate(validationContext);
+        _validationErrors = helper.ToDictionary();
+        if (save)
+            await SaveProfiles(true);
+    }
+
+    private async Task<string?> Validate(object obj, string name)
+    {
+        await ValidateInner(false);
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, name), out var value))
+            return value.Message; // not valid
+        else
+        {
+            // valid, resort
+            var userItems = _items.Where(x => !x.IsDefault).ToArray();
+            _items = new[] { _defaultItem }.Concat(userItems.OrderByNatural(x => x.Profile.Name)).ToArray();
+            await SaveProfiles(true);
+            StateHasChanged();
+            return null;
+        }
+    }
+
+    private async Task OnAdd()
+    {
+        string name = "";
+        for (int i = 1; i < 100; i++)
+        {
+            var candidate = "Profile " + i;
+            if (!_items.Any(x => x.Profile.Name.Equals(candidate, StringComparison.CurrentCultureIgnoreCase)))
+            {
+                if (name == "")
+                    name = candidate;
+            }
+            else
+                name = "";
+        }
+        if (name == "")
+            name = "New Profile";
+        var profile = _selectedItem.IsDefault
+            ? new PrintProfile()
+            : _selectedItem.Profile.Clone();
+        profile.Id = Guid.NewGuid();
+        profile.Name = name;
+        var item = new Item
+            {
+                IsDefault = false,
+                Profile = profile,
+                IsAdded = true,
+            };
+        var userItems = _items.Where(x => !x.IsDefault).Append(item).ToArray();
+        _items = new[] { _defaultItem }.Concat(userItems.OrderByNatural(x => x.Profile.Name)).ToArray();
+        await SelectProfile(item);
+    }
+
+    private async Task OnDelete()
+    {
+        var item = _selectedItem;
+        if (item.IsDefault)
+            return;
+        var index = Array.IndexOf(_items, item);
+        if (index == -1)
+            return;
+        await _deleteModal!.Show();
+    }
+
+    private async Task OnDeleteConfirm()
+    {
+        await _deleteModal!.Close();
+        var item = _selectedItem;
+        if (item.IsDefault)
+            return;
+        var index = Array.IndexOf(_items, item);
+        if (index == -1)
+            return;
+        _items = _items.Where(x => x != item).ToArray();
+        _selectedItem = index < _items.Length ? _items[index] : _items[index - 1];
+        await Storage.RemoveProfile(item.Profile.Id);
+        await ValidateInner(false);
+        StateHasChanged();
+    }
+
+    private string? GetError(object obj, string path)
+    {
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, path), out var value))
+            return value.Message;
+        else
+            return null;
+    }
+
+    private RenderFragment RenderValues(
+        (object profile, object profileDefault, string? path)[] pathsSource,
+        int minRows = -1,
+        bool hideTopLine = true)
+    {
+        return builder =>
+        {
+            if (minRows == -1)
+                minRows = _minRows;
+            var paths = pathsSource.Where(x => x.path != null).ToArray()!;
+            var seq = 1;
+            var rows = Math.Max((paths.Length + 1) / 2, minRows);
+            var col1 = 0;
+            var col2 = rows;
+            var nonNullPath = paths.First();
+
+            void RenderColumn(object profile, object profileDefault, string path, bool hasPath, bool isLeft)
+            {
+                var value = StorageValue.Create(profile, path);
+                var valueDefault = profileDefault != profile ? StorageValue.Create(profileDefault, path) : null;
+                var visibility = hasPath ? "" : "invisible";
+                IInputValueTraits? traits = GetTraits(value);
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-1 property-name {(isLeft ? "" : "pl-4")} {visibility}");
+                builder.AddContent(seq++, value.Name.Name);
+                builder.CloseElement();
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-4 property-value {(isLeft ? "pr-4" : "")} {visibility}");
+                builder.AddContent(seq++, value.RenderValueEditor(valueDefault, profile, validationError: GetError(profile, value.Path), cssScope: CssScope, traits: traits));
+                builder.CloseElement();
+            }
+
+            for (int row = 0; row < rows; row++)
+            {
+                var hasFirstPath = col1 < paths.Length;
+                var hasSecondPath = col2 < paths.Length;
+                var firstPath = (hasFirstPath ? paths[col1++] : nonNullPath);
+                var secondPath = (hasSecondPath ? paths[col2++] : nonNullPath);
+                builder.OpenElement(seq++, "tr");
+                builder.AddAttribute(seq++, CssScope);
+                if (row == 0 && hideTopLine)
+                    builder.AddAttribute(seq++, "class", "hide-top-line");
+                RenderColumn(firstPath.profile, firstPath.profileDefault, firstPath.path!, hasFirstPath, true);
+                RenderColumn(secondPath.profile, secondPath.profileDefault, secondPath.path!, hasSecondPath, false);
+                builder.CloseElement();
+            }
+        };
+    }
+
+    private RenderFragment RenderValues(
+        object profile,
+        object profileDefault,
+        string?[] paths,
+        int minRows = -1,
+        bool hideTopLine = true)
+        => RenderValues(paths.Select(x => (profile, profileDefault, x)).ToArray(), minRows, hideTopLine);
+
+    private IInputValueTraits? GetTraits(StorageValue value)
+    {
+        if (value.Path == nameof(PrintProfile.SoftHeaterFilename))
+            return GetSoftHeaterTraits();
+        else if (value.Type == typeof(PrintProfileShrinkageCorrectionType?))
+            return GetPrintProfileSizeCorrectionTypeTraits();
+        else
+            return null;
+    }
+
+    private IInputValueTraits GetSoftHeaterTraits()
+    {
+        return new DelegatedFilenameInputValueTraits(
+            typeof(string),
+            x => "Click to browse",
+            x => (object?)x,
+            AnalyseHeating.FilenameMasks,
+            valueToEditableString: x => (string?)x,
+            directory: PrinterPath.Surface
+        );
+    }
+
+    private IInputValueTraits GetPrintProfileSizeCorrectionTypeTraits()
+    {
+        var choices = new object[] { PrintProfileShrinkageCorrectionType.None, PrintProfileShrinkageCorrectionType.Standard };
+        var traits = new DelegatedInputValueTraits(typeof(PrintProfileShrinkageCorrectionType?),
+            input => input switch
+            {
+                PrintProfileShrinkageCorrectionType.None => "None",
+                PrintProfileShrinkageCorrectionType.Standard => "Standard",
+                _ => "Other",
+            },
+            input => PrintProfileShrinkageCorrectionType.NotSet,
+            choices: choices);
+        return traits;
+    }
+
+    private void SelectTab(TabIndex tab)
+    {
+        _tabIndex = tab;
+        UpdateUri();
+    }
+
+    private void UpdateUri()
+    {
+        NavigationManager.NavigateTo($"{SelfPath}/{ProfileId}/{TabIndexName}", new NavigationOptions { ReplaceHistoryEntry = true });
+    }
+}

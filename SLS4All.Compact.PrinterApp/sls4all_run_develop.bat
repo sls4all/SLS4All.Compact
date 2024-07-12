@@ -1,0 +1,1 @@
+SLS4All.Compact.PrinterApp.exe --environment Development --Application:StartBrowser true

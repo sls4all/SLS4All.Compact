@@ -1,0 +1,490 @@
+﻿@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using Nito.AsyncEx
+@using SLS4All.Compact.Helpers
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Text
+@using SLS4All.Compact.Validation;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Numerics
+@using static SLS4All.Compact.Pages.Jobs
+
+@inherits AppComponent
+@inject IJobStorage JobStorage
+@inject ICurrentJobProvider JobProvider
+@inject IPrinterFileProvider FileProvider
+@inject IPrinterSettingsStorage SettingsStorage
+@inject IPrintProfileStorage ProfileStorage
+@inject IToastProvider ToastProvider
+@inject IJSRuntime JSRuntime
+@inject ILogger<CurrentJobAutomatic> Logger
+@inject IOptionsMonitor<FrontendOptions> FrontendOptions
+@inject INestingServiceScoped Nesting
+@inject IUnitConverter UnitConverter
+
+@{
+    var nestingStatus = Nesting.BackgroundTask.Status;
+    var isNesting = IsNesting;
+    var isPrinting = IsPrinting;
+    var hasObjects = Job?.Objects.Any(x => !x.IsEmpty && x.IsEnabled == true) == true;
+    var tabIndex = TabIndex;
+    var selectedObject = SelectedObject;
+    if (Job == null)
+    {
+        tabIndex = TabIndex.Jobs;
+    }
+    else
+        Job.EnsureObjects();
+}
+
+@if (tabIndex == TabIndex.General)
+{
+    Debug.Assert(Job != null);
+    @Jobs!.RenderValues(
+        new (object, string)[] {
+            (Job, nameof(Job.Name)),
+            (Job, nameof(Job.PrintProfile)),
+            (Job, nameof(Job.Width)),
+            (Job, nameof(Job.Height)),
+            (Job, nameof(Job.AvailableDepth)),
+            (Job, nameof(Job.LimitThickness)),
+            (Job.NestingState, nameof(Job.NestingState.DensityPercent)),
+        },
+        isEditable: !isNesting
+    )
+    <tr class="print-row">
+        <td colspan="2">
+            <div class="print-row-container">
+                @if (ValidationErrors.Count == 0 && !isNesting && hasObjects && !isPrinting)
+                {
+                    <button class="btn btn-primary btn--icon-text w-100" @onclick="() => Jobs!.ShowPrintModal()">
+                        <i class="bi bi-play-circle-fill" /> Print this job...
+                    </button>
+                }
+                else if (isPrinting)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Finish currently running <b>printing</b> before starting new.</span>
+                }
+                else if (isNesting)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Please finish geometry check before <b>printing</b> is possible.</span>
+                }
+                else if (!hasObjects)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Please add some objects before <b>printing</b> is possible.</span>
+                }
+                else
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-play-circle-fill" /> Please fix highlighted issues before <b>printing</b> is possible.</span>
+                }
+            </div>
+        </td>
+    </tr>
+}
+else if (tabIndex == TabIndex.Objects)
+{
+    Debug.Assert(Job != null);
+    for (int y = 0; y < Job.Height; y++)
+    {
+        var rowObjs = Job.Objects.Skip(y * Job.Width).Take(Job.Width).ToArray();
+        var isSelectedRow = Array.IndexOf(rowObjs, selectedObject) != -1;
+        <tr class="object-start-row @(isSelectedRow ? "table-active" : "")">
+            <td colspan="2">
+                <span>Row @(y + 1)</span>
+                <button class="btn btn-theme btn--icon-text" disabled="@(isNesting || !CanPasteObjectAttributes())" @onclick="() => PasteObjectAttributes(rowObjs)">
+                    <i class="bi bi-clipboard" />
+                </button>
+            </td>
+        </tr>
+        @for (int x = 0; x < Job.Width; x++)
+        {
+            var index = y * Job.Width + x;
+            var obj = Job.Objects[index];
+            if (obj.IsEmpty)
+            {
+                <tr @key="obj" class="object-missing-row">
+                    <td colspan="2">
+                        <button class="btn btn-theme" disabled="@isNesting" @onclick="() => Jobs!.AddObject(null, index)">
+                            Click to add model... <small>(X@(x + 1), Y@(y + 1))</small>
+                        </button>
+                        <button class="btn btn-theme btn--icon-text" disabled="@(isNesting || !CanPasteObjectAttributes())" @onclick="() => PasteObjectAttributes(obj)">
+                            <i class="bi bi-clipboard" />
+                        </button>
+                    </td>
+                </tr>
+            }
+            else
+            {
+                var isSelected = obj == selectedObject;
+                var objError = Jobs!.GetError(obj, "");
+                <tr class="object-name-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
+                    <td colspan="2">
+                        @obj.Name <small>(X@(x + 1), Y@(y + 1))</small>
+                    </td>
+                </tr>
+                <tr @key="obj" class="object-actions-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
+                    <td colspan="2">
+                        <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => SetEnabled(obj, !obj.IsEnabled)">
+                            @if (obj.IsEnabled)
+                            {
+                                <text><i class="bi bi-check-square" /> Enabled</text>
+                            }
+                            else
+                            {
+                                <text><i class="bi bi-square" /> Disabled</text>
+                            }
+                        </button>
+                        <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => RemoveObject(obj)">
+                            <i class="bi bi-trash" />
+                        </button>
+                        <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => Jobs!.SelectObject(obj, false, tabIndex: TabIndex.Attributes)">
+                            <i class="bi bi-list" /> Attributes
+                        </button>
+                        <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => CopyObjectAttributes(obj)">
+                            <i class="bi bi-copy" />
+                        </button>
+                        <button class="btn btn-theme btn--icon-text" disabled="@(isNesting || !CanPasteObjectAttributes())" @onclick="() => PasteObjectAttributes(obj)">
+                            <i class="bi bi-clipboard" />
+                        </button>
+                    </td>
+                </tr>
+                @Jobs!.RenderValues(
+                    new (object, string)[] {
+                        (obj, nameof(obj.LaserOnPercent)),
+                        (obj, nameof(obj.LaserFirstOutlineEnergyDensity)),
+                        (obj, nameof(obj.LaserOtherOutlineEnergyDensity)),
+                        (obj, nameof(obj.LaserFillEnergyDensity)),
+                        (obj, nameof(obj.OutlineCount)),
+                        (obj, nameof(obj.FillOutlineSkipCount)),
+                        (obj, nameof(obj.HotspotOverlapPercent)),
+                        (obj, nameof(obj.OutlinePowerPrecision)),
+                        (obj, nameof(obj.OutlinePowerIncrease)),
+                    },
+                    onClick: (_, _) => Jobs!.SelectObject(obj, true),
+                    classes: isSelected ? "table-active" : "",
+                    isEditable: !isNesting
+                )
+                @if (objError != null)
+                {
+                    <tr class="object-issues-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
+                        <td colspan="2">
+                            <span class="badge badge-warning text-wrap">@objError</span>
+                        </td>
+                    </tr>
+                }
+            }
+        }
+    }
+}
+else if (tabIndex == TabIndex.Attributes && selectedObject != null)
+{
+    Debug.Assert(Job != null);
+    var nestingMesh = TryGetOriginalNestingMesh(selectedObject);
+    <tr class="object-attributes-name-row" @onclick="() => Jobs!.DeselectConstraint()">
+        <td colspan="2">
+            @selectedObject.Name
+        </td>
+    </tr>
+    @if (nestingMesh != null)
+    {
+        var sx = UnitConverter.GetUnits(
+            selectedObject.Units == JobObjectUnits.Millimeters
+            ? nestingMesh.Bounds.Size.X
+            : nestingMesh.Bounds.Size.X * Numerics.Units.InchesToMm,
+            Numerics.Units.Millimeter, UnitConverterFlags);
+        var sy = UnitConverter.GetUnits(
+            selectedObject.Units == JobObjectUnits.Millimeters
+            ? nestingMesh.Bounds.Size.Y
+            : nestingMesh.Bounds.Size.Y * Numerics.Units.InchesToMm,
+            Numerics.Units.Millimeter, UnitConverterFlags);
+        var sz = UnitConverter.GetUnits(
+            selectedObject.Units == JobObjectUnits.Millimeters
+            ? nestingMesh.Bounds.Size.Z
+            : nestingMesh.Bounds.Size.Z * Numerics.Units.InchesToMm,
+            Numerics.Units.Millimeter, UnitConverterFlags);
+        <tr class="object-attributes-size-row" @onclick="() => Jobs!.DeselectConstraint()">
+            <td colspan="2">
+                <small>X:&nbsp;</small>@sx.Value<small>@sx.Unit</small>
+                <small>Y:&nbsp;</small>@sy.Value<small>@sy.Unit</small>
+                <small>Z:&nbsp;</small>@sz.Value<small>@sz.Unit</small>
+            </td>
+        </tr>
+    }
+    <tr class="object-actions-row">
+        <td colspan="2">
+            <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => SetEnabled(selectedObject, !selectedObject.IsEnabled)">
+                @if (selectedObject.IsEnabled)
+                {
+                    <i class="bi bi-check-square" />
+                }
+                else
+                {
+                    <i class="bi bi-square" />
+                }
+            </button>
+            <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => MoveObject(selectedObject, -1, 0)">
+                <i class="bi bi-arrow-left" />
+            </button>
+            <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => MoveObject(selectedObject, +1, 0)">
+                <i class="bi bi-arrow-right" />
+            </button>
+            <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => MoveObject(selectedObject, 0, -1)">
+                <i class="bi bi-arrow-up" />
+            </button>
+            <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => MoveObject(selectedObject, 0, +1)">
+                <i class="bi bi-arrow-down" />
+            </button>
+            <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="() => Jobs!.AddObject(null, Array.IndexOf(Job.Objects, selectedObject))">
+                <i class="bi bi-plus" />
+            </button>
+            <button class="btn btn-theme btn--icon-text ml-4" disabled="@isNesting" @onclick="() => RemoveObject(selectedObject)">
+                <i class="bi bi-trash" />
+            </button>
+        </td>
+    </tr>
+    @Jobs!.RenderValues(
+        new (object, string)[] {
+            (selectedObject, nameof(selectedObject.LaserOnPercent)),
+            (selectedObject, nameof(selectedObject.LaserFirstOutlineEnergyDensity)),
+            (selectedObject, nameof(selectedObject.LaserOtherOutlineEnergyDensity)),
+            (selectedObject, nameof(selectedObject.LaserFillEnergyDensity)),
+            (selectedObject, nameof(selectedObject.OutlineCount)),
+            (selectedObject, nameof(selectedObject.FillOutlineSkipCount)),
+            (selectedObject, nameof(selectedObject.HotspotOverlapPercent)),
+            (selectedObject, nameof(selectedObject.OutlinePowerPrecision)),
+            (selectedObject, nameof(selectedObject.OutlinePowerIncrease)),
+            (selectedObject, nameof(selectedObject.FillPhase)),
+            (selectedObject, nameof(selectedObject.IsThinObject)),
+            (selectedObject, nameof(selectedObject.Units)),
+            (selectedObject, nameof(selectedObject.Scale)),
+            (selectedObject, nameof(selectedObject.Yaw)),
+            (selectedObject, nameof(selectedObject.Pitch)),
+            (selectedObject, nameof(selectedObject.Roll)),
+            (selectedObject, nameof(selectedObject.XOffset)),
+            (selectedObject, nameof(selectedObject.YOffset)),
+            (selectedObject, nameof(selectedObject.ZOffset)),
+        },
+        isEditable: !isNesting
+    )
+}
+@if (Job != null && tabIndex == TabIndex.General)
+{
+    var progress = nestingStatus != null ? nestingStatus.Progress : 0;
+    var progressInt = (int)Math.Round(progress);
+    <tr class="nesting-row hide-top-line">
+        <td colspan="2">
+            <div class="nesting-row-container">
+                @if (isPrinting)
+                {
+                    <span class="badge badge-secondary text-wrap"><i class="bi bi-pip-fill" /> Geometry check not possible during printing for performance reasons.</span>
+                }
+                else if (!isNesting)
+                {
+                    <button class="btn btn-theme btn--icon-text" @onclick="() => StartDoCheck()">
+                        <i class="bi bi-pip-fill" /> Check geometry
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-danger btn--icon-text" @onclick="() => StopDoCheck()">
+                        <i class="bi bi-x-circle-fill" /> Cancel check
+                    </button>
+                    <div class="nesting-progress" style="background: linear-gradient(to right, rgba(128,255,255,0.15) @progressInt%, rgba(128,255,255,0.05) @progressInt%)">
+                        @(progress.RoundToDecimal(0, true))%
+                    </div>
+                }
+            </div>
+        </td>
+    </tr>
+}
+@code {
+    private const string CssScope = Jobs.CssScope;
+    private bool _inShouldRender;
+    private object? _clipboard;
+
+    [CascadingParameter]
+    private IMainLayout? MainLayout { get; set; }
+
+    [CascadingParameter]
+    private Jobs? Jobs { get; set; }
+
+    [Parameter]
+    public UnitConverterFlags UnitConverterFlags { get; set; }
+
+    public TabIndex TabIndex => Jobs!.CurrentTab;
+    public ProfilingJob? Job => (Jobs!.Job as ProfilingJobEntry)?.Obj;
+    public ProfilingJobObject? SelectedObject => (Jobs!.SelectedObject as ProfilingJobObjectEntry)?.Obj;
+    public Dictionary<ValidationKey, ValidationValue> ValidationErrors => Jobs!.ValidationErrors;
+
+    public async Task MoveObject(ProfilingJobObject obj, int ox, int oy)
+    {
+        if (Job == null || IsNesting)
+            return;
+        var oldIndex = Array.IndexOf(Job.Objects, obj);
+        var oldX = oldIndex % Job.Width;
+        var oldY = oldIndex / Job.Width;
+        var newX = Math.Clamp(oldX + ox, 0, Job.Width - 1);
+        var newY = Math.Clamp(oldY + oy, 0, Job.Height - 1);
+        var newIndex = newX + newY * Job.Width;
+        Job.EnsureObjects();
+        (Job.Objects[oldIndex], Job.Objects[newIndex]) = (Job.Objects[newIndex], Job.Objects[oldIndex]);
+        await Jobs!.ValidateInner(true);
+    }
+
+    public async Task RemoveObject(ProfilingJobObject obj)
+    {
+        if (Job == null || IsNesting)
+            return;
+        // NOTE: do not remove object file
+        Job.Objects = Job.Objects.Select(x => x != obj ? x : new ProfilingJobObject()).ToArray();
+        if (SelectedObject == obj)
+            await Jobs!.SelectObject(null, false);
+        await Jobs!.ValidateInner(true);
+    }
+
+    public async Task AddObject(string[] selection, object? state, CancellationToken cancel)
+    {
+        using var _ = Jobs!.IgnoreJobUpdated();
+        try
+        {
+            if (Job == null || IsNesting)
+                return;
+            var index = (int)state!;
+            ProfilingJobObject? lastObject = null;
+            var files = new List<(PrinterPath filename, string hash)>();
+            Job.EnsureObjects();
+            foreach (var filename in selection)
+            {
+                var hash = FileProvider.GetHash(filename);
+                var file = Job.TryGetObjectFileByHash(hash);
+                if (file != null)
+                {
+                    var obj = Job.Objects[index++];
+                    obj.Name = file.Name;
+                    obj.IsEnabled = true;
+                    lastObject = obj;
+                }
+                else
+                    files.Add((filename, hash));
+            }
+            string[] names;
+            try
+            {
+                names = await JobStorage.AddObjects(Job.Id, files.Select(x => x.filename), cancel);
+            }
+            catch (KeyNotFoundException) // job is missing?
+            {
+                await JobStorage.UpsertJob(Job, cancel);
+                names = await JobStorage.AddObjects(Job.Id, files.Select(x => x.filename), cancel);
+            }
+            foreach (var item in names.Zip(files, (name, file) => (name, file.filename, file.hash)))
+            {
+                Job.AddObjectFile(item.name, item.hash);
+                var obj = Job.Objects[index++];
+                obj.Name = item.name;
+                obj.IsEnabled = true;
+                lastObject = obj;
+            }
+            await JobStorage.UpsertJob(Job, cancel);
+            if (lastObject != null)
+                await Jobs!.SelectObject(lastObject, false);
+        }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to add object",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+        }
+        await Jobs!.ValidateInner(true);
+    }
+
+    public void OnParentStateHasChanged()
+    {
+        StateHasChanged();
+    }
+
+    protected override bool ShouldRender()
+    {
+        if (!_inShouldRender)
+        {
+            _inShouldRender = true;
+            try
+            {
+                Jobs!.OnChildStateHasChanged();
+                return base.ShouldRender();
+            }
+            finally
+            {
+                _inShouldRender = false;
+            }
+        }
+        else
+            return false;
+    }
+
+    private async Task SetEnabled(ProfilingJobObject obj, bool enabled)
+    {
+        if (Job == null || IsNesting)
+            return;
+        obj.IsEnabled = enabled;
+        await Jobs!.ValidateInner(true);
+    }
+
+    private void CopyObjectAttributes(ProfilingJobObject obj)
+    {
+        _clipboard = obj.Clone();
+    }
+
+    private bool CanPasteObjectAttributes()
+    {
+        return _clipboard is ProfilingJobObject;
+    }
+
+    private async Task PasteObjectAttributes(params ProfilingJobObject[] objs)
+    {
+        if (_clipboard is not ProfilingJobObject source)
+            return;
+        foreach (var obj in objs)
+        {
+            if (obj.IsEmpty && objs.Length == 1) // paste object attributes only if none is set and we are pasting to single cell, not a whole row
+            {
+                obj.Name = source.Name;
+                obj.Scale = source.Scale;
+                obj.Units = source.Units;
+                obj.Yaw = source.Yaw;
+                obj.Pitch = source.Pitch;
+                obj.Roll = source.Roll;
+                obj.XOffset = source.XOffset;
+                obj.YOffset = source.YOffset;
+                obj.ZOffset = source.ZOffset;
+                obj.FillPhase = source.FillPhase;
+            }
+            obj.LaserOnPercent = source.LaserOnPercent;
+            obj.LaserFirstOutlineEnergyDensity = source.LaserFirstOutlineEnergyDensity;
+            obj.LaserOtherOutlineEnergyDensity = source.LaserOtherOutlineEnergyDensity;
+            obj.LaserFillEnergyDensity = source.LaserFillEnergyDensity;
+            obj.OutlineCount = source.OutlineCount;
+            obj.FillOutlineSkipCount = source.FillOutlineSkipCount;
+            obj.HotspotOverlapPercent = source.HotspotOverlapPercent;
+            obj.OutlinePowerPrecision = source.OutlinePowerPrecision;
+            obj.OutlinePowerIncrease = source.OutlinePowerIncrease;
+        }
+        await Jobs!.ValidateInner(true);
+    }
+}

@@ -1,0 +1,25 @@
+﻿@page "/ping"
+@using SLS4All.Compact.ComponentModel;
+@layout EmptyLayout
+@inject IFirstRenderHandler FirstRenderHandler
+@inject Printer.IPrinterLifetime PrinterLifetime
+
+<text>
+    PAGE_HAS_LOADED
+</text>
+@if (FirstRenderHandler.HasHandled)
+{
+    <text>
+        PAGE_HAS_RENDERED
+    </text>
+}
+@if (PrinterLifetime.IsStopping)
+{
+    <text>
+        APP_IS_STOPPING
+    </text>
+}
+
+@code {
+    public const string SelfPath = "/ping";
+}

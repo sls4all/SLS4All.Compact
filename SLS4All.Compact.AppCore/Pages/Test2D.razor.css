@@ -1,0 +1,82 @@
+﻿.dummy {
+}
+
+.properties-panel {
+    font-family: 'AurulentSans', sans-serif;
+    font-size: 20px;
+}
+
+    .properties-panel .hide-top-line td, .properties-panel .hide-top-line th {
+        border-top: none;
+    }
+
+    .properties-panel .nav-link {
+        font-size: 20px;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .properties-panel .nav-tabs {
+        border-bottom: 0px solid white;
+    }
+
+    .properties-panel .nav-item {
+    }
+
+.property-table {
+    background: #8080801E;
+    border-radius: 10px;
+    position: relative;
+    top: 0px;
+}
+
+    .property-table .property-name {
+        white-space: nowrap;
+        color: #ffffff;
+        font-size: 20px;
+        vertical-align: middle;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .property-table .property-value {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: right;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+        .property-table .property-value .property-value-set {
+            /*font-weight: bold;*/
+        }
+
+        .property-table .property-value .property-value-set-parent {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+        .property-table .property-value .property-value-not-set {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+    .property-table .property-suffix {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .property-table .property-separator {
+    }
+
+    .property-table .property-buttons a {
+        margin-right: 5px;
+        font-size: 15px;
+    }
+

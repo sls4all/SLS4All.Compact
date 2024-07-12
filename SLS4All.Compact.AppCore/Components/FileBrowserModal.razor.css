@@ -1,0 +1,145 @@
+﻿.dummy {
+}
+
+.browser-container {
+    font-size: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.header-row {
+    padding-bottom: 10px;
+}
+
+    .header-row button {
+        font-size: 20px;
+    }
+
+    .header-row .col-auto {
+        padding-left: 5px;
+        padding-right: 5px;
+        margin-top: auto;
+        margin-bottom: auto;
+    }
+
+    .header-row .col {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .header-row .current-directory {
+    }
+
+    .header-row .dropdown-menu {
+        background-color: rgba(0, 48, 57, 0.96);
+    }
+
+        .header-row .dropdown-menu .dropdown-item {
+            font-size: 20px;
+        }
+
+.content-row {
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.table-empty {
+    text-align: center;
+    padding-top: 50px;
+    padding-bottom: 50px;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.table-entry {
+    text-align: center;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-bottom: 5px;
+    display: flex;
+    flex-flow: row;
+    align-items: center;
+}
+
+    .table-entry-directory .table-entry-icon {
+        color: yellow;
+    }
+
+.table-entry-icon {
+    font-size: 35px;
+    cursor: pointer;
+    color: #fff9;
+    height: 100%;
+    padding-right: 5px;
+}
+
+.table-entry-name {
+    display: block;
+    overflow-wrap: anywhere;
+    text-align: left;
+    border-radius: 5px;
+    padding: 5px;
+    height: 100%;
+    width: 100%;
+}
+
+.table-entry-directory .table-entry-name {
+}
+
+.table-entry-file .table-entry-name {
+    background: #00000015;
+}
+
+.table-entry-selected .table-entry-icon {
+    color: #fff;
+}
+
+.table-entry-selected .table-entry-name {
+    background: #00000050;
+}
+
+
+/*.table-entries {
+    font-size: 17px;
+    overflow-y: auto;
+    height: 70vh;
+    display: block;
+}
+
+.table-entries-check {
+    vertical-align: middle;
+    padding: 0px;
+}
+
+    .table-entries-check input {
+        vertical-align: middle;
+        width: 80px;
+        height: 30px;
+    }
+
+.table-entries-icon {
+    font-size: 27px;
+    padding-left: 0px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.table-entries-directory .table-entries-icon {
+    color: yellow;
+}
+
+.table-entries-name {
+    padding-left: 0px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.table-entries-directory .table-entries-name {
+    font-weight: bold;
+}
+*/

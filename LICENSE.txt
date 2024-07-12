@@ -1,0 +1,539 @@
+LICENSE AGREEMENT
+
+For formatted and PDF version of this License Agreement please visit 
+https://sls4all.com/terms-of-use/ .
+
+This  License  Agreement  specifies  the  rights  and  obligations  of  company
+anyteq development s.r.o., registered office at Lesní 405, 251 62 Mukařov, Czech Republic,
+Company Id.: 172 35 836, registered in the Commercial Register kept by the Municipal Court in
+Prague, Section C, File 368482, established under the law of the Czech Republic (“Licensor”),
+and any person exercising rights under this License (“Licensee or You”).
+
+1.   DEFINITIONS
+
+
+1.1.   For the purposes of this Agreement terms bellow have the following meaning:
+
+- Adapted Material
+
+Means material subject to Copyright and Similar Rights that is
+derived from or based upon the Licensed Material and in which
+the Licensed Material is translated, altered, arranged,
+transformed, or otherwise modified in a manner requiring
+permission under the Copyright and Similar Rights held by the
+Licensor.
+
+- Agreement
+
+Means this License Agreement containing License to the
+Product and License to the Program.
+
+- License to the Product
+
+Means License to deal with the Product in accordance with the
+terms of the Agreement.
+
+- License to the Program
+
+Means License to deal with the Program in accordance with the
+terms of the Agreement.
+
+- Copyright
+
+Means also copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+- Program
+
+Means any copyrightable work other than Product licensed
+under License to the Program.
+
+- Convey or Share
+
+Means to communicate to the public or distribute.
+
+- Product or Products
+
+Means any device, component, work or physical object,
+whether in finished or intermediate form, arising from the use,
+application or processing of Covered Source.
+
+- Make
+
+Means to create or configure something, whether by
+manufacture, assembly, compiling, loading or applying Covered
+Source or another Product or otherwise.
+
+- Available Component
+
+Means any part, sub-assembly, library or code which:
+
+a)  is licensed to You as Complete Source under a
+Compatible License; or
+
+b) is available, at the time a Product or the Source
+containing it is first Conveyed, to You and any other
+prospective licensees
+
+    i.  with sufficient rights and information (including
+    any configuration and programming files and
+    information  about  its  characteristics  and
+    interfaces) to enable it either to be Made itself, or
+    to be sourced and used to Make the Product; or
+
+    ii.  as part of the normal distribution of a tool used to
+    design or Make the Product.
+
+- External Material
+
+Means anything (including Source) which:
+
+a) is only combined with Covered Source in such a way that
+it  interfaces with  the Covered  Source using  a
+documented interface which is described in the Covered
+Source; and
+
+b) is not a derivative of or contains Covered Source, or, if it
+is, it is solely to the extent necessary to facilitate such
+interfacing.
+
+- Covered Source
+
+Means Source that is explicitly made available under License to
+the Product.
+
+- Source
+
+Means information such as design materials or digital code
+which can be applied to Make or test a Product or to prepare a
+Product for use, Conveyance or sale, regardless of its medium
+or how it is expressed. It may include Notices.
+
+- Complete Source
+
+Means the set of all Source necessary to Make a Product, in the
+preferred form for making modifications, including necessary
+installation and interfacing information both for the Product, and
+for any included Available Components. If the format is
+proprietary, it must also be made available in a format (if the
+proprietary tool can create it) which is viewable with a tool
+available to potential licensees and licensed under a license
+approved by the Free Software Foundation or the Open Source
+Initiative. Complete Source need not include the Source of any
+Available Component, provided that You include in the
+Complete Source sufficient information to enable a recipient to
+Make or source and use the Available Component to Make the
+Product.
+
+- Source Location
+
+Means a location where a Licensor has placed Covered Source,
+and which that Licensor reasonably believes will remain easily
+accessible for at least three years for anyone to obtain a digital
+copy.
+
+- Notice or Notices
+
+Means copyright, acknowledgement and trademark notices,
+Source Location references, modification notices and all
+notices that refer to License to the Product and/or License to
+the Program and to the disclaimer of warranties that are
+included in the Covered Source.
+
+- Licensee or You
+
+Means any person exercising rights under this License.
+
+- URI
+
+Uniform resource identifier.
+
+- Licensor
+
+Means company anyteq development s.r.o., with registered
+seat at Lesni 405, 251 62 Mukarov, Czechia, business ID No.
+17235836.
+
+
+1.2.   This Agreement is split in two parts. First part with Sections 2.1 through 2.7 specifies
+the rights and obligations of Licensor and Licensee in regards hardware of the
+Products. Second part with Sections 3.1 through 3.7 specifies the rights and
+obligations of Licensor and Licensee in regards to the Program.
+
+2.   PRODUCTS
+
+2.1.  Applicability
+
+2.1.1. This License to the Product governs the use, copying, modification, Conveying
+of Covered Source and Products, and the Making of Products for non-
+commercial purposes only. By exercising any right granted under this License
+to the Product, You irrevocably accept these terms and conditions.
+
+2.1.2. This License to the Product is granted by the Licensor directly to You, and shall
+apply worldwide and without limitation in time.
+
+2.1.3. You shall not attempt to restrict by contract or otherwise the rights granted
+under this License to the Product to other Licensees.
+
+2.1.4. This License to the Product is not intended to restrict fair use, fair dealing, or
+any other similar right.
+
+2.2.   Copying, Modifying and Conveying Covered Source
+
+2.2.1. You may copy and Convey verbatim copies of Covered Source, in any medium,
+provided You retain all Notices.
+
+2.2.2. You may modify Covered Source, other than Notices, provided that You
+irrevocably undertake to make that modified Covered Source available from a
+Source Location should You Convey a Product in circumstances where the
+recipient does not otherwise receive a copy of the modified Covered Source. In
+each case subsection 2.2.3 shall apply. You may only delete Notices if they are
+
+
+no longer applicable to the corresponding Covered Source as modified by You
+and You may add additional Notices applicable to Your modifications.
+
+2.2.3. You may Convey modified Covered Source (with the effect that You shall also
+become a Licensor) provided that You:
+
+2.2.3.1. retain Notices as required in subsection 2.2.2;
+
+2.2.3.2. add a Notice to the modified Covered Source stating that You have
+modified it, with the date and brief description of how You have
+modified it;
+
+2.2.3.3. add a Source Location Notice for the modified Covered Source if You
+Convey in circumstances where the recipient does not otherwise
+receive a copy of the modified Covered Source; and
+
+2.2.3.4. license the modified Covered Source under the terms and conditions
+of this License to the Product. Such modified Covered Source must
+be licensed as a whole, but excluding Available Components
+contained in it or External Material to which it is interfaced, which
+remain licensed under their own applicable licenses.
+
+2.3.   Making and Conveying Products
+
+2.3.1. You may Make Products, and/or Convey them, provided that You either provide
+each recipient with a copy of the Complete Source or ensure that each recipient
+is notified of the Source Location of the Complete Source. That Complete
+Source includes Covered Source and You must accordingly satisfy Your
+obligations set out in Section 2.2.2. If specified in a Notice, the Product must
+visibly and securely display the Source Location on it or its packaging or
+documentation in the manner specified in that Notice.
+
+2.3.2. Where You Convey a Product which incorporates External Material, the
+Complete Source for that Product which You are required to provide under
+subsection 2.3.1 need not include any Source for the External Material.
+
+2.3.3. You may license Products under terms of Your choice, provided that such
+terms do not restrict or attempt to restrict any recipients' rights under this
+License to the Product to the Covered Source.
+
+2.4.   Research and Development
+
+2.4.1. You may Convey Covered Source, modified Covered Source or Products to a
+legal entity carrying out development, testing or quality assurance work on Your
+behalf provided that the work is performed on terms which prevent the entity
+from both using the Source or Products for its own internal purposes and
+Conveying the Source or Products or any modifications to them to any person
+other than You. Any modifications made by the entity shall be deemed to be
+made by You pursuant to subsection 2.2.2.
+
+2.5.   Disclaimer and Liability
+
+2.5.1. The Covered Source and any Products are provided as-is and as-available and
+any express or implied warranties, including, but not limited to, implied
+warranties of satisfactory quality, non-infringement of third-party rights, and
+
+
+fitness for a particular purpose or use are disclaimed in respect of any Source
+or Product to the maximum extent permitted by law. The Licensor makes no
+representation that any Source or Product does not or will not infringe any
+patent, copyright, trade secret or other proprietary right. The entire risk as to the
+use, quality, and performance of any Source or Product shall be with You and
+not the Licensor. This disclaimer of warranty is an essential part of this License
+to the Product and a condition for the grant of any rights granted under this
+License to the Product.
+
+2.5.2. The Licensor shall, to the maximum extent permitted by law, have no liability
+for direct, indirect, special, incidental, consequential, exemplary, punitive or
+other damages of any character including, without limitation, procurement of
+substitute goods or services, loss of use, data or profits, or business
+interruption, however caused and on any theory of contract, warranty, tort
+(including negligence), product liability or otherwise, arising in any way in
+relation to the Covered Source, modified Covered Source and/or the Making or
+Conveyance of a Product, even if advised of the possibility of such damages,
+and You shall hold the Licensor(s) free and harmless from any liability, costs,
+damages, fees and expenses, including claims by third parties, in relation to
+such use.
+
+2.5.3. The Licensee shall use all reasonable care to protect its own safety and health
+and the safety and health of persons affected by its acts or omissions in
+handling the Product.
+
+2.5.4. The Licensee agree not to hold the Licensor responsible for injuries or damages
+they may suffer in connection with the handling of the Product.
+
+2.5.5. The Licensor shall not be liable for any damages incurred by the Licensee in
+connection with movement of mechanical parts of the Product or overheating
+of the Product.
+
+2.5.6. The Licensor shall not be liable for any injury to the Licensee caused by an
+electric current or laser beam.
+
+2.5.7. In the cases where the liability of the Licensor for the damage caused cannot
+be excluded and the Licensee’s claims may not be lawfully waived, but the
+Licensor’s liability may be limited, it holds that the entire obligation of the
+Licensor to compensate for damage shall be limited to the amount paid by the
+Licensee for using the Product, or to the amount of USD 10.
+
+2.6.  Patents
+
+2.6.1. Patent and trademark rights are not licensed under this License to the Product.
+
+2.6.2. If You institute patent litigation against any entity (including a cross-claim or
+counterclaim in a lawsuit) alleging that the Covered Source or a Product
+constitutes direct or contributory patent infringement, or You seek any
+declaration that a patent licensed to You under this License to the Product is
+invalid or unenforceable then any rights granted to You under this License to the
+Product shall terminate as of the date such process is initiated.
+
+2.7.  General
+
+
+2.7.1. If any provisions of this License to the Product are or subsequently become
+invalid or unenforceable for any reason, the remaining provisions shall remain
+effective.
+
+2.7.2. You shall not use any of the name (including acronyms and abbreviations),
+image, or logo by which the Licensor is known, except where needed to comply
+with section 2.2, or where the use is otherwise allowed by law. Any such
+permitted use shall be factual and shall not be made so as to suggest any kind
+of endorsement or implication of involvement by the Licensor or its personnel.
+
+2.7.3. This License to the Product shall terminate with immediate effect if You fail to
+comply with any of its terms and conditions.
+
+2.7.4. This License to the Product shall not be enforceable except by a Licensor acting
+as such, and third-party beneficiary rights are specifically excluded.
+
+3.   PROGRAM
+
+3.1.   Scope of the License
+
+3.1.1. Subject to the terms and conditions of this License to the Program, the Licensor
+hereby grants You a worldwide, royalty-free, non-sublicensable, non-
+exclusive, irrevocable license to exercise the licensed rights in the Licensed
+Program to:
+
+3.1.1.1. reproduce and Share the Licensed Program, in whole or in part, for
+non-commercial purposes only; and
+
+3.1.1.2. produce, reproduce, and Share Adapted Material for non-commercial
+purposes only.
+
+3.1.2. For the avoidance of doubt, where exceptions and limitations apply to Your use,
+this License to the Program does not apply, and You do not need to comply with
+its terms and conditions.
+
+3.1.3. The term of this License to the Program is specified in 3.5.1.
+
+3.1.4. The Licensor authorizes You to exercise the Licensed rights in all media and
+formats whether now known or hereafter created, and to make technical
+modifications necessary to do so. The Licensor waives and/or agrees not to
+assert any right or authority to forbid You from making technical modifications
+necessary to exercise the Licensed rights, including technical modifications
+necessary to circumvent Effective Technological Measures. For purposes of
+this License to the Program, simply making modifications authorized by this
+Section 3.1.4 never produces Adapted Material.
+
+3.1.5. Every recipient of the Licensed Program automatically receives an offer from
+the Licensor to exercise the Licensed rights under the terms and conditions of
+this License to the Program.
+
+3.1.6. You may not offer or impose any additional or different terms or conditions on,
+or apply any Effective Technological Measures to, the Licensed Program if
+doing so restricts exercise of the Licensed rights by any recipient of the
+Licensed Program.
+
+
+3.1.7. Nothing in this License to the Program constitutes or may be construed as
+permission to assert or imply that You are, or that Your use of the Licensed
+Program is, connected with, or sponsored, endorsed, or granted official status
+by, the Licensor or others designated to receive attribution as provided in
+Section 3.2.2.1.1.
+
+3.1.8. Moral rights, such as the right of integrity, are not licensed under this License to
+the Program, nor are publicity, privacy, and/or other similar personality rights;
+however, to the extent possible, the Licensor waives and/or agrees not to
+assert any such rights held by the Licensor to the limited extent necessary to
+allow You to exercise the Licensed rights, but not otherwise.
+
+3.1.6. Patent and trademark rights are not licensed under this License to the Program.
+
+3.1.10. To the extent possible, the Licensor waives any right to collect royalties from
+You for the exercise of the Licensed rights, whether directly or through a
+collecting society under any voluntary or waivable statutory or compulsory
+licensing scheme. In all other cases the Licensor expressly reserves any right
+to collect such royalties, including when the Licensed Program is used other
+than for non-commercial purposes.
+
+3.2.   License Conditions
+
+3.2.1. Your exercise of the Licensed rights is expressly made subject to the following
+conditions.
+
+3.2.2. If You Share the Licensed Program (including in modified form), You must:
+
+3.2.2.1. retain the following if it is supplied by the Licensor with the Licensed
+Program:
+
+3.2.2.1.1. identification of the creator(s) of the Licensed Program
+and any others designated to receive attribution, in any
+reasonable manner requested by the Licensor (including
+by pseudonym if designated);
+
+3.2.2.1.2. a copyright Notice;
+
+3.2.2.1.3.  a Notice that refers to this License to the Program;
+
+3.2.2.1.4.  a Notice that refers to the disclaimer of warranties;
+
+3.2.2.1.5.  a URI or hyperlink to the Licensed Program to the extent
+reasonably practicable;
+
+3.2.2.2. indicate if You modified the Licensed Program and retain an indication
+of any previous modifications; and
+
+3.2.2.3. indicate the Licensed Program is licensed under this License to the
+Program, and include the text of, or the URI or hyperlink to, this
+License to the Program.
+
+3.2.3. You may satisfy the conditions in Section 3.2.3 in any reasonable manner based
+on the medium, means, and context in which You Share the Licensed Program.
+For example, it may be reasonable to satisfy the conditions by providing a URI
+or hyperlink to a resource that includes the required information.
+
+
+3.2.4. If requested by the Licensor, You must remove any of the information required
+by Section 3.2.2.1 to the extent reasonably practicable.
+
+3.2.5. If You Share Adapted Material You produce, the Adapter's License You apply
+must not prevent recipients of the Adapted Material from complying with this
+License to the Program.
+
+3.3.   Sui Generis Database Rights
+
+3.3.1. Where the Licensed rights include Sui Generis Database Rights that apply to
+Your use of the Licensed Program:
+
+3.3.1.1. for the avoidance of doubt, Section 3.1.1 grants You the right to
+extract, reuse, reproduce, and Share all or a substantial portion of the
+contents of the database for non-commercial purposes only;
+
+3.3.1.2. if You include all or a substantial portion of the database contents in a
+database in which You have Sui Generis Database Rights, then the
+database in which You have Sui Generis Database Rights (but not its
+individual contents) is Adapted Material; and
+
+3.3.1.3. You must comply with the conditions in Section 3.2.2 if You Share all
+or a substantial portion of the contents of the database.
+
+3.3.2. For the avoidance of doubt, this Section 3.3 supplements and does not replace
+Your obligations under this License to the Program where the Licensed rights
+include other Copyright and Similar Rights.
+
+3.4.   Disclaimer of Warranties and Limitation of Liability
+
+3.4.1. Unless otherwise separately undertaken by the Licensor, to the extent
+possible, the Licensor offers the Licensed Program as-is and as-available, and
+makes no representations or warranties of any kind concerning the Licensed
+Program, whether express, implied, statutory, or other. This includes, without
+limitation, warranties of title, fitness for a particular purpose, non-infringement,
+absence of latent or other defects, accuracy, or the presence or absence of
+errors, whether or not known or discoverable. Where disclaimers of warranties
+are not allowed in full or in part, this disclaimer may not apply to You.
+
+3.4.2. To the extent possible, in no event will the Licensor be liable to You on any legal
+theory (including, without limitation, negligence) or otherwise for any direct,
+special, indirect, incidental, consequential, punitive, exemplary, or other
+losses, costs, expenses, or damages arising out of this License to the Program
+or use of the Licensed Program, even if the Licensor has been advised of the
+possibility of such losses, costs, expenses, or damages. Where a limitation of
+liability is not allowed in full or in part, this limitation may not apply to You.
+
+3.4.3. The disclaimer of warranties and limitation of liability provided above shall be
+interpreted in a manner that, to the extent possible, most closely approximates
+an absolute disclaimer and waiver of all liability.
+
+3.5.   Term and Termination
+
+3.5.1. This License to the Program applies for the term of the Copyright and Similar
+Rights licensed here. However, if You fail to comply with this License to the
+
+
+Program, then Your rights under this License to the Program terminate
+automatically.
+
+3.5.2. Where Your right to use the Licensed Program has terminated under Section
+3.5.1, it reinstates:
+
+3.5.2.1. automatically as of the date the violation is cured, provided it is cured
+within 30 days of Your discovery of the violation; or
+
+3.5.2.2. upon express reinstatement by the Licensor.
+
+3.5.3. For the avoidance of doubt, this Section 3.5.2 does not affect any right the
+Licensor may have to seek remedies for Your violations of this License to the
+Program.
+
+3.5.4. For the avoidance of doubt, the Licensor may also offer the Licensed Program
+under separate terms or conditions or stop distributing the Licensed Program
+at any time; however, doing so will not terminate this License to the Program.
+
+3.5.5. Sections 1; 3.4; 3.5; 3.6 and 3.7 survive termination of this License to the
+Program.
+
+3.6.   Other Terms and Conditions
+
+3.6.1. The Licensor shall not be bound by any additional or different terms or
+conditions communicated by You unless expressly agreed.
+
+3.6.2. Any arrangements, understandings, or agreements regarding the Licensed
+Program not stated herein are separate from and independent of the terms and
+conditions of this License to the Program.
+
+3.7.  Interpretation
+
+3.7.1. For the avoidance of doubt, this License to the Program does not, and shall not
+be interpreted to, reduce, limit, restrict, or impose conditions on any use of the
+Licensed Program that could lawfully be made without permission under this
+License to the Program.
+
+3.7.2. To the extent possible, if any provision of this License to the Program is deemed
+unenforceable, it shall be automatically reformed to the minimum extent
+necessary to make it enforceable. If the provision cannot be reformed, it shall
+be severed from this License to the Program without affecting the enforceability
+of the remaining terms and conditions.
+
+3.7.3. No term or condition of this License to the Program will be waived and no failure
+to comply consented to unless expressly agreed to by the Licensor.
+
+3.7.4. Nothing in this License to the Program constitutes or may be interpreted as a
+limitation upon, or waiver of, any privileges and immunities that apply to the
+Licensor or You, including from the legal processes of any jurisdiction or
+authority.
+
+4.   FINAL PROVISIONS
+
+4.1.   This Agreement has been drawn up in the English language only.
+
+
+4.2.   All disputes arising under or relating to this Agreement shall be governed by, and
+construed in accordance with, the laws of Czechia. Each Party irrevocably agrees that
+the courts of Czechia shall have exclusive jurisdiction to settle any dispute or claim
+(including non-contractual disputes or claims) arising out of or in connection with this
+Agreement.
+
+End of document.
