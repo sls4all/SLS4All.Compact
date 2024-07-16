@@ -28,9 +28,9 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.100.3.340"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.100.3.340"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.100.3.340"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.104.0.361"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.104.0.361"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.104.0.361"/>
 		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.6" />
 	</ItemGroup>
 

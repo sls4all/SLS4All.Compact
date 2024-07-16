@@ -199,7 +199,7 @@ namespace SLS4All.Compact.Pages
             public abstract decimal BasePitch { get; set; }
             public abstract decimal BaseRoll { get; set; }
             public abstract decimal Freedom { get; set; }
-            public abstract bool AllowAnyYaw { get; set; }
+            public abstract AutomaticJobObjectConstraintAnyYawMode AllowAnyYawMode { get; set; }
 
             [return: NotNullIfNotNull("obj")]
             public static implicit operator JobObjectConstraintEntry?(AutomaticJobObjectConstraint? obj)
@@ -232,10 +232,10 @@ namespace SLS4All.Compact.Pages
                 set => Obj.Freedom = value;
             }
 
-            public override bool AllowAnyYaw
+            public override AutomaticJobObjectConstraintAnyYawMode AllowAnyYawMode
             {
-                get => Obj.AllowAnyYaw;
-                set => Obj.AllowAnyYaw = value;
+                get => Obj.AllowAnyYawMode;
+                set => Obj.AllowAnyYawMode = value;
             }
         }
 
@@ -401,7 +401,7 @@ namespace SLS4All.Compact.Pages
                 (float)(constraint.BaseYaw / 180) * MathF.PI,
                 (float)(constraint.BasePitch / 180) * MathF.PI,
                 (float)(constraint.BaseRoll / 180) * MathF.PI);
-            return new NestedRotationConstraint(matrix, (float)(constraint.Freedom / 180) * MathF.PI, constraint.AllowAnyYaw);
+            return new NestedRotationConstraint(matrix, (float)(constraint.Freedom / 180) * MathF.PI, constraint.AllowAnyYawMode);
         }
 
         private async Task RemoveConstrainedInstanceInner(Action? beginWork)
@@ -488,7 +488,7 @@ namespace SLS4All.Compact.Pages
                     _constrainedInstance.Instance, 
                     _playConstraintIncrementPerSec / freedomFactor, 
                     freedom, 
-                    freedom == 0 && _selectedConstraint.AllowAnyYaw);
+                    freedom == 0 && _selectedConstraint.AllowAnyYawMode is not AutomaticJobObjectConstraintAnyYawMode.Disabled);
             }
             else
                 await _root.StopConstrainedInstanceAnimation();

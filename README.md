@@ -17,10 +17,18 @@ and provide access to the modified source.
 >We are not responsible for any damages, injuries, etc. caused in connection with the software. By exercising any right granted under the License, you irrevocably accept all its terms and conditions.
 
 ## NuGet packages
-SLS4All NuGet packages for parts that have not yet been open-sourced are published on GitHub. 
+SLS4All NuGet packages for parts that have not yet been open-sourced are published on GitHub package source.
 These NuGet packages are referenced from the projects present in this repository.
 Path to NuGet package source is https://nuget.pkg.github.com/sls4all/index.json.
-This source should already be configured in nuget.config in the root of this repository.
+This source should already be configured in nuget.config in the root of this repository. 
+Please note that GitHub [currently requires](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry#authenticating-with-a-personal-access-token) a registered GitHub account and associated token to download NuGet packages, even if the packages are marked public. 
+
+GitHub package source has a limitation that it requires authentification even for public packages like ours. 
+You will need a registered GitHub account, generate a [personal access token (PAT)](https://github.com/settings/tokens/new) 
+with at least a *read:packages* permission and use your e-mail and the generated 
+token as a password to pull the packages and build the project.
+
+[Full GitHub NuGet packages documentation.](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry)
 
 ## Building
 All sources in this repository are compilable using [.NET 8.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0). 

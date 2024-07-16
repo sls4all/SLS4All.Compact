@@ -263,7 +263,7 @@ else if (tabIndex == TabIndex.Attributes && selectedObject != null)
                             <i class="bi bi-arrow-repeat" />&nbsp;Reset base rotation
                         </a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item @(constraint.Freedom == 0 && !constraint.AllowAnyYaw ? "disabled" : "")" href="javascript:void(0)" @onclick="() => Jobs!.TogglePlayConstraint(selectedObject, constraint, true)">
+                        <a class="dropdown-item @(constraint.Freedom == 0 && constraint.AllowAnyYawMode is AutomaticJobObjectConstraintAnyYawMode.Disabled ? "disabled" : "")" href="javascript:void(0)" @onclick="() => Jobs!.TogglePlayConstraint(selectedObject, constraint, true)">
                             @if (!PlayConstraint || !isSelected)
                             {
                                 <i class="bi bi-play-fill" />
@@ -290,7 +290,7 @@ else if (tabIndex == TabIndex.Attributes && selectedObject != null)
                 (constraint, nameof(constraint.BasePitch)),
                 (constraint, nameof(constraint.BaseRoll)),
                 (constraint, nameof(constraint.Freedom)),
-                (constraint, nameof(constraint.AllowAnyYaw)),
+                (constraint, nameof(constraint.AllowAnyYawMode)),
             ];
         }
         else
@@ -306,7 +306,7 @@ else if (tabIndex == TabIndex.Attributes && selectedObject != null)
             items,
             classes: isSelected ? "table-active" : "",
             onClick: (obj, path) => Jobs!.SelectConstraint(selectedObject, constraint, true),
-            onValueEntered: (obj, path) => Jobs!.TogglePlayConstraint(selectedObject, constraint, true, path is nameof(constraint.Freedom) or nameof(constraint.AllowAnyYaw)),
+            onValueEntered: (obj, path) => Jobs!.TogglePlayConstraint(selectedObject, constraint, true, path is nameof(constraint.Freedom) or nameof(constraint.AllowAnyYawMode)),
             isEditable: !isNesting
         )
         constraintIndex++;

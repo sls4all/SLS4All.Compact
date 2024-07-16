@@ -599,6 +599,22 @@
         return traits;
     }
 
+    private IInputValueTraits GetAnyYawTraits()
+    {
+        var choices = new object[] { AutomaticJobObjectConstraintAnyYawMode.Disabled, AutomaticJobObjectConstraintAnyYawMode.Enabled, AutomaticJobObjectConstraintAnyYawMode.EnabledAndUpsideDown };
+        var traits = new DelegatedInputValueTraits(typeof(AutomaticJobObjectConstraintAnyYawMode),
+            input => input switch
+            {
+                AutomaticJobObjectConstraintAnyYawMode.Disabled => "Disabled",
+                AutomaticJobObjectConstraintAnyYawMode.Enabled => "Enabled",
+                AutomaticJobObjectConstraintAnyYawMode.EnabledAndUpsideDown => "Enabled + upside down",
+                _ => "Other",
+            },
+            input => AutomaticJobObjectConstraintAnyYawMode.NotSet,
+            choices: choices);
+        return traits;
+    }
+
     private IInputValueTraits GetPrintProfileTraits()
     {
         var choices = _printProfiles.Select(x => (object?)x.Reference).ToArray();
@@ -645,6 +661,8 @@
                     traits = GetJobObjectUnitsTraits();
                 else if (value.Type == typeof(PrintJobType))
                     traits = GetJobTypeTraits();
+                else if (value.Type == typeof(AutomaticJobObjectConstraintAnyYawMode))
+                    traits = GetAnyYawTraits();
                 builder.OpenElement(seq++, "tr");
                 if (onClick != null)
                     builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => onClick(firstPath.obj, firstPath.path)));
