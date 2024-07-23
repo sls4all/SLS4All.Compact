@@ -7,6 +7,9 @@
 [Kestrel.Endpoints.Http]
 Url = "http://0.0.0.0:80"
 
+[DefaultPrintProfileInitializer]
+DefaultsDirectory = "Defaults/Inova"
+
 [ImageCodePlotter]
 PlotWidth = 500
 PlotHeight = 500

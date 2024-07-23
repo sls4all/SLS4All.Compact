@@ -284,9 +284,9 @@ namespace SLS4All.Compact.Pages
                 var profiles = new List<PrintProfile>();
                 foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
                 {
-                    var isValid = await item.profile.Validate(validationContext);
+                    var isValid = await item.Profile.Validate(validationContext);
                     if (isValid.IsValid)
-                        profiles.Add(item.profile);
+                        profiles.Add(item.Profile);
                 }
                 _profiles = profiles.ToArray();
                 await _profileModal!.Show();

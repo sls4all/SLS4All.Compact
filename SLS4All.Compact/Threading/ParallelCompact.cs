@@ -89,11 +89,12 @@ namespace SLS4All.Compact.Threading
             TNumber from,
             TNumber toExclusive,
             int maxDegreeOfParallelism,
+            int maxQueuedResults,
             Func<TNumber, CancellationToken, (TNumber Next, Task<TResult> Task)> factory,
             CancellationToken cancel)
             where TNumber : INumber<TNumber>
         {
-            var channel = Channel.CreateUnbounded<TResult>(new UnboundedChannelOptions
+            var channel = Channel.CreateBounded<TResult>(new BoundedChannelOptions(maxQueuedResults)
             {
                 AllowSynchronousContinuations = false,
                 SingleReader = true,

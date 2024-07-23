@@ -32,6 +32,7 @@ using SLS4All.Compact.McuClient.PipedMcu;
 using SLS4All.Compact.Printing;
 using NReco.Logging.File;
 using SLS4All.Compact.Numerics;
+using SLS4All.Compact.Storage.PrintProfiles;
 
 namespace SLS4All.Compact
 {
@@ -325,6 +326,9 @@ namespace SLS4All.Compact
 
             services.Configure<FileSystemTempBlobStorageOptions>(Configuration.GetSection("FileSystemTempBlobStorage"));
             services.AddAsImplementationAndInterfaces<FileSystemTempBlobStorage>(ServiceLifetime.Singleton);
+
+            services.Configure<DefaultPrintProfileInitializerOptions>(Configuration.GetSection("DefaultPrintProfileInitializer"));
+            services.AddAsImplementationAndInterfaces<DefaultPrintProfileInitializer>(ServiceLifetime.Transient);
 
             services.Configure<PrintingServiceOptions>(Configuration.GetSection("PrintingService"));
             services.AddAsImplementationAndInterfaces<PrintingServiceScoped>(ServiceLifetime.Scoped);

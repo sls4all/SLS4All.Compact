@@ -359,7 +359,7 @@
     private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
     private PrintJobDescription[] _jobs = Array.Empty<PrintJobDescription>();
     private JobEntry? _job, _jobOriginal;
-    private JobSort _jobSort = JobSort.Name;
+    private JobSort _jobSort = JobSort.DateDesc;
     private TabIndex __tabIndex = TabIndex.Jobs;
     private TabIndex _tabIndex
     {
@@ -437,12 +437,12 @@
         var profiles = new List<PrintProfileEntry>();
         foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
         {
-            var isValid = (await item.profile.Validate(validationContext)).IsValid;
+            var isValid = (await item.Profile.Validate(validationContext)).IsValid;
             profiles.Add(new PrintProfileEntry
                 {
-                    Profile = item.profile,
+                    Profile = item.Profile,
                     IsValid = isValid,
-                    IsDefault = item.isDefault,
+                    IsDefault = item.IsDefault,
                 });
         }
         _printProfiles = profiles.ToArray();

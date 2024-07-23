@@ -188,20 +188,27 @@
                         @if (Traits.IsNumber && (!string.IsNullOrWhiteSpace(ValueText) || !string.IsNullOrWhiteSpace(DefaultValueText)) && !string.IsNullOrWhiteSpace(Unit))
                         {
                             var valueText = !string.IsNullOrWhiteSpace(ValueText) ? ValueText : DefaultValueText!;
-                            var value = Convert.ToDecimal(valueText);
-                            var alternateUnits = UnitConverter.TryGetAlternateUnits(value, Unit);
-                            if (alternateUnits.Length > 0)
+                            try
                             {
-                                <div class="row pb-1">
-                                    <span class="badge badge-pill badge-info">
-                                        <text>@valueText <i>@Unit</i></text>
-                                        @foreach (var item in alternateUnits)
-                                        {
-                                            <text> = </text>
-                                            <text>@item.Value <i>@item.Unit</i></text>
-                                        }
-                                    </span>
-                                </div>
+                                var value = Convert.ToDecimal(valueText);
+                                var alternateUnits = UnitConverter.TryGetAlternateUnits(value, Unit);
+                                if (alternateUnits.Length > 0)
+                                {
+                                    <div class="row pb-1">
+                                        <span class="badge badge-pill badge-info">
+                                            <text>@valueText <i>@Unit</i></text>
+                                            @foreach (var item in alternateUnits)
+                                            {
+                                                <text> = </text>
+                                                <text>@item.Value <i>@item.Unit</i></text>
+                                            }
+                                        </span>
+                                    </div>
+                                }
+                            }
+                            catch (Exception ex) when (ex is FormatException or OverflowException)
+                            {
+                                // swallow
                             }
                         }
                         @if (IsEditable && _choices == null && !Traits.IsBoolean && !Traits.HasStringToValue)
