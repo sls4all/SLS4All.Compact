@@ -1097,7 +1097,11 @@
                                 },
                                 cancel);
                         }
-                        await session.Succeeded((detail, cancel) =>
+                        await session.Succeeded(
+                            PrintingGlobal.SoftCancelMode == PrintingSoftCancelMode.NotSet
+                                ? PrintSessionResult.Succeeded
+                                : PrintSessionResult.SucceededPartially,
+                            (detail, cancel) =>
                             {
                                 detail.HeatingDuration = newStats?.HeatingDuration ?? TimeSpan.Zero;
                                 detail.ObjectsDuration = newStats?.ObjectsDuration ?? TimeSpan.Zero;

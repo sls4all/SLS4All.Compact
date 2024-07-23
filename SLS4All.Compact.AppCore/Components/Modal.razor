@@ -6,7 +6,7 @@
     @if (Parent == null)
     {
         <div @key="_selfKey" @ref="@ElementRef" id="@ElementId" class="modal @ClassNames" style="@StyleNames" @attributes="@Attributes">
-            <div class="modal-dialog" style="@_scrollFixStyle">
+            <div class="modal-dialog" style="@_scrollFixStyle" @attributes="@JustAttributesWithCssScope">
                 @if (ChildContent != null)
                 {
                     @ChildContent(this)
@@ -25,7 +25,7 @@
             var sibling = sibling_;
             <DummyComponent @key="sibling.Modal._selfKey" @ref="sibling.Container">
                 <div @ref="@sibling.Modal.ElementRef" id="@sibling.Modal.ElementId" class="modal @sibling.Modal.ClassNames" style="@sibling.Modal.StyleNames" @attributes="@sibling.Modal.Attributes">
-                    <div class="modal-dialog" style="@_scrollFixStyle">
+                    <div class="modal-dialog" style="@_scrollFixStyle" @attributes="@sibling.Modal.JustAttributesWithCssScope">
                         @if (sibling.Modal.ChildContent != null)
                         {
                             @sibling.Modal.ChildContent(sibling.Modal)

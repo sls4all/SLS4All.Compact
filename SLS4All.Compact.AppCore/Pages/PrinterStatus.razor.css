@@ -188,3 +188,22 @@
                     width: 100%;
                     height: 100%;
                 }
+
+.stop-modal > .modal-dialog {
+    max-width: 600px;
+}
+
+.soft-cancel-table {
+}
+
+    .soft-cancel-table td {
+        border-top: none;
+        font-size: 17px;
+        vertical-align: middle;
+    }
+
+    .soft-cancel-table .btn {
+        font-size: 17px;
+        width: 100%;
+        white-space: nowrap;
+    }

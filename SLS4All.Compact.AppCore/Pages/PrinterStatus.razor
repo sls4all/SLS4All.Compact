@@ -27,7 +27,7 @@
 
 <PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
 
-<ModalWrapper @ref="_stopModal" class="fade app-modal" Context="modal">
+<ModalWrapper @ref="_stopModal" class="fade app-modal stop-modal" Context="modal" ExternalCssScope="@CssScope">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">
@@ -35,15 +35,32 @@
             </h5>
         </div>
          <div class="modal-body">
-            Do you really want to stop the current print? You can <i>Stop immeditalely</i>, that will immediately end all procedures including cooling and will almost certanly spoil the print results. If you want to stop the printing but still go trough the <i>Print cap</i> and <i>Cooling procedure</i>, choose <i>Cap &amp; cool</i>.
+            Do you really want to stop the current print?
         </div>
         <div class="modal-footer">
-            @if (!PrintingGlobal.SoftCancelToken.IsCancellationRequested)
-            {
-                <button class="btn btn-danger" @onclick="OnStopSoftConfirm">Cap &amp; cool!</button>
-            }
-            <button class="btn btn-danger" @onclick="OnStopHardConfirm">Stop immediately!</button>
-            <button class="btn btn-secondary" @onclick="() => modal.Close()">Continue printing</button>
+            <table class="table table-sm soft-cancel-table">
+                <tbody>
+                    @if (PrintingGlobal.SoftCancelMode == PrintingSoftCancelMode.NotSet)
+                    {
+                        <tr>
+                            <td><button class="btn btn-danger" @onclick="() => OnStopSoftConfirm(PrintingSoftCancelMode.CapAndCool)">Cap &amp; cool!</button></td>
+                            <td>Ends the current layer and goes to the <i>Print cap</i> and <i>Cooling procedure</i></td>
+                        </tr>
+                        <tr>
+                            <td><button class="btn btn-danger" @onclick="() => OnStopSoftConfirm(PrintingSoftCancelMode.CoolNow)">Cool now!</button></td>
+                            <td>Ends the current layer and goes to <i>Cooling procedure</i></td>
+                        </tr>
+                    }
+                    <tr>
+                        <td><button class="btn btn-danger" @onclick="OnStopHardConfirm">Stop immediately!</button></td>
+                        <td>Immediately ends all procedures including cooling. Will almost certanly spoil the print results.</td>
+                    </tr>
+                    <tr>
+                        <td><button class="btn btn-secondary" @onclick="() => modal.Close()">Continue printing</button></td>
+                        <td>Goes back to <i>status page</i></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </ModalWrapper>
@@ -62,7 +79,7 @@
     var slicingStatus = PrintingGlobal.BackgroundTask.Status;
     var isActive = slicingStatus != null && !slicingStatus.IsCompleted;
     var isCancelling = isActive && PrintingGlobal.BackgroundTask.IsCancelled;
-    var isSoftStop = isActive && PrintingGlobal.SoftCancelToken.IsCancellationRequested;
+    var softStopMode = isActive ? PrintingGlobal.SoftCancelMode : PrintingSoftCancelMode.NotSet;
     var progressStatus = slicingStatus?.ProgressStatus as PrintingStatus;
     var canEjectCake = !isActive && PrintSessionStorage.CanEjectCake;
     var progress = progressStatus?.Estimate.Incomplete == false ? progressStatus.Estimate.Progress : 0;
@@ -128,9 +145,14 @@
                                                     }
                                                     else
                                                     {
-                                                        if (isSoftStop)
+                                                        switch (softStopMode)
                                                         {
-                                                            <span class="text-warning">Cap&amp;cool > </span>
+                                                            case PrintingSoftCancelMode.CapAndCool:
+                                                                <span class="text-warning">Cap&amp;cool > </span>
+                                                                break;
+                                                            case PrintingSoftCancelMode.CoolNow:
+                                                                <span class="text-warning">Cool now > </span>
+                                                                break;
                                                         }
                                                         switch (slicingStatus!.ProgressStatus)
                                                         {
@@ -408,7 +430,7 @@
                         <div class="col-3">
                             @if (canEjectCake)
                             {
-                                <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-eject.png" OnClick="OnEject" Title="Eject" class="print-controls-button" ExternalCssScope="@CssScope" />
+                                 <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-eject.png" OnClick="OnEject" Title="Eject" class="print-controls-button" ExternalCssScope="@CssScope" />
                             }
                             else
                             {
@@ -570,9 +592,9 @@
         NavigationManager.NavigateTo(ThermoCamera.SelfPath);
     }
 
-    private async Task OnStopSoftConfirm()
+    private async Task OnStopSoftConfirm(PrintingSoftCancelMode mode)
     {
-        PrintingGlobal.SoftCancel();
+        PrintingGlobal.SoftCancel(mode);
         await _stopModal!.Close();
     }
 

@@ -16,6 +16,13 @@ namespace SLS4All.Compact.Printing
 {
     public record class PrintingStatus(PrintingPhase Phase, double PhaseDone, double PhaseTotal, PrintingEstimate Estimate, string JobName);
 
+    public enum PrintingSoftCancelMode
+    {
+        NotSet = 0,
+        CapAndCool,
+        CoolNow,
+    }
+
     public interface IPrintingService
     {
         public static WeakConcurrentDictionary<string, IPrintingService> Services { get; } = new();
@@ -25,7 +32,7 @@ namespace SLS4All.Compact.Printing
         bool IsPrinting { get; }
         int PreviewLayerFinalCount { get; }
         PrintedLayer[] PreviewLayers { get; }
-        CancellationToken SoftCancelToken { get; }
+        PrintingSoftCancelMode SoftCancelMode { get; }
 
         void Clear();
         Task AnalyseHeating(PrintSetup setup, string jobName, CancellationToken cancel);
@@ -56,7 +63,7 @@ namespace SLS4All.Compact.Printing
             Func<PrintingServiceLayerStats, Task>? saveStats,
             CancellationToken cancel);
         void UpdateLayerStatsProfile(PrintingServiceLayerStats stats, PrintProfile profile);
-        void SoftCancel();
+        void SoftCancel(PrintingSoftCancelMode mode);
     }
 
     public static class PrintingServiceExtensions
