@@ -1027,10 +1027,6 @@ window.getBrowserTimeZone = function () {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-window.fadeOutPageLoader = function () {
-    $(".page-loader").fadeOut();
-}
-
 window.openThemes = function () {
     a = $(".themes");
     $("body").addClass("aside-toggled"), $(a).addClass("toggled"), $(".content, .header").append('<div class="sa-backdrop" data-sa-action="aside-close" data-sa-target=' + a + " />");

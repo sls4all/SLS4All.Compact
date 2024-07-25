@@ -308,6 +308,9 @@ var SLS4All;
                         else
                             navigator.clipboard.writeText(text);
                     }
+                    static hidePageLoader() {
+                        $(".page-loader").fadeOut();
+                    }
                     static appExitShowLoader(refreshUri) {
                         $(".page-loader").fadeIn();
                         $("#components-reconnect-modal").children().remove();

@@ -112,7 +112,7 @@ namespace SLS4All.Compact.ComponentModel
                     {
                         var layout = page.MainLayout;
                         if (layout != null)
-                            await layout.SetPageLoader();
+                            await layout.AppExitShowLoader();
                     }
                     catch (Exception ex)
                     {

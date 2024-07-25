@@ -15,7 +15,7 @@ namespace SLS4All.Compact.Pages
     public interface IMainLayout
     {
         void SetTitle(PrinterPageTitle? title);
-        Task SetPageLoader();
+        Task AppExitShowLoader();
         Vector2 Scale { get; }
         RgbaF BackgroundColor { get; }
         bool IsLocalSession { get; }

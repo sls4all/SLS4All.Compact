@@ -297,6 +297,10 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
                 navigator.clipboard.writeText(text); // swallow promise result
         }
 
+        public static hidePageLoader(): void {
+            $(".page-loader").fadeOut();
+        }
+
         public static appExitShowLoader(refreshUri: string): void {
             $(".page-loader").fadeIn();
             $("#components-reconnect-modal").children().remove();

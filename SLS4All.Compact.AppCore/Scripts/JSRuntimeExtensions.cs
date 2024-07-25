@@ -28,7 +28,16 @@ namespace SLS4All.Compact.Scripts
             return isInitialized;
         }
 
-        public static ValueTask CollectGarbage(this IJSRuntime runtime, CancellationToken cancel = default)
-            => runtime.InvokeVoidAsync("AppHelpersInvoke", cancel, "collectGarbage");
+        public static async ValueTask CollectGarbage(this IJSRuntime runtime, CancellationToken cancel = default)
+        {
+            try
+            {
+                await runtime.InvokeVoidAsync("AppHelpersInvoke", cancel, "collectGarbage");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or JSDisconnectedException)
+            {
+                // swallow
+            }
+        }
     }
 }

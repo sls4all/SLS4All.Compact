@@ -664,12 +664,12 @@
         await base.OnParametersSetAsync();
     }
 
-    public async Task SetPageLoader()
+    public async Task AppExitShowLoader()
     {
         var uri = new Uri(Navigation.Uri);
         var refreshUri = uri.AbsolutePath == ShutdownPage.SelfPath
-            ? IndexPage.SelfPath
-            : uri.PathAndQuery;
+            ? new Uri(uri, IndexPage.SelfPath + uri.Query).ToString()
+            : uri.ToString();
         await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "appExitShowLoader", refreshUri);
     }
 
@@ -687,7 +687,7 @@
             try
             {
                 await UpdateReloadUriInJS();
-                await JSRuntime.InvokeVoidAsync("fadeOutPageLoader");
+                await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "hidePageLoader");
                 await FirstRenderHandler.HandleFirstRender();
             }
             catch (InvalidOperationException)
@@ -695,7 +695,6 @@
                 // prerendering
             }
         }
-        await base.OnInitializedAsync();
     }
 
     protected override async Task OnInitializedAsync()
