@@ -9,11 +9,17 @@ using SLS4All.Compact.McuClient.Pins;
 
 namespace SLS4All.Compact.McuClient
 {
+    public enum PowerPinType
+    {
+        NotSet = 0,
+        Halogen,
+    }
+
     public interface IMcuPowerManager
     {
         PowermanState GetState();
         void Set(IMcuOutputPin pin, McuPinValue value);
-        void SetupPin(IMcuOutputPin pin, double watts, int priority);
+        void SetupPin(IMcuOutputPin pin, double watts, int priority, PowerPinType type);
         void SetTotalMaxConsumption(double watts);
     }
 }

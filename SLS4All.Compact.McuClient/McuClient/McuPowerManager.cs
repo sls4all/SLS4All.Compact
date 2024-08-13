@@ -4,7 +4,7 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Renci.SshNet.Messages.Connection;
 using SLS4All.Compact.Diagnostics;
@@ -21,6 +21,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using SLS4All.Compact.Storage.PrinterSettings;
 
 namespace SLS4All.Compact.McuClient
 {
@@ -36,7 +37,7 @@ namespace SLS4All.Compact.McuClient
         private sealed class PinInfo : IComparable<PinInfo>
         {
             public required IMcuOutputPin Pin { get; init; }
-            public long MaxConsumption { get; set; }
+            public double MaxConsumptionWatts { get; set; }
             public float Value { get; set; }
             public SystemTimestamp OnTime { get; set; }
             public SystemTimestamp PowerTime { get; set; }
@@ -44,6 +45,8 @@ namespace SLS4All.Compact.McuClient
             public bool HasProcessed { get; set; }
             public TimeSpan PowerDebt { get; set; }
             public int Priority { get; set; }
+            public PowerPinType Type { get; set; }
+            public long PowerConsumption { get; set; }
 
             public int CompareTo(PinInfo? other)
             {
@@ -65,28 +68,33 @@ namespace SLS4All.Compact.McuClient
 
         private readonly ILogger<McuPowerManager> _logger;
         private readonly IOptions<McuPowerManagerOptions> _options;
+        private readonly IPrinterSettingsStorage _printerSettings;
         private readonly McuManager _manager;
         private readonly Dictionary<IMcuOutputPin, PinInfo> _infos;
         private readonly object _syncRoot = new();
         private readonly long _baseConsumption = 0;
         private readonly List<PinInfo> _switchList;
         private readonly List<PinInfo> _powerOffList;
+        private volatile PrinterPowerSettings _powerSettings;
         private long _currentConsumption = 0;
         private long _maxConsumption = 0;
 
         public McuPowerManager(
             IOptions<McuPowerManagerOptions> options,
-            McuManager manager)
+            McuManager manager,
+            IPrinterSettingsStorage printerSettings)
         {
             _logger = manager.CreateLogger<McuPowerManager>();
             _options = options;
             _manager = manager;
+            _printerSettings = printerSettings;
 
             var o = options.Value;
             _switchList = new();
             _powerOffList = new();
             _infos = new();
-            _baseConsumption = GetConsumption(o.BaseConsumption);
+            _powerSettings = _printerSettings.GetPowerSettings();
+            _baseConsumption = GetConsumption(o.BaseConsumption, PowerPinType.NotSet, _powerSettings);
             _currentConsumption = 0;
             SetTotalMaxConsumption(o.MaxConsumption);
             Task.Run(SwitchThread);
@@ -100,17 +108,18 @@ namespace SLS4All.Compact.McuClient
                 var currentPower = GetWatts(_currentConsumption + _baseConsumption);
                 var poweredOnDesc = new StringBuilder();
                 var required = 0L;
+                var powerSettings = _powerSettings;
                 foreach (var info in _infos.Values)
                 {
                     if (!info.OnTime.IsEmpty)
-                        required += info.MaxConsumption;
+                        required += info.PowerConsumption;
                     if (!info.PowerTime.IsEmpty)
                     {
                         if (poweredOnDesc.Length != 0)
                             poweredOnDesc.Append("; ");
                         poweredOnDesc.Append(info.Pin.Name);
                         poweredOnDesc.Append('=');
-                        poweredOnDesc.Append(GetWatts(info.MaxConsumption));
+                        poweredOnDesc.Append(GetWatts(info.PowerConsumption));
                     }
                 }
                 var requiredPower = GetWatts(required + _baseConsumption);
@@ -124,7 +133,8 @@ namespace SLS4All.Compact.McuClient
 
         public void SetTotalMaxConsumption(double watts)
         {
-            var maxConsumption = GetConsumption(watts) - _baseConsumption;
+            var powerSettings = _powerSettings;
+            var maxConsumption = GetConsumption(watts, PowerPinType.NotSet, powerSettings) - _baseConsumption;
             if (maxConsumption < 0)
                 maxConsumption = 0;
             if (_maxConsumption == maxConsumption)
@@ -133,28 +143,27 @@ namespace SLS4All.Compact.McuClient
             {
                 var now = SystemTimestamp.Now;
                 foreach (var info in _infos.Values)
-                    TryPowerOffInner(info, now);
+                    TryPowerOffInner(info, now, powerSettings);
                 _maxConsumption = maxConsumption;
-                SwitchPinsInner();
+                SwitchPinsInner(powerSettings);
             }
         }
 
-        public void SetupPin(IMcuOutputPin pin, double watts, int priority)
+        public void SetupPin(IMcuOutputPin pin, double watts, int priority, PowerPinType type)
         {
             lock (_syncRoot)
             {
-                lock (_syncRoot)
-                {
-                    var now = SystemTimestamp.Now;
-                    ref var info = ref CollectionsMarshal.GetValueRefOrAddDefault(_infos, pin, out var exists);
-                    if (info == null)
-                        info = new PinInfo() { Pin = pin };
-                    var wasPoweredOff = TryPowerOffInner(info, now);
-                    info.MaxConsumption = GetConsumption(watts);
-                    info.Priority = priority;
-                    if (wasPoweredOff)
-                        TryPowerOnInner(info, now, false);
-                }
+                var powerSettings = _powerSettings;
+                var now = SystemTimestamp.Now;
+                ref var info = ref CollectionsMarshal.GetValueRefOrAddDefault(_infos, pin, out var exists);
+                if (info == null)
+                    info = new PinInfo() { Pin = pin };
+                var wasPoweredOff = TryPowerOffInner(info, now, powerSettings);
+                info.MaxConsumptionWatts = watts;
+                info.Priority = priority;
+                info.Type = type;
+                if (wasPoweredOff)
+                    TryPowerOnInner(info, now, false, powerSettings);
             }
         }
 
@@ -191,6 +200,7 @@ namespace SLS4All.Compact.McuClient
             lock (_syncRoot)
             {
                 var now = SystemTimestamp.Now;
+                var powerSettings = _powerSettings;
                 ref var info = ref CollectionsMarshal.GetValueRefOrAddDefault(_infos, pin, out _);
                 if (info == null)
                     info = new PinInfo() { Pin = pin };
@@ -202,29 +212,31 @@ namespace SLS4All.Compact.McuClient
                         info.PowerDuration = TimeSpan.Zero;
                     }
                     info.Value = value.Single;
-                    var poweredOn = TryPowerOnInner(info, now, force: true); // NOTE: force, so we update MCU next on period (max duration)
+                    var poweredOn = TryPowerOnInner(info, now, force: true, powerSettings); // NOTE: force, so we update MCU next on period (max duration)
                     if (!poweredOn && GetMinPoweredPriorityInner() < info.Priority) // if there is anything with lower priority to sacrifice, switch now
-                        SwitchPinsInner(explicitPin: info);
+                        SwitchPinsInner(powerSettings, explicitPin: info);
                 }
                 else
                 {
                     info.Value = 0;
                     info.OnTime = default;
-                    TryPowerOffInner(info, now);
+                    TryPowerOffInner(info, now, powerSettings);
                     info.PowerDuration = TimeSpan.Zero;
                 }
             }
         }
 
-        private bool TryPowerOnInner(PinInfo info, SystemTimestamp now, bool force)
+        private bool TryPowerOnInner(PinInfo info, SystemTimestamp now, bool force, PrinterPowerSettings powerSettings)
         {
             if (info.PowerTime.IsEmpty) // not powered on
             {
-                if (_currentConsumption + info.MaxConsumption <= _maxConsumption)
+                var infoMaxConsumption = GetConsumption(info.MaxConsumptionWatts, info.Type, powerSettings);
+                if (_currentConsumption + infoMaxConsumption <= _maxConsumption)
                 {
                     // we have have enough power to spare, switch on immediately
                     info.PowerTime = now;
-                    _currentConsumption += info.MaxConsumption;
+                    info.PowerConsumption = infoMaxConsumption;
+                    _currentConsumption += infoMaxConsumption;
                     info.Pin.Set(info.Value, McuCommandPriority.Default, McuTimestamp.Immediate(info.Pin.Mcu));
                     return true;
                 }
@@ -239,15 +251,15 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private bool TryPowerOffInner(PinInfo info, SystemTimestamp now)
+        private bool TryPowerOffInner(PinInfo info, SystemTimestamp now, PrinterPowerSettings powerSettings)
         {
             if (!info.PowerTime.IsEmpty)
             {
                 // was enabled, disable
                 info.PowerDuration += now - info.PowerTime;
                 info.PowerTime = default;
-                Debug.Assert(_currentConsumption >= info.MaxConsumption);
-                _currentConsumption -= info.MaxConsumption;
+                Debug.Assert(_currentConsumption >= info.PowerConsumption);
+                _currentConsumption -= info.PowerConsumption;
                 info.Pin.Set(0, McuCommandPriority.Default, McuTimestamp.Immediate(info.Pin.Mcu));
                 return true;
             }
@@ -266,7 +278,9 @@ namespace SLS4All.Compact.McuClient
                 {
                     lock (_syncRoot)
                     {
-                        SwitchPinsInner();
+                        var powerSettings = _printerSettings.GetPowerSettings();
+                        _powerSettings = powerSettings;
+                        SwitchPinsInner(powerSettings);
                     }
                 }
             }
@@ -286,7 +300,7 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private void SwitchPinsInner(PinInfo? explicitPin = null, bool powerOnOnly = false)
+        private void SwitchPinsInner(PrinterPowerSettings powerSettings, PinInfo? explicitPin = null, bool powerOnOnly = false)
         {
             var now = SystemTimestamp.Now;
             var somethingPoweredOffButShouldBeOn = false;
@@ -339,19 +353,20 @@ namespace SLS4All.Compact.McuClient
                     // powered off, has a lot of debt, try to power off something with less debt
                     var available = _maxConsumption - _currentConsumption;
                     Debug.Assert(available >= 0);
-                    var remaining = info.MaxConsumption - available;
+                    var remaining = info.PowerConsumption - available;
                     if (remaining > 0)
                     {
                         _powerOffList.Clear();
                         for (int q = _switchList.Count - 1; q >= 0 && remaining > 0; q--)
                         {
                             var candidate = _switchList[q];
+                            var candidateMaxConsumption = GetConsumption(candidate.MaxConsumptionWatts, candidate.Type, powerSettings);
                             if (candidate.PowerTime.IsEmpty || candidate.HasProcessed) // not powered or already processed
                                 continue;
                             Debug.Assert(candidate != info);
-                            if (candidate.MaxConsumption > 0)
+                            if (candidateMaxConsumption > 0)
                             {
-                                remaining -= candidate.MaxConsumption;
+                                remaining -= candidateMaxConsumption;
                                 _powerOffList.Add(candidate);
                             }
                         }
@@ -370,18 +385,20 @@ namespace SLS4All.Compact.McuClient
                     foreach (var other in _powerOffList)
                     {
                         other.HasProcessed = true;
-                        TryPowerOffInner(other, now);
+                        TryPowerOffInner(other, now, powerSettings);
                     }
                     info.HasProcessed = true;
-                    TryPowerOnInner(info, now, false);
+                    TryPowerOnInner(info, now, false, powerSettings);
                 }
             }
         }
 
-        private static long GetConsumption(double watts)
+        private static long GetConsumption(double watts, PowerPinType type, PrinterPowerSettings powerSettings)
         {
             if (watts < 0)
                 throw new ArgumentOutOfRangeException(nameof(watts));
+            if (type == PowerPinType.Halogen)
+                watts = watts * (double)powerSettings.HalogenMaxPercent / 100;
             return (long)Math.Ceiling(watts * 1000);
         }
 

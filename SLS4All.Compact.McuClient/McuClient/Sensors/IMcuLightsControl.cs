@@ -12,10 +12,11 @@ namespace SLS4All.Compact.McuClient.Sensors
     {
         bool HasLightsEnabled { get; }
         int LightCount { get; }
+        float MaxLightFactor { get; }
 
         void GetEnabledLights(ICollection<KeyValuePair<int, float>> res);
-        void SetLights(bool enabled, int? mask = null, float? power = null);
-        void SetLights(Span<(bool Enabled, int Index, float? Power)> items);
+        void SetLights(bool enabled, int? mask = null, float? power = null, bool forceMax = false);
+        void SetLights(Span<(bool Enabled, int Index, float? Power)> items, bool forceMax = false);
 
         bool TryGetRecentLightPower(int index, out bool isCurrent, out float power, SystemTimestamp now, TimeSpan? duration);
         bool HasRecentLightPower(int index, SystemTimestamp now = default, TimeSpan? duration = null);

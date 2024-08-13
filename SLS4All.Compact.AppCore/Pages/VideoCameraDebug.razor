@@ -23,6 +23,7 @@
                 var i = _i;
                 <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetLightsOn(true, 1 << i, 1.0f)">Light @(i+1) to 100%</a>
             }
+            <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetLightsTest()">Lights test</a>
             <div class="dropdown-divider"></div>
             <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetLightsOn(false)">Lights off</a>
         </div>
@@ -37,6 +38,7 @@
     private const int _timerPeriod = 500;
     private ImageStreamingHandle? _streamHandle;
     private long _streamCounter;
+    private CancellationTokenSource? _lightsTestCancelSource;
 
     private string StreamUri => $"/api/videocamera/image/{_id}?c={_streamCounter}";
 
@@ -80,6 +82,7 @@
     {
         TryUnregisterImageReady();
         _timer.Dispose();
+        _lightsTestCancelSource?.Cancel();
         await base.DisposeAsync();
     }
 
@@ -87,7 +90,50 @@
     {
         try
         {
+            _lightsTestCancelSource?.Cancel();
             await Lights.SetLights(enabled, mask: mask, power: power);
+        }
+        catch (Exception)
+        {
+            // swallow
+        }
+    }
+
+    private void SetLightsTest()
+    {
+        try
+        {
+            _lightsTestCancelSource?.Cancel();
+            _lightsTestCancelSource = new();
+            _ = RunLightsTest(_lightsTestCancelSource.Token);
+        }
+        catch (Exception)
+        {
+            // swallow
+        }
+    }
+
+    private async Task RunLightsTest(CancellationToken cancel)
+    {
+        try
+        {
+            const int steps = 10;
+            var delay = TimeSpan.FromSeconds(0.2);
+            while (true)
+            {
+                for (int i = 0; i < steps; i++)
+                {
+                    cancel.ThrowIfCancellationRequested();
+                    await Lights.SetLights(true, power: (float)i / steps, cancel: cancel);
+                    await Task.Delay(delay, cancel);
+                }
+                for (int i = steps; i > 0; i--)
+                {
+                    cancel.ThrowIfCancellationRequested();
+                    await Lights.SetLights(true, power: (float)i / steps, cancel: cancel);
+                    await Task.Delay(delay, cancel);
+                }
+            }
         }
         catch (Exception)
         {

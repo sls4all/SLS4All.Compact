@@ -1,9 +1,5 @@
 ﻿[Application]
 
-	[Application.Dependencies.ProjectionPattern]
-	After = "appsettings.Inova"
-	Filename = "appsettings.Inova-ProjectionPattern"
-
 [Kestrel.Endpoints.Http]
 Url = "http://0.0.0.0:80"
 

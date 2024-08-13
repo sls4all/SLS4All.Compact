@@ -44,19 +44,11 @@ namespace SLS4All.Compact.McuClient.Pins
             SetInitialField("PWM_LIM", 12);
             SetInitialField("TPOWERDOWN", 20);
             SetInitialField("SGTHRS", 0);
-            SetInitialField("TPWMTHRS", 0); // enable stealthchop, TODO: configurable?
-            SetInitialField("en_spreadCycle", 0); // disable spreadcycle, TODO: configurable?
-            SetInitialField("TCOOLTHRS", 0); // disable spreadcycle, TODO: configurable?
-        }
+            SetInitialField("TPWMTHRS", 0); // enable stealthchop
+            SetInitialField("en_spreadCycle", 0); // disable spreadcycle
+            SetInitialField("TCOOLTHRS", 0); // disable spreadcycle
 
-        public override async ValueTask BeginHomingMove(CancellationToken cancel)
-        {
-            await SetRegister(Tmc2209.Registers.TCOOLTHRS, 0xfffff, cancel);
-        }
-
-        public override async ValueTask EndHomingMove(CancellationToken cancel)
-        {
-            await SetRegister(Tmc2209.Registers.TCOOLTHRS, 0, cancel);
+            SetEndstopMoveInitialField("TCOOLTHRS", 65535);
         }
 
         public override string ToString()

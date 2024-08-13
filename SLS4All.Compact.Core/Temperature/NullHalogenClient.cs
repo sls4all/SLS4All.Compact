@@ -26,10 +26,10 @@ namespace SLS4All.Compact.Temperature
 
         public AsyncEvent<LightsState> StateChangedHighFrequency { get; } = new();
 
-        public ValueTask SetHalogens(bool enabled, int? mask = null, float? power = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public ValueTask SetHalogens(bool enabled, int? mask = null, float? power = null, bool hidden = false, bool forceMax = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
-        public ValueTask SetHalogens(Memory<(bool enabled, int index, float? power)> values, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public ValueTask SetHalogens(Memory<(bool enabled, int index, float? power)> values, bool hidden, bool forceMax = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
         public ValueTask SetLights(bool enabled, int? mask = null, float? power = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
@@ -50,5 +50,8 @@ namespace SLS4All.Compact.Temperature
 
         public bool HasRecentLightPower(SystemTimestamp now = default, TimeSpan? duration = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => false;
+
+        public float GetMaxHalogenFactor(IPrinterClientCommandContext? context = null)
+            => 1;
     }
 }

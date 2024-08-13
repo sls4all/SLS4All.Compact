@@ -218,6 +218,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     [McuManager.Steppers.r.Tmc2209Driver]
     UartPin = "P1.8"
     Fields.SGTHRS = 85
+    EndstopMoveFields.StuckDetection.SGTHRS = 120
     RunCurrent = 1.0
     HoldCurrent = 0.001
     Microsteps = 64

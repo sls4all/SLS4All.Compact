@@ -17,6 +17,7 @@ using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
 using SLS4All.Compact.McuClient.PipedMcu;
 using SLS4All.Compact.McuClient.Sensors;
+using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Temperature;
 using SLS4All.Compact.Threading;
 using System;
@@ -207,16 +208,17 @@ namespace SLS4All.Compact.McuClient
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
+            IPrinterSettingsStorage settingsStorage,
             IOptionsMonitor<McuStepperGlobalOptions>? optionsStepperGlobal = null,
             ITemperatureCamera? temperatureCamera = null)
-            : base(loggerFactory, loggerFactory.CreateLogger<McuManager>(), options, appDataWriter, deviceFactories)
+            : base(loggerFactory, loggerFactory.CreateLogger<McuManager>(), options, appDataWriter, deviceFactories, settingsStorage)
         {
             _optionsStepperGlobal = optionsStepperGlobal ?? ConstantOptionsMonitor.Create(new McuStepperGlobalOptions());
             _temperatureCamera = temperatureCamera ?? NullTemperatureCamera.Instance;
             _activePinsNeedsLock = new();
             _activeBusNeedsLock = new();
 
-            _powerManager = new McuPowerManager(Options.Create(options.CurrentValue.PowerManager), this);
+            _powerManager = new McuPowerManager(Options.Create(options.CurrentValue.PowerManager), this, settingsStorage);
             _outputPinsInit = new();
             _buttonsInit = new();
             _steppersInit = new();
@@ -394,6 +396,7 @@ namespace SLS4All.Compact.McuClient
                         Options.Create(heaterOptions.InovaSurface),
                         this,
                         _temperatureCamera,
+                        _settingsStorage,
                         name);
                 }
                 else

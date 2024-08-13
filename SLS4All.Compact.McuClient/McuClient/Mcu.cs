@@ -34,6 +34,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using SLS4All.Compact.Storage.PrinterSettings;
 
 namespace SLS4All.Compact.McuClient
 {

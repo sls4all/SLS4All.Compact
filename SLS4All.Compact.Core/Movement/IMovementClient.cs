@@ -17,6 +17,23 @@ namespace SLS4All.Compact.Movement
 {
     public readonly record struct PositionHighFrequency(Position Position, bool HasHomed);
 
+    public readonly record struct MoveAuxItem(
+        double Value, 
+        bool Relative, 
+        double? Speed = null, 
+        double? Acceleration = null, 
+        double? Decceleration = null,
+        double? InitialSpeed = null, 
+        double? FinalSpeed = null);
+
+    public enum EndstopSensitivity
+    {
+        NotSet = 0,
+        Homing,
+        StuckDetection,
+        User,
+    }
+
     public interface IMovementClient : IMovementConfig
     {
         Position CurrentPosition { get; }
@@ -27,8 +44,9 @@ namespace SLS4All.Compact.Movement
         TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null);
         ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask HomeXY(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-        ValueTask MoveAux(MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, double? deceleration = null, bool hidden = false, double? initialSpeed = null, double? finalSpeed = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-        ValueTask HomeAux(MovementAxis axis, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask MoveContinuous(MovementAxis axis, bool positive, double speed, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);

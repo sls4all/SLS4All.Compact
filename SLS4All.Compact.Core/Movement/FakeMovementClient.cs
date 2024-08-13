@@ -117,7 +117,7 @@ namespace SLS4All.Compact.Movement
                 return Task.CompletedTask;
         }
 
-        public override async ValueTask HomeAux(MovementAxis axis, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override async ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             using (await _homingLock.LockAsync(cancel))
             {
@@ -170,7 +170,7 @@ namespace SLS4All.Compact.Movement
             }
         }
 
-        public override ValueTask MoveAux(MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, double? decceleration = null, bool hidden = false, double? initialSpeed = null, double? finalSpeed = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             var options = _options.CurrentValue;
             lock (_lock)
@@ -180,32 +180,40 @@ namespace SLS4All.Compact.Movement
                 switch (axis)
                 {
                     case MovementAxis.Z1:
-                        distance = relative ? value : value - _posZ1;
-                        _posZ1 = relative ? _posZ1 + value : value;
+                        distance = item.Relative ? item.Value : item.Value - _posZ1;
+                        _posZ1 = item.Relative ? _posZ1 + item.Value : item.Value;
                         break;
                     case MovementAxis.Z2:
-                        distance = relative ? value : value - _posZ2;
-                        _posZ2 = relative ? _posZ2 + value : value;
+                        distance = item.Relative ? item.Value : item.Value - _posZ2;
+                        _posZ2 = item.Relative ? _posZ2 + item.Value : item.Value;
                         break;
                     case MovementAxis.R:
-                        distance = relative ? value : value - _posR;
-                        _posR = relative ? _posR + value : value;
+                        distance = item.Relative ? item.Value : item.Value - _posR;
+                        _posR = item.Relative ? _posR + item.Value : item.Value;
                         break;
                     default: throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis));
                 }
                 _trapezoid.Values.Clear();
                 var duration = _trapezoid.Move(
-                    initialSpeed ?? 0,
-                    finalSpeed ?? 0,
-                    acceleration ?? 0,
-                    decceleration ?? acceleration ?? 0,
-                    speed ?? _maxReaasonableVelocity,
+                    item.InitialSpeed ?? 0,
+                    item.FinalSpeed ?? 0,
+                    item.Acceleration ?? 0,
+                    item.Decceleration ?? item.Acceleration ?? 0,
+                    item.Speed ?? _maxReaasonableVelocity,
                     0,
                     Math.Abs(distance),
                     0);
                 _timestamp += duration / options.SpeedFactor;
             }
             return UpdatePositionHighFrequency(false, cancel);
+        }
+
+        public override async ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            foreach (var item in items)
+                await MoveAux(axis, item, hidden, context, cancel);
+            await FinishMovement(context, cancel);
+            return false;
         }
 
         public override TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null)

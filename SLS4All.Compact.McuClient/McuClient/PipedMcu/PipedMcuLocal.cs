@@ -11,6 +11,7 @@ using SLS4All.Compact.Configuration;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.Printer;
+using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Concurrent;
@@ -64,7 +65,8 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             McuManager manager, 
             IOptions<McuOptions> options, 
             IMcuClockSync clockSync, 
-            IEnumerable<IMcuDeviceFactory> deviceFactories) 
+            IEnumerable<IMcuDeviceFactory> deviceFactories,
+            IPrinterSettingsStorage settingsStorage) 
             : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuLocal>(), appDataWriter, manager, options, clockSync, deviceFactories)
         {
             _responseHandlers = new();

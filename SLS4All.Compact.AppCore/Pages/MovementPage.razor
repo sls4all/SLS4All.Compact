@@ -186,7 +186,7 @@
                 <tbody>
                     <tr>
                         <th colspan="2" class="h5 text-center">
-                            X / Y (laser)
+                            X / Y (galvo)
                         </th>
                     </tr>
                     <tr class="@(Values.DirectMovement ? "invisible" : "visible")">
@@ -671,7 +671,7 @@
     {
         await BackgroundTask(async cancel =>
         {
-            await MovementClient.MoveAux(axis, (double)step, true, speed: (double)speed, acceleration: (double)acceleration, cancel: cancel);
+            await MovementClient.MoveAux(axis, new MoveAuxItem((double)step, true, (double)speed, (double)acceleration), cancel: cancel);
         });
     }
 
@@ -679,7 +679,7 @@
     {
         await BackgroundTask(async cancel =>
         {
-            await MovementClient.HomeAux(axis, (double)maxDistance, (double)speed, cancel: cancel);
+            await MovementClient.HomeAux(axis, EndstopSensitivity.Homing, (double)maxDistance, (double)speed, cancel: cancel);
         });
     }
 
@@ -711,8 +711,8 @@
             var z1 = Values.MoveZ1Pos;
             var z2 = Values.MoveZ2Pos;
             Values.InvalidateLastPosition();
-            await MovementClient.MoveAux(MovementAxis.Z1, (double)z1, false, speed: (double)Values.SpeedZ, cancel: cancel);
-            await MovementClient.MoveAux(MovementAxis.Z2, (double)z2, false, speed: (double)Values.SpeedZ, cancel: cancel);
+            await MovementClient.MoveAux(MovementAxis.Z1, new MoveAuxItem((double)z1, false, (double)Values.SpeedZ), cancel: cancel);
+            await MovementClient.MoveAux(MovementAxis.Z2, new MoveAuxItem((double)z2, false, (double)Values.SpeedZ), cancel: cancel);
         });
     }
 
@@ -721,7 +721,7 @@
         await BackgroundTask(async cancel =>
         {
             Values.InvalidateLastPosition();
-            await MovementClient.MoveAux(MovementAxis.R, (double)Values.MoveRPos, false, speed: (double)Values.SpeedR, acceleration: (double)Values.AccelR, cancel: cancel);
+            await MovementClient.MoveAux(MovementAxis.R, new MoveAuxItem((double)Values.MoveRPos, false, (double)Values.SpeedR, (double)Values.AccelR), cancel: cancel);
         });
     }
 

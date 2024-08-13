@@ -320,8 +320,7 @@ namespace SLS4All.Compact
             IApplicationBuilder app,
             IHostApplicationLifetime lifetime,
             ILogger<StartupBase> logger,
-            IOptions<ApplicationOptions> options,
-            IEnumerable<IObjectFactory<IDelayedConstructable, object>> delayedConstructables)
+            IOptions<ApplicationOptions> options)
         {
             var o = options.Value;
             if (o.Proxy)
@@ -332,12 +331,7 @@ namespace SLS4All.Compact
                     options,
                     app,
                     lifetime,
-                    services.GetRequiredService<IServer>(),
-                    services.GetRequiredService<IOptions<FrontendOptions>>(),
-                    services.GetRequiredService<IPrinterCultureManager>(),
-                    services.GetRequiredService<IToastProvider>(),
-                    services.GetRequiredService<IObjectFactory<ISliceProcessor, object>>(),
-                    services.GetRequiredService<IEnumerable<IObjectFactory<IDelayedConstructable, object>>>());
+                    services);
         }
 
         protected virtual void ConfigureProxy(IServiceProvider services,
@@ -345,20 +339,31 @@ namespace SLS4All.Compact
             ILogger<StartupBase> logger,
             IOptions<ApplicationOptions> options)
         {
+            var constructables = services.GetRequiredService<IEnumerable<IObjectFactory<IConstructable, object>>>();
+            var delayedConstructables = services.GetRequiredService<IEnumerable<IObjectFactory<IDelayedConstructable, object>>>();
+            InitializeConstructables(
+                logger,
+                services,
+                constructables,
+                delayedConstructables,
+                lifetime.ApplicationStopping)
+                .GetAwaiter().GetResult();
         }
 
-        private void ConfigureApp(
+        protected virtual void ConfigureApp(
             ILogger<StartupBase> logger,
             IOptions<ApplicationOptions> options,
             IApplicationBuilder app,
             IHostApplicationLifetime lifetime,
-            IServer server,
-            IOptions<FrontendOptions> feOptions,
-            IPrinterCultureManager printerCultureManager,
-            IToastProvider toastProvider,
-            IObjectFactory<ISliceProcessor, object> sliceProcessorFactory,
-            IEnumerable<IObjectFactory<IDelayedConstructable, object>> delayedConstructables)
-        { 
+            IServiceProvider services)
+        {
+            var server = services.GetRequiredService<IServer>();
+            var feOptions = services.GetRequiredService<IOptions<FrontendOptions>>();
+            var printerCultureManager = services.GetRequiredService<IPrinterCultureManager>();
+            var toastProvider = services.GetRequiredService<IToastProvider>();
+            var constructables = services.GetRequiredService<IEnumerable<IObjectFactory<IConstructable, object>>>();
+            var delayedConstructables = services.GetRequiredService<IEnumerable<IObjectFactory<IDelayedConstructable, object>>>();
+
             if (feOptions.Value.ShowAdvancedDebugFeatures)
             {
                 app.UseDeveloperExceptionPage();
@@ -410,25 +415,59 @@ namespace SLS4All.Compact
                 StartBrowser(server, options.Value);
             });
 
-            // initialize slicer and hotspot calculator in the background
-            Task.Run(async () =>
+            InitializeConstructables(
+                logger,
+                services,
+                constructables,
+                delayedConstructables,
+                lifetime.ApplicationStopping)
+                .GetAwaiter().GetResult();
+        }
+
+        protected virtual async Task InitializeConstructables(
+            ILogger logger,
+            IServiceProvider services,
+            IEnumerable<IObjectFactory<IConstructable, object>> constructables, 
+            IEnumerable<IObjectFactory<IDelayedConstructable, object>> delayedConstructables, 
+            CancellationToken cancel)
+        {
+            // initialize constructables
+            try
             {
-                var cancel = lifetime.ApplicationStopping;
+                logger.LogInformation($"Creating constructables");
+                foreach (var factory in constructables)
+                {
+                    cancel.ThrowIfCancellationRequested();
+                    using var obj = factory.CreateDisposable();
+                    await obj.Instance.Construct(cancel);
+                }
+                logger.LogInformation($"Finished constructables");
+            }
+            catch (Exception ex)
+            {
+                if (!cancel.IsCancellationRequested)
+                    logger.LogCritical(ex, $"Unhandled exception on constructables");
+                throw;
+            }
+
+            // initialize delayed constructables
+            _ = Task.Run(async () =>
+            {
                 try
                 {
-                    logger.LogInformation($"Beginning delayed startup");
+                    logger.LogInformation($"Creating delayed constructables");
                     foreach (var factory in delayedConstructables)
                     {
                         cancel.ThrowIfCancellationRequested();
                         using var obj = factory.CreateDisposable();
                         await obj.Instance.DelayedConstruct(cancel);
                     }
-                    logger.LogInformation($"Finished delayed startup");
+                    logger.LogInformation($"Finished delayed constructables");
                 }
                 catch (Exception ex)
                 {
                     if (!cancel.IsCancellationRequested)
-                        logger.LogCritical(ex, $"Unhandled exception on delayed startup");
+                        logger.LogCritical(ex, $"Unhandled exception on constructables");
                 }
             });
         }

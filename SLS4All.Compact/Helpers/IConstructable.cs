@@ -13,12 +13,12 @@ using System.Threading.Tasks;
 namespace SLS4All.Compact.Helpers
 {
     /// <summary>
-    /// Interface for types created in application startup on separate thread (not blocking application initialization).
-    /// For classes that should be initialialized and should block application initialization <see cref="IConstructable"/>
+    /// Interface for types created in application startup (blocking application initialization).
+    /// For classes that should be initialialized and not block application initialization <see cref="IDelayedConstructable"/>
     /// </summary>
-    public interface IDelayedConstructable
+    public interface IConstructable
     {
-        public ValueTask DelayedConstruct(CancellationToken cancel = default)
+        public ValueTask Construct(CancellationToken cancel = default)
             => ValueTask.CompletedTask;
     }
 }

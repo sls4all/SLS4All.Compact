@@ -164,6 +164,13 @@ namespace SLS4All.Compact.Movement
         public VolumeAndDepth BedPreparationAndCap => BedPreparation + PrintCap;
     }
 
+    public class LayerClientStuckException : Exception
+    {
+        public LayerClientStuckException() { }
+        public LayerClientStuckException(string message) : base(message) { }
+        public LayerClientStuckException(string message, Exception inner) : base(message, inner) { }
+    }
+
     public interface ILayerClient
     {
         /// <summary>

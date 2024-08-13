@@ -14,6 +14,7 @@ using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
 using SLS4All.Compact.McuClient.Sensors;
+using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Concurrent;
@@ -51,8 +52,9 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             ILoggerFactory loggerFactory,
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
-            IEnumerable<IMcuDeviceFactory> deviceFactories)
-            : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuManagerLocal>(), options, appDataWriter, deviceFactories)
+            IEnumerable<IMcuDeviceFactory> deviceFactories,
+            IPrinterSettingsStorage settingsStorage)
+            : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuManagerLocal>(), options, appDataWriter, deviceFactories, settingsStorage)
         {
         }
 
@@ -60,7 +62,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             => new PipedMcuClockSyncLocal(loggerFactory.CreateLogger<PipedMcuClockSyncLocal>(), this);
 
         protected override IMcu CreateMcu(ILoggerFactory loggerFactory, IAppDataWriter appDataWriter, McuManager mcuManagerBase, IOptions<McuManagerOptions.ManagerMcuOptions> options, IMcuClockSync clockSync, IEnumerable<IMcuDeviceFactory> deviceFactories)
-            => new PipedMcuLocal(loggerFactory, appDataWriter, mcuManagerBase, options, clockSync, deviceFactories);
+            => new PipedMcuLocal(loggerFactory, appDataWriter, mcuManagerBase, options, clockSync, deviceFactories, _settingsStorage);
 
         public override McuPinDescription ClaimPin(McuPinType type, string description, bool canInvert = false, bool canPullup = false, string? shareType = null)
             => throw new NotSupportedException();

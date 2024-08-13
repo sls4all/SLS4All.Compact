@@ -1264,12 +1264,17 @@
     {
         if (IsPrinting) // page will render error
             return;
-        Debug.Assert(_volumeTotals != null);
+        var printingParams = _params;
+        Debug.Assert(printingParams != null);
         await _cancelModal!.Execute(
             async cancel =>
             {
-                await LayerClient.SetPowderDepth(_volumeTotals!.Total.Depth * 1000 * (_addPowderIteration + 1) / _addPowderIterationCount, cancel: cancel);
-                _addPowderIteration++;
+                var setup = new Movement.BeginLayerSetup
+                {
+                    Enabled = true,
+                    LayerThickness = (double)printingParams.Setup.LayerThickness,
+                };
+                await LayerClient.BeginLayer(setup, cancel: cancel);
             },
             titleText: "Please wait",
             bodyText: "Recoating in progress...",

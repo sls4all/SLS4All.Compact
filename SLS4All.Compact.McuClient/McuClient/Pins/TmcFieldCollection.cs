@@ -64,7 +64,7 @@ namespace SLS4All.Compact.McuClient.Pins
             _values.Add((reg, value));
         }
 
-        public uint GetRegister(TRegister reg)
+        public uint GetRegister(TRegister reg, uint defaultValue = 0)
         {
             var span = CollectionsMarshal.AsSpan(_values);
             for (int i = 0; i < span.Length; i++)
@@ -73,12 +73,12 @@ namespace SLS4All.Compact.McuClient.Pins
                 if (EqualityComparer<TRegister>.Default.Equals(item.Reg, reg))
                     return item.Value;
             }
-            return 0;
+            return defaultValue;
         }
 
-        public void SetField(string field, long defaultFieldValue, Dictionary<string, long?> fields)
+        public void SetField(string field, long defaultFieldValue, Dictionary<string, long?>? fields)
         {
-            if (fields.TryGetValue(field, out var fieldValue) && fieldValue >= 0)
+            if (fields != null && fields.TryGetValue(field, out var fieldValue) && fieldValue >= 0)
                 SetField(field, fieldValue.Value);
             else
                 SetField(field, defaultFieldValue);

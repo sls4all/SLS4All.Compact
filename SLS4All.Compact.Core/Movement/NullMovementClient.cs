@@ -58,14 +58,17 @@ namespace SLS4All.Compact.Movement
         public ValueTask FinishMovementCode(ChannelWriter<CodeCommand> channel, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
-        public ValueTask HomeAux(MovementAxis axis, double maxDistance, double? speed = null, bool noExtraMoves = false,IPrinterClientCommandContext ? context = null, CancellationToken cancel = default)
+        public ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false,IPrinterClientCommandContext ? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
         public ValueTask HomeXY(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
-        public ValueTask MoveAux(MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, double? decceleration = null, bool hidden = false, double? initialSpeed = null, double? finalSpeed = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
+
+        public ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+            => ValueTask.FromResult(false);
 
         public ValueTask MoveAuxCode(ChannelWriter<CodeCommand> channel, MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;

@@ -62,6 +62,18 @@ cd bin\Release\net8.0\linux-arm64\publish
 # any other address the computer with the software has.
 ```
 
+### Configuration
+
+PrinterApp configuration is present in `appsettings*.toml` files that are published to the same directory as the main executable `SLS4All.Compact.PrinterApp`. In sources that corresponds to `/SLS4All.Compact.PrinterApp/appsettings*.toml` configuration files.
+
+The main configuration file is taken from the running environment (--environment command line parameter). For development environment (--environment Development) without the HW, the main configuration file the `appsettings.Development.toml` and user override configuration file `appsettings.Development.user.toml`. For the Inova MK1 Printer Kit, the main configuration file is the `appsettings.Inova-RaspberryPi5.toml` (--environment Inova-RaspberryPi5). 
+
+For more complete startup script for the Inova MK1 Printer Kit, please see the `sls4all_run_Inova_RaspberryPI5.sh` bash script, that we use to start the software on the kits. This script also allows SLS4All Compact software update, data backup & restore, splash screen, system permissions, and opens the browser. As the name suggests, it is intended to be used on Raspberry PI 5 with Raspberry Pi OS and installed dependencies specified below.
+
+Additional configuration and its overrides can be placed to `~/SLS4All/Configuration/appsettings.user.toml` file. If this directory also contains files that would be normally loaded from the directory with the application binary, these files are loaded instead. E.g. if you create `~/SLS4All/Configuration/appsettings.toml`, this file would be loaded instead of the default file.
+
+Configuration files can reference and load other configuration files, using [Application.Dependencies] configuration dictionary. Please see the `*Inova*.toml` configuration files for an example of usage.
+
 ## PrinterApp system dependencies
 
 There are some dependencies for full functionality of the compiled software and bundled scripts running on the embedded PC.

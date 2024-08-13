@@ -4,14 +4,16 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿namespace SLS4All.Compact.McuClient.Pins
+using SLS4All.Compact.Movement;
+
+namespace SLS4All.Compact.McuClient.Pins
 {
     public interface IStepperDriver
     {
         IMcu Mcu { get; }
         int Microsteps { get; }
 
-        ValueTask BeginHomingMove(CancellationToken cancel);
-        ValueTask EndHomingMove(CancellationToken cancel);
+        ValueTask BeginEndstopMove(EndstopSensitivity sensitivity, CancellationToken cancel);
+        ValueTask FinishEndstopMove(CancellationToken cancel);
     }
 }

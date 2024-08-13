@@ -224,7 +224,7 @@ namespace SLS4All.Compact.McuClient.Helpers
         /// </summary>
         public object FlushLock => _flushLock;
         /// <summary>
-        /// If flush is scheduled, this is maxumum time after it will happen. Otherwise set to <see cref="TimeSpan.MaxValue"/>.
+        /// If flush is scheduled, this is maxiumum time after it will happen. Otherwise set to <see cref="TimeSpan.MaxValue"/>.
         /// Read in flush and then master lock.
         /// </summary>
         public TimeSpan FlushAfterNeedsLocks => _flushAfterNeedsLocks;

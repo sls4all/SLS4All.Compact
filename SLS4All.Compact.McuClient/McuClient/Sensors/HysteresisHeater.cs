@@ -98,7 +98,7 @@ namespace SLS4All.Compact.McuClient.Sensors
             _heaterDesc = manager.ClaimPin(McuPinType.Digital, o.HeaterPin, canInvert: true);
             _heater = _heaterDesc.SetupPin($"heater-{name}");
             _heater.SetupMaxDuration(o.MaxHeatTime);
-            _manager.PowerManager.SetupPin(_heater, o.PowerConsumption, o.PowerManagerPriority);
+            _manager.PowerManager.SetupPin(_heater, o.PowerConsumption, o.PowerManagerPriority, PowerPinType.NotSet);
 
             manager.RegisterSetup(null, OnSetup);
             _sensor.ReadEvent.AddHandler(OnRead);

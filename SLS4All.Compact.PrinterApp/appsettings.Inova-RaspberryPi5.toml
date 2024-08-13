@@ -13,11 +13,11 @@ PushTemperatureCameraGCode = false
   Filename = "appsettings.Inova"
   Before = "appsettings.Inova-RaspberryPi5"
 
-  [Application.Dependencies.RockPI-McuClient]
+  [Application.Dependencies.Inova-RaspberryPi5-McuClient]
   After = "appsettings.Inova-RaspberryPi5"
   Filename = "appsettings.Inova-RaspberryPi5-McuClient"
 
-  [Application.Dependencies.OV5647]
+  [Application.Dependencies.Inova-RaspberryPi5-libcamera]
   After = "appsettings.Inova-RaspberryPi5"
   Filename = "appsettings.Inova-RaspberryPi5-libcamera"
 

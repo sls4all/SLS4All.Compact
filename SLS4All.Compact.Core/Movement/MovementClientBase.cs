@@ -87,13 +87,13 @@ namespace SLS4All.Compact.Movement
                 cmd => string.Create(CultureInfo.InvariantCulture, $"MOVE_XY X={cmd.Arg1} Y={cmd.Arg2} RELATIVE={cmd.Arg3} SPEED={cmd.Arg4Nullable}"),
                 _moveXYFormatterTag);
             _moveRFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
-                MoveAux(MovementAxis.R, cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null, hidden: hidden, context: context, cancel: cancel),
+                MoveAux(MovementAxis.R, new MoveAuxItem(cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null), hidden: hidden, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"MOVE_R R={cmd.Arg1} RELATIVE={cmd.Arg2} SPEED={cmd.Arg3Nullable} ACCEL={cmd.Arg4Nullable}"));
             _moveZ1Formatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
-                MoveAux(MovementAxis.Z1, cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null, hidden: hidden, context: context, cancel: cancel),
+                MoveAux(MovementAxis.Z1, new MoveAuxItem(cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null), hidden: hidden, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"MOVE_Z1 Z1={cmd.Arg1} RELATIVE={cmd.Arg2} SPEED={cmd.Arg3Nullable} ACCEL={cmd.Arg4Nullable}"));
             _moveZ2Formatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
-                MoveAux(MovementAxis.Z2, cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null, hidden: hidden, context: context, cancel: cancel),
+                MoveAux(MovementAxis.Z2, new MoveAuxItem(cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null), hidden: hidden, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"MOVE_Z2 Z2={cmd.Arg1} RELATIVE={cmd.Arg2} SPEED={cmd.Arg3Nullable} ACCEL={cmd.Arg4Nullable}"));
             _finishMovementFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
                 FinishMovement(context: context, cancel: cancel),
@@ -152,7 +152,7 @@ namespace SLS4All.Compact.Movement
         public ValueTask FinishMovementCode(ChannelWriter<CodeCommand> channel, CancellationToken cancel = default)
             => channel.WriteAsync(_finishMovementFormatter.Create(), cancel);
 
-        public abstract ValueTask HomeAux(MovementAxis axis, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        public abstract ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         protected ValueTask UpdatePositionHighFrequency(bool hasHomed, CancellationToken cancel)
         {
@@ -165,7 +165,9 @@ namespace SLS4All.Compact.Movement
 
         public abstract ValueTask HomeXY(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
-        public abstract ValueTask MoveAux(MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, double? decceleration = null, bool hidden = false, double? initialSpeed = null, double? finalSpeed = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        public abstract ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext ? context = null, CancellationToken cancel = default);
+
+        public abstract ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public ValueTask MoveAuxCode(ChannelWriter<CodeCommand> channel, MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, CancellationToken cancel = default)
         {
@@ -202,10 +204,7 @@ namespace SLS4All.Compact.Movement
                 else
                     await MoveAux(
                         axis,
-                        step,
-                        true,
-                        speed,
-                        0,
+                        new MoveAuxItem(step, true, speed),
                         hidden: true,
                         context: context,
                         cancel: cancel);

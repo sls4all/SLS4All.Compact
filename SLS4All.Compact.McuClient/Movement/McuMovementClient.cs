@@ -31,6 +31,7 @@ using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using static SLS4All.Compact.McuClient.McuManager;
+using System.Buffers;
 
 namespace SLS4All.Compact.Movement
 {
@@ -248,10 +249,11 @@ namespace SLS4All.Compact.Movement
                                 shouldCollectGarbage = true;
                             }
 
-                            // if a flush is scheduled, wait after it completes
-                            var flushAfter = _xylQueue.FlushAfterNeedsLocks;
-                            if (flushAfter != TimeSpan.MaxValue)
-                                duration += flushAfter;
+                            // NOTE: commented out, since we add FinishMovementDelay below anyway and try again
+                            //// if a flush is scheduled, wait after it completes
+                            //var flushAfter = _xylQueue.FlushAfterNeedsLocks;
+                            //if (flushAfter != TimeSpan.MaxValue)
+                            //    duration += flushAfter;
 
                             queuesEmpty = _xylQueue.IsPseudoEmpty;
 
@@ -269,14 +271,17 @@ namespace SLS4All.Compact.Movement
                         }
                     }
 
+                    // NOTE: commented out, since we add FinishMovementDelay below anyway and try again
+                    //foreach (var stepper in manager.Steppers.Values)
+                    //{
+                    //    var candidate = stepper.SendAheadDuration;
+                    //    if (duration < candidate)
+                    //        duration = candidate;
+                    //}
+
                     // wait
-                    foreach (var stepper in manager.Steppers.Values)
-                    {
-                        var candidate = stepper.SendAheadDuration;
-                        if (duration < candidate)
-                            duration = candidate;
-                    }
-                    await Delay(duration + options.FinishMovementDelay, context, cancel);
+                    duration += options.FinishMovementDelay;
+                    await Delay(duration, context, cancel);
                     totalRawDuration += duration;
                 }
                 var hasTimingCriticalCommandsScheduled = manager.HasTimingCriticalCommandsScheduled;
@@ -295,7 +300,7 @@ namespace SLS4All.Compact.Movement
             }
         }
 
-        public override async ValueTask HomeAux(MovementAxis axis, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override async ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             using (await _homingLock.LockAsync(cancel))
             {
@@ -316,7 +321,7 @@ namespace SLS4All.Compact.Movement
                 if (options.ZPreHomingEnable && axis is MovementAxis.Z1 or MovementAxis.Z2 && !noExtraMoves)
                 {
                     var counterDistance = -Math.Sign(maxDistance) * options.ZPreHomingDistance;
-                    await MoveAux(axis, counterDistance, true, speed, context: context, cancel: cancel);
+                    await MoveAux(axis, new MoveAuxItem(counterDistance, true, speed), context: context, cancel: cancel);
                     await FinishMovement(context: context, cancel: cancel);
                     await Delay(options.ZPreHomingDelay, context, cancel);
                     maxDistance -= counterDistance;
@@ -347,7 +352,8 @@ namespace SLS4All.Compact.Movement
                 // MaxSpeed may also be too fast for EndStop checking (we may get endstop_event timer error otherwise)
                 var velocity = Math.Min(speed ?? stepper.CriticalVelocity, stepper.CriticalVelocity);
                 var startTimestamp = SystemTimestamp.Now;
-                var res = await stepper.TryHome(
+                var res = await stepper.EndstopMove(
+                    sensitivity,
                     velocity,
                     startPos,
                     endPos,
@@ -382,10 +388,11 @@ namespace SLS4All.Compact.Movement
                     if (postHomingDistance > 0)
                     {
                         var counterDistance = -Math.Sign(maxDistance) * postHomingDistance;
-                        await MoveAux(axis, counterDistance, true, velocity, context: context, cancel: cancel);
+                        await MoveAux(axis, new MoveAuxItem(counterDistance, true, velocity), context: context, cancel: cancel);
                         await FinishMovement(context: context, cancel: cancel);
 
-                        res = await stepper.TryHome(
+                        res = await stepper.EndstopMove(
+                            sensitivity,
                             velocity,
                             startPos + counterDistance,
                             endPos,
@@ -446,7 +453,7 @@ namespace SLS4All.Compact.Movement
             }
         }
 
-        public override ValueTask MoveAux(MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, double? decceleration = null, bool hidden = false, double? initialSpeed = null, double? finalSpeed = null, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
@@ -465,15 +472,15 @@ namespace SLS4All.Compact.Movement
                 {
                     case MovementAxis.Z1:
                         startPos = _posZ1;
-                        _posZ1 = endPos = relative ? startPos + value : value;
+                        _posZ1 = endPos = item.Relative ? startPos + item.Value : item.Value;
                         break;
                     case MovementAxis.Z2:
                         startPos = _posZ2;
-                        _posZ2 = endPos = relative ? startPos + value : value;
+                        _posZ2 = endPos = item.Relative ? startPos + item.Value : item.Value;
                         break;
                     case MovementAxis.R:
                         startPos = _posR;
-                        _posR = endPos = relative ? startPos + value : value;
+                        _posR = endPos = item.Relative ? startPos + item.Value : item.Value;
                         break;
                     default: throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis));
                 }
@@ -487,11 +494,11 @@ namespace SLS4All.Compact.Movement
                     minQueueAheadDuration: manager.StepperQueueHigh);
 
                 timestamp = stepper.Move(
-                    initialSpeed ?? 0,
-                    finalSpeed ?? 0,
-                    acceleration ?? 0,
-                    decceleration ?? acceleration ?? 0,
-                    speed ?? stepper.MaxVelocity,
+                    item.InitialSpeed ?? 0,
+                    item.FinalSpeed ?? 0,
+                    item.Acceleration ?? 0,
+                    item.Decceleration ?? item.Acceleration ?? 0,
+                    item.Speed ?? stepper.MaxVelocity,
                     startPos,
                     endPos,
                     timestamp);
@@ -499,6 +506,86 @@ namespace SLS4All.Compact.Movement
                 master[this] = timestamp;
             }
             return UpdatePositionHighFrequency(false, cancel);
+        }
+
+        public override async ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            using (await _homingLock.LockAsync(cancel))
+            {
+                cancel.ThrowIfCancellationRequested();
+                if (items.Count == 0)
+                    return false;
+
+                var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
+                var options = _options.CurrentValue;
+                var stepper = manager.Steppers[axis switch
+                {
+                    MovementAxis.Z1 => options.Z1StepperName,
+                    MovementAxis.Z2 => options.Z2StepperName,
+                    MovementAxis.R => options.RStepperName,
+                    _ => throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis)),
+                }];
+
+                await FinishMovement(context: context, cancel: cancel);
+
+                var positions = new (double StartPos, double EndPos, double Velocity, double InitialSpeed, double FinalSpeed, double Acceleration, double Decceleration)[items.Count];
+                var maxVelocity = 0.0;
+                bool res;
+                using (var master = manager.LockMasterQueue())
+                {
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        var item = items[i];
+                        double startPos, endPos;
+                        switch (axis)
+                        {
+                            case MovementAxis.Z1:
+                                startPos = _posZ1;
+                                _posZ1 = endPos = item.Relative ? startPos + item.Value : item.Value;
+                                break;
+                            case MovementAxis.Z2:
+                                startPos = _posZ2;
+                                _posZ2 = endPos = item.Relative ? startPos + item.Value : item.Value;
+                                break;
+                            case MovementAxis.R:
+                                startPos = _posR;
+                                _posR = endPos = item.Relative ? startPos + item.Value : item.Value;
+                                break;
+                            default: throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis));
+                        }
+                        var velocity = item.Speed ?? stepper.MaxVelocity;
+                        if (velocity > maxVelocity)
+                            maxVelocity = velocity;
+                        positions[i] = (startPos, endPos, velocity, item.InitialSpeed ?? 0, item.FinalSpeed ?? 0, item.Acceleration ?? 0, item.Decceleration ?? item.Acceleration ?? 0);
+                    }
+                }
+
+                res = await stepper.EndstopMove(
+                    sensitivity,
+                    maxVelocity,
+                    timestamp =>
+                    {
+                        foreach (var position in positions)
+                        {
+                            timestamp = stepper.Move(
+                                position.InitialSpeed,
+                                position.FinalSpeed,
+                                position.Acceleration,
+                                position.Decceleration,
+                                position.Velocity,
+                                position.StartPos,
+                                position.EndPos,
+                                timestamp);
+                        }
+                        return timestamp;
+                    },
+                    null,
+                    true,
+                    cancel);
+
+                await UpdatePositionHighFrequency(false, cancel);
+                return res;
+            }
         }
 
         private void MoveResetXYLInner(

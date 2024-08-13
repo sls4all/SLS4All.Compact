@@ -153,53 +153,56 @@
                                 </td>
                             </tr>
                         }
-                        <tr>
-                            <td class="col" colspan="2">
-                                <label><input type="checkbox" @bind="_networkSelected.IsStaticIP" /> Static IP configuration</label>
-                            </td>
-                        </tr>
-                        @if (_networkSelected.IsStaticIP)
+                        @if (isSsid || _networkSelected.Item.Device is not IWirelessNetworkDevice)
                         {
                             <tr>
-                                <td class="col-5">
-                                    IP Address
-                                </td>
-                                <td class="col">
-                                    <ValueEditor Title="IP Address" @bind-Value="_networkSelected.IPAddress" />
+                                <td class="col" colspan="2">
+                                    <label><input type="checkbox" @bind="_networkSelected.IsStaticIP" /> Static IP configuration</label>
                                 </td>
                             </tr>
-                            <tr>
-                                <td class="col-5">
-                                    Prefix
-                                </td>
-                                <td class="col">
-                                    <ValueEditor Title="Prefix" Subtitle="E.g. 24 for IPv4 255.255.255.0" @bind-Value="_networkSelected.Prefix" />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="col-5">
-                                    Gateway
-                                </td>
-                                <td class="col">
-                                    <ValueEditor Title="Gateway" @bind-Value="_networkSelected.Gateway" />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="col-5">
-                                    Primary DNS
-                                </td>
-                                <td class="col">
-                                    <ValueEditor Title="Primary DNS" @bind-Value="_networkSelected.DnsPrimary" />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="col-5">
-                                    Secondary DNS
-                                </td>
-                                <td class="col">
-                                    <ValueEditor Title="Secondary DNS" @bind-Value="_networkSelected.DnsSecondary" />
-                                </td>
-                            </tr>
+                            @if (_networkSelected.IsStaticIP)
+                            {
+                                <tr>
+                                    <td class="col-5">
+                                        IP Address
+                                    </td>
+                                    <td class="col">
+                                        <ValueEditor Title="IP Address" @bind-Value="_networkSelected.IPAddress" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-5">
+                                        Prefix
+                                    </td>
+                                    <td class="col">
+                                        <ValueEditor Title="Prefix" Subtitle="E.g. 24 for IPv4 255.255.255.0" @bind-Value="_networkSelected.Prefix" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-5">
+                                        Gateway
+                                    </td>
+                                    <td class="col">
+                                        <ValueEditor Title="Gateway" @bind-Value="_networkSelected.Gateway" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-5">
+                                        Primary DNS
+                                    </td>
+                                    <td class="col">
+                                        <ValueEditor Title="Primary DNS" @bind-Value="_networkSelected.DnsPrimary" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-5">
+                                        Secondary DNS
+                                    </td>
+                                    <td class="col">
+                                        <ValueEditor Title="Secondary DNS" @bind-Value="_networkSelected.DnsSecondary" />
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -839,6 +842,7 @@
                                     power,
                                     valueEntered: EventCallback.Factory.Create(this, SaveSettings),
                                     nameof(power.LaserWattage),
+                                    nameof(power.HalogenMaxPercent),
                                     nameof(power.MaxWattage)
                                 )
                                 <tr>

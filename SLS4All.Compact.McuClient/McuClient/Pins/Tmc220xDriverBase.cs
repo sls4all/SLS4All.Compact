@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Nito.AsyncEx;
 using SLS4All.Compact.Configuration;
 using SLS4All.Compact.McuClient.Pins.Tmc2209;
+using SLS4All.Compact.Movement;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -20,6 +21,11 @@ namespace SLS4All.Compact.McuClient.Pins
 {
     public class Tmc220xDriverOptions
     {
+        public class EndstopMoveFieldSet : Dictionary<string, long?>, IOptionsItemEnable
+        {
+            public bool IsEnabled { get; set; } = true;
+        }
+
         public int Retries { get; set; } = 5;
         public required string UartPin { get; set; }
         public string? TxPin { get; set; }
@@ -30,6 +36,7 @@ namespace SLS4All.Compact.McuClient.Pins
         public required int Microsteps { get; set; }
         public bool Interpolate { get; set; } = true;
         public Dictionary<string, long?> Fields { get; } = new();
+        public Dictionary<EndstopSensitivity, EndstopMoveFieldSet?> EndstopMoveFields { get; } = new();
     }
 
     public abstract class Tmc220xDriverBase<TRegister> : IStepperDriver
@@ -39,8 +46,10 @@ namespace SLS4All.Compact.McuClient.Pins
         private readonly McuManager _manager;
         private readonly TmcUart _uart;
         private readonly TmcFieldCollection<TRegister> _fields;
+        private readonly Dictionary<EndstopSensitivity, TmcFieldCollection<TRegister>> _endstopMoveFields;
         private readonly AsyncLock _lock = new();
         private long? _ifcnt;
+        private EndstopSensitivity _lastEndstopSensitivity;
 
         public IMcu Mcu => _uart.Mcu;
         public int Microsteps => _options.Value.Microsteps;
@@ -60,6 +69,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 : rx;
             _uart = new TmcUart(rx, tx, null);
             _fields = new TmcFieldCollection<TRegister>();
+            _endstopMoveFields = new Dictionary<EndstopSensitivity, TmcFieldCollection<TRegister>>();
 
             var current = CalcCurrent(o.RunCurrent, o.HoldCurrent);
             SetInitialField("vsense", current.vsense ? 1 : 0);
@@ -90,6 +100,18 @@ namespace SLS4All.Compact.McuClient.Pins
             var options = _options.Value;
             _fields.SetField(field, defaultFieldValue, options.Fields);
         }
+
+        protected void SetEndstopMoveInitialField(string field, long defaultFieldValue)
+        {
+            var options = _options.Value;
+            foreach (var sensitivity in Enum.GetValues<EndstopSensitivity>())
+            {
+                var dict = new TmcFieldCollection<TRegister>();
+                _endstopMoveFields[sensitivity] = dict;
+                var fields = options.EndstopMoveFields.GetValueOrDefault(sensitivity);
+                dict.SetField(field, defaultFieldValue, fields);
+            }
+         }
 
         private async ValueTask OnSetup(CancellationToken cancel)
         {
@@ -171,7 +193,25 @@ namespace SLS4All.Compact.McuClient.Pins
             return (vsense, irun, ihold);
         }
 
-        public abstract ValueTask BeginHomingMove(CancellationToken cancel);
-        public abstract ValueTask EndHomingMove(CancellationToken cancel);
+        public async ValueTask BeginEndstopMove(EndstopSensitivity sensitivity, CancellationToken cancel)
+        {
+            // set endstop move values
+            _lastEndstopSensitivity = sensitivity;
+            if (_endstopMoveFields.TryGetValue(sensitivity, out var fields))
+            {
+                foreach (var field in fields.Values)
+                    await SetRegister(field.Reg, field.Value, cancel);
+            }
+        }
+
+        public async ValueTask FinishEndstopMove(CancellationToken cancel)
+        {
+            // set original values
+            if (_endstopMoveFields.TryGetValue(_lastEndstopSensitivity, out var fields))
+            {
+                foreach (var field in fields.Values)
+                    await SetRegister(field.Reg, _fields.GetRegister(field.Reg, field.Value), cancel);
+            }
+        }
     }
 }

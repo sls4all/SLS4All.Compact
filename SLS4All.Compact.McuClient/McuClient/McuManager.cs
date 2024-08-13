@@ -13,6 +13,7 @@ using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
 using SLS4All.Compact.McuClient.Sensors;
+using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Frozen;
@@ -89,6 +90,7 @@ namespace SLS4All.Compact.McuClient
         protected readonly IOptionsMonitor<McuManagerOptions> _options;
         protected readonly IAppDataWriter _appDataWriter;
         protected readonly IEnumerable<IMcuDeviceFactory> _deviceFactories;
+        protected readonly IPrinterSettingsStorage _settingsStorage;
         protected readonly FrozenDictionary<string, McuItem> _mcuItems;
         private readonly CancellationTokenSource _runningCancelSource;
         private volatile McuShutdownMessage? _managerShutdownReason;
@@ -190,18 +192,20 @@ namespace SLS4All.Compact.McuClient
             ILogger logger,
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
-            IEnumerable<IMcuDeviceFactory> deviceFactories)
+            IEnumerable<IMcuDeviceFactory> deviceFactories,
+            IPrinterSettingsStorage settingsStorage)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
             _options = options;
             _appDataWriter = appDataWriter;
-            _masterTimestamp = new Dictionary<object, McuTimestamp>();
+            _deviceFactories = deviceFactories;
+            _settingsStorage = settingsStorage;
 
+            _masterTimestamp = new Dictionary<object, McuTimestamp>();
             _hasStartedSource = new();
             _setupHandlers = new();
             _runningCancelSource = new();
-            _deviceFactories = deviceFactories;
             _mcuItems = CreateMcus().ToFrozenDictionary();
         }
 

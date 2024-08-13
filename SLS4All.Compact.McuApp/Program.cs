@@ -21,6 +21,8 @@ using SLS4All.Compact.McuClient.PipedMcu;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.McuClient.Devices;
 using NReco.Logging.File;
+using SLS4All.Compact.PrinterSettings;
+using SLS4All.Compact.Storage.PrinterSettings;
 
 namespace SLS4All.Compact.McuApp
 {
@@ -84,6 +86,7 @@ namespace SLS4All.Compact.McuApp
             builder.Services.Configure<McuManagerOptions>(builder.Configuration.GetSection("McuManager"));
             builder.Services.AddAsImplementationAndParents<PipedMcuManagerLocal>(ServiceLifetime.Singleton);
             builder.Services.AddAsImplementationAndInterfaces<PipedMcuComponent>(ServiceLifetime.Singleton);
+            builder.Services.AddAsImplementationAndInterfaces<NullPrinterSettingsStorage>(ServiceLifetime.Singleton);
 
             builder.Services.Configure<McuAliasesOptions>(builder.Configuration.GetSection("McuAliases"));
             switch (applicationOptions.McuSerialDeviceFactory)

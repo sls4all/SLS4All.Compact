@@ -5,6 +5,7 @@
 // file located in the root directory of the repository.
 
 ﻿using SLS4All.Compact.Diagnostics;
+using SLS4All.Compact.Movement;
 
 namespace SLS4All.Compact.McuClient.Pins
 {
@@ -35,10 +36,18 @@ namespace SLS4All.Compact.McuClient.Pins
         double GetPrecisionIntervalFromSecondsDouble(double seconds);
         long GetPrecisionIntervalFromVelocity(double velocity);
         double GetPrecisionIntervalFromVelocityDouble(double velocity);
-        Task<bool> TryHome(
+        Task<bool> EndstopMove(
+            EndstopSensitivity sensitivity,
             double velocity,
             double startPosition,
             double finalPosition,
+            double? clearanceSteps,
+            bool expectedEndstopState,
+            CancellationToken cancel);
+        Task<bool> EndstopMove(
+            EndstopSensitivity sensitivity,
+            double maxVelocity,
+            Func<McuTimestamp, McuTimestamp> queueSteps,
             double? clearanceSteps,
             bool expectedEndstopState,
             CancellationToken cancel);

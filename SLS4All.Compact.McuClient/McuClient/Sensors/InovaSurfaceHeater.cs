@@ -32,6 +32,8 @@ using System.Threading.Tasks.Sources;
 using System.Xml.Linq;
 using static System.Collections.Specialized.BitVector32;
 using System.Collections.Frozen;
+using SLS4All.Compact.Storage.PrinterSettings;
+using System.Security.AccessControl;
 
 namespace SLS4All.Compact.McuClient.Sensors
 {
@@ -140,6 +142,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly object _locker = new object();
         private readonly McuManager _manager;
         private readonly ITemperatureCamera _camera;
+        private readonly IPrinterSettingsStorage _settingsStorage;
         private readonly List<float> _calcTemperatureTemp;
         private readonly HashSet<Pin> _pinsTemp;
         private readonly List<SectionPair> _sectionPairsTemp;
@@ -153,6 +156,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly Queue<float[]> _matrices;
         private volatile StrongBox<float>? _target;
         private volatile McuTemperatureSensorData? _current;
+        private volatile PrinterPowerSettings _powerSettings;
         private float[]? _matrix;
         private bool _isReady;
 
@@ -216,17 +220,22 @@ namespace SLS4All.Compact.McuClient.Sensors
 
         public int LightCount => _pins.Count;
 
+        public float MaxLightFactor => (float)_powerSettings.HalogenMaxPercent / 100;
+
         public InovaSurfaceHeater(
             IOptions<InovaSurfaceHeaterOptions> options,
             McuManager manager,
             ITemperatureCamera camera,
+            IPrinterSettingsStorage settingsStorage,
             string name)
         {
             _options = options;
             _manager = manager;
             _camera = camera;
+            _settingsStorage = settingsStorage;
             _name = name;
 
+            _powerSettings = settingsStorage.GetPowerSettings();
             _validationSupressor = new();
             _readEventQueue = new();
             _calcTemperatureTemp = new();
@@ -292,7 +301,7 @@ namespace SLS4All.Compact.McuClient.Sensors
             {
                 pin.Output = pin.Desc.SetupPin($"heater-{_name}-{pin.Index}");
                 pin.Output.SetupMaxDuration(o.MaxHeatTime);
-                _manager.PowerManager.SetupPin(pin.Output, o.PowerConsumptionPerLight, o.PowerManagerPriority);
+                _manager.PowerManager.SetupPin(pin.Output, o.PowerConsumptionPerLight, o.PowerManagerPriority, PowerPinType.Halogen);
             }
 
             // finalize
@@ -335,6 +344,7 @@ namespace SLS4All.Compact.McuClient.Sensors
                 }
                 var avgTemperature = sumTemperature / _sections.Length;
                 var current = new McuTemperatureSensorData(avgTemperature, time);
+                _powerSettings = _settingsStorage.GetPowerSettings();
                 _current = current;
 
                 Action action;
@@ -814,35 +824,47 @@ namespace SLS4All.Compact.McuClient.Sensors
             return ValueTask.CompletedTask;
         }
 
-        public void SetLights(bool enabled, int? mask = null, float? power = null)
+        public void SetLights(bool enabled, int? mask = null, float? power = null, bool forceMax = false)
         {
             lock (_locker)
             {
                 var options = _options.Value;
+                var maxFactor = MaxLightFactor;
                 _lightPowers.Clear();
                 if (enabled && !(power <= 0))
                 {
                     foreach (var pin in _pins.Values)
                     {
                         if ((mask != null && (mask.Value & (1 << pin.Index)) != 0) || (mask == null && pin.IsLight))
-                            _lightPowers.Add(pin.Index, power ?? options.LightsPwm);
+                        {
+                            var setPower = power ?? options.LightsPwm;
+                            if (!forceMax && setPower > maxFactor)
+                                setPower = maxFactor;
+                            _lightPowers.Add(pin.Index, setPower);
+                        }
                     }
                 }
                 Update();
             }
         }
 
-        public void SetLights(Span<(bool Enabled, int Index, float? Power)> items)
+        public void SetLights(Span<(bool Enabled, int Index, float? Power)> items, bool forceMax = false)
         {
             lock (_locker)
             {
                 var options = _options.Value;
+                var maxFactor = MaxLightFactor;
                 _lightPowers.Clear();
                 for (int i = 0; i < items.Length; i++)
                 {
                     ref var item = ref items[i];
                     if (item.Enabled && !(item.Power <= 0))
-                        _lightPowers.Add(item.Index, item.Power ?? options.LightsPwm);
+                    {
+                        var setPower = item.Power ?? options.LightsPwm;
+                        if (!forceMax && setPower > maxFactor)
+                            setPower = maxFactor;
+                        _lightPowers.Add(item.Index, setPower);
+                    }
                 }
                 Update();
             }

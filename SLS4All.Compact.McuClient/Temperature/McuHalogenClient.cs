@@ -4,7 +4,7 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Diagnostics;
@@ -17,6 +17,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using SLS4All.Compact.Storage.PrinterSettings;
+using SLS4All.Compact.Configuration;
 
 namespace SLS4All.Compact.Temperature
 {
@@ -32,11 +34,13 @@ namespace SLS4All.Compact.Temperature
         private readonly IOptionsMonitor<McuHalogenClientOptions> _options;
         private readonly IMediator _mediator;
         private readonly McuPrinterClient _printerClient;
+        private readonly IPrinterSettingsStorage _settingsStorage;
         private readonly PeriodicTimer _lowFrequencyTimer;
         private readonly string _surfaceId;
 
         private volatile LightsState _lowFrequencyState;
         private volatile int _lightCount;
+        private volatile PrinterPowerSettings _powerSettings;
 
         public LightsState CurrentState => _lowFrequencyState;
         public AsyncEvent<LightsState> StateChangedLowFrequency { get; } = new();
@@ -48,18 +52,21 @@ namespace SLS4All.Compact.Temperature
             ILogger<McuHalogenClient> logger,
             IOptionsMonitor<McuHalogenClientOptions> options,
             IMediator mediator,
-            McuPrinterClient printerClient)
+            McuPrinterClient printerClient,
+            IPrinterSettingsStorage settingsStorage)
             : base(logger)
         {
             _logger = logger;
             _options = options;
             _mediator = mediator;
             _printerClient = printerClient;
+            _settingsStorage = settingsStorage;
 
             var o = options.CurrentValue;
             _surfaceId = o.SurfaceId;
             _lowFrequencyState = new(false);
             _lowFrequencyTimer = new PeriodicTimer(o.LowFrequencyPeriod);
+            _powerSettings = _settingsStorage.GetPowerSettings();
         }
 
         public IDisposable SupressValidation()
@@ -69,37 +76,41 @@ namespace SLS4All.Compact.Temperature
             return heater.SupressValidation();
         }
 
-        ValueTask ILightsClient.SetLights(bool enabled, int? mask, float? power, bool hidden, IPrinterClientCommandContext? context, CancellationToken cancel)
-            => SetHalogens(enabled, mask, power, hidden, context, cancel);
+        public float GetMaxHalogenFactor(IPrinterClientCommandContext? context = null)
+        {
+            var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
+            var heater = (IMcuLightsControl)manager.Heaters[_surfaceId];
+            return heater.MaxLightFactor;
+        }
 
-        public ValueTask SetHalogens(bool enabled, int? mask = null, float? power = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        ValueTask ILightsClient.SetLights(bool enabled, int? mask, float? power, bool hidden, IPrinterClientCommandContext? context, CancellationToken cancel)
+            => SetHalogens(enabled, mask, power, hidden, false, context, cancel);
+
+        public ValueTask SetHalogens(bool enabled, int? mask = null, float? power = null, bool hidden = false, bool forceMax = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
             var heater = (IMcuLightsControl)manager.Heaters[_surfaceId];
-
-            heater.SetLights(enabled, mask, power);
+            heater.SetLights(enabled, mask, power, forceMax: forceMax);
 
             var state = GetState(heater);
             return StateChangedHighFrequency.Invoke(state, cancel);
         }
 
-        public ValueTask SetHalogens(Memory<(bool enabled, int index, float? power)> values, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public ValueTask SetHalogens(Memory<(bool enabled, int index, float? power)> values, bool hidden, bool forceMax = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
             var heater = (IMcuLightsControl)manager.Heaters[_surfaceId];
-
-            heater.SetLights(values.Span);
-
+            heater.SetLights(values.Span, forceMax: forceMax);
             var state = GetState(heater);
             return StateChangedHighFrequency.Invoke(state, cancel);
         }
 
         private LightsState GetState(IMcuLightsControl heater)
         {
-            return heater.HasLightsEnabled 
-                ? LightsState.LightsStateEnabled 
+            return heater.HasLightsEnabled
+                ? LightsState.LightsStateEnabled
                 : LightsState.LightsStateDisabled;
         }
 
@@ -109,6 +120,7 @@ namespace SLS4All.Compact.Temperature
             {
                 try
                 {
+                    _powerSettings = _settingsStorage.GetPowerSettings();
                     var manager = _printerClient.ManagerIfReady;
                     if (manager != null)
                     {

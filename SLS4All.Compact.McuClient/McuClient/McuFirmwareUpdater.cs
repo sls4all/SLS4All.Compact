@@ -22,6 +22,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using SLS4All.Compact.Storage.PrinterSettings;
 
 namespace SLS4All.Compact.McuClient
 {
@@ -237,7 +238,8 @@ namespace SLS4All.Compact.McuClient
                             }
                         }),
                         _appDataWriter,
-                        [ factory ]);
+                        [ factory ],
+                        NullPrinterSettingsStorage.Instance);
 
                     using (var managerCancelSource = CancellationTokenSource.CreateLinkedTokenSource(protectedCancel))
                     {

@@ -11,6 +11,7 @@ using SLS4All.Compact.Helpers;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
+using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Temperature;
 using SLS4All.Compact.Threading;
 using System;
@@ -30,9 +31,10 @@ namespace SLS4All.Compact.McuClient.PipedMcu
         public PipedMcuManagerProxy(
             ILoggerFactory loggerFactory, 
             IOptionsMonitor<McuManagerOptions> options, 
-            IAppDataWriter appDataWriter, 
+            IAppDataWriter appDataWriter,
+            IPrinterSettingsStorage settingsStorage,
             IOptionsMonitor<McuStepperGlobalOptions>? optionsStepperGlobal = null, 
-            ITemperatureCamera? temperatureCamera = null) : base(loggerFactory, options, appDataWriter, [], optionsStepperGlobal, temperatureCamera)
+            ITemperatureCamera? temperatureCamera = null) : base(loggerFactory, options, appDataWriter, [], settingsStorage, optionsStepperGlobal, temperatureCamera)
         {
         }
 

@@ -10,6 +10,41 @@ UseIdealCircleHotspotCalculator = false
 PushTemperatureCameraGCode = false
 SoftHeater = "SoftAnalysis"
 
+############################
+### Example plugin usage ###
+
+## Registers plugin assembly containing the plugin classes to be loaded
+## Use unique name (e.g. "TestPlugin") as a key to the PluginAssemblies dictionary
+#	[Application.PluginAssemblies]
+#	TestPlugin = "../SLS4All.Compact.TestPlugin/bin/Debug/net8.0/SLS4All.Compact.TestPlugin.dll"
+#
+## Registers plugin class that replaces specified default implementation
+## Use a unique name (e.g. "TestPlugin_PluginWatchdog") as a key to PluginReplacements dictionary
+## I.e. replaces default PrinterWatchDogMonitor with custom implementation
+#	[Application.PluginReplacements.TestPlugin_PluginWatchdog]
+#	Original = "SLS4All.Compact.Printer.PrinterWatchDogMonitor, SLS4All.Compact.Platform"
+#	Replacement = "SLS4All.Compact.TestPlugin.PluginWatchdog, SLS4All.Compact.TestPlugin"
+#
+## Registers a configuration/options class for the plugin
+## Use a unique name (e.g. "TestPlugin_PluginService") as a key to PluginOptions dictionary
+## Use a unique name (e.g. "PluginService") as a name of the configuration section
+#	[Application.PluginOptions.TestPlugin_PluginService]
+#	Options = "SLS4All.Compact.TestPlugin.PluginServiceOptions, SLS4All.Compact.TestPlugin"
+#	Section = "PluginService"
+#
+## Fills in the above registered configuration/options section for the plugin
+# [PluginService]
+# Message = "Hello from plugin!"
+#
+## In case the plugin is not a replacement, it needs to be registered to the IoC
+## If the plugin class needs to be created/initialized on startup and not created lazily
+## it should implement IConstructable or IDelayedConstructable.
+## I.e. following registers the plugin class as all its interfaces and the implementation type as a Singleton
+#	[Application.PluginServices.TestPlugin]
+#	Implementation = "SLS4All.Compact.TestPlugin.PluginService, SLS4All.Compact.TestPlugin"
+#	Registration = "AsImplementationAndInterfaces"
+#	Lifetime = "Singleton"
+
 [Logging.LogLevel]
 "Default" = "Information"
 "Microsoft" = "Warning"
@@ -208,6 +243,7 @@ ExecuteAsync = true
 
 
 [ExhaustiveNester]
+UseShell = true
 MeshMargin = 0.75
 ChamberStep = 1.0
 NestingDimX = 161
@@ -339,6 +375,7 @@ VolumeFactor = 1.1
 PowderBedLevelingDepth = 5
 SettleTemperatureIncrease = 0
 SettleTemperatureIncreaseDuration = "0:0:0"
+RStuckCheckEnabled = true
 
   [LayerClient.RMovesHome.1-1]
   Speed = 50
@@ -630,3 +667,4 @@ Z2Factor = 0.000_001
 SavePeriod = "0:5:0"
 
 [Frontend] # [monitored]
+

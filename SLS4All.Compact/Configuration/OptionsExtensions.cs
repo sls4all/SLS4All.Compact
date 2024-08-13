@@ -47,6 +47,20 @@ namespace SLS4All.Compact.Configuration
             return res.ToArray();
         }
 
+        public static KeyValuePair<TKey, TValue>[] GetEnabledKeyValues<TKey, TValue>(
+            this Dictionary<TKey, TValue?> dictionary,
+            Func<TValue, bool> getIsEnabled)
+            where TKey: notnull
+        {
+            var res = new List<KeyValuePair<TKey, TValue>>(dictionary.Count);
+            foreach (var pair in dictionary
+                .Where(x => x.Value != null && getIsEnabled(x.Value)))
+            {
+                res.Add(pair!);
+            }
+            return res.ToArray();
+        }
+
         public static KeyValuePair<string, TValue>[] GetOrderedEnabledKeyValues<TValue>(
             this Dictionary<string, TValue?> dictionary)
             where TValue : IOptionsItemEnable
@@ -72,5 +86,11 @@ namespace SLS4All.Compact.Configuration
         public static KeyValuePair<string, string?[]>[] GetOrderedEnabledKeyValues(
             this Dictionary<string, string?[]?> dictionary)
             => GetOrderedEnabledKeyValues(dictionary, x => (x?.Length > 0) == true);
+
+        public static KeyValuePair<TKey, TValue>[] GetEnabledKeyValues<TKey, TValue>(
+            this Dictionary<TKey, TValue?> dictionary)
+            where TKey : notnull
+            where TValue : IOptionsItemEnable
+             => GetEnabledKeyValues(dictionary, x => x.IsEnabled);
     }
 }
