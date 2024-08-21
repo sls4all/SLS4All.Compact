@@ -160,6 +160,7 @@ while :; do
                                 sleep 0.1
                             else
                                 wait $CHROMIUM_PID
+                                echo "Browser exited"
                                 exit
                             fi
                         else

@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.UpdateModel
 {
-    public record class ApplicationInfo
+    public record class ApplicationInfo : IComparable<ApplicationInfo>
     {
         public required ApplicationIdentity Identity { get; set; }
         public required string ArchiveFormat { get; set; }
@@ -20,5 +20,24 @@ namespace SLS4All.Compact.UpdateModel
         public required DateTimeOffset PublishedAt { get; set; }
         public long? ArchiveSize { get; set; }
         public string? ReleaseNotesUrl { get; set; }
+
+        public int CompareTo(ApplicationInfo? other)
+        {
+            if (other == null)
+                return 1;
+            var thisHasVersion = ApplicationIdentity.TryParseVersion(Identity?.VersionString, out var thisVersion);
+            var otherHasVersion = ApplicationIdentity.TryParseVersion(other.Identity?.VersionString, out var otherVersion);
+            if (thisHasVersion && !otherHasVersion)
+                return 1;
+            if (!thisHasVersion && otherHasVersion)
+                return -1;
+            if (thisHasVersion && otherHasVersion)
+            {
+                var versionCompare = thisVersion!.CompareTo(otherVersion!);
+                if (versionCompare != 0) 
+                    return versionCompare;
+            }
+            return Comparer<DateTime>.Default.Compare(PublishedAt.UtcDateTime, other.PublishedAt.UtcDateTime);
+        }
     }
 }

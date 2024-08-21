@@ -612,7 +612,7 @@ TemperatureCheckEnabled = true
 UnsafeTemperatureIncreaseAfterShutdown = 10
 UnsafeChamberTemperatureAfterShutdown = 100
 UnsafeSurfaceTemperatureAfterShutdown = 100
-ShutdownGracePeriod = "0:0:5"
+ShutdownGracePeriod = "0:0:15"
 
 [UIToastProvider] # [monitored]
 PlayMelody = true

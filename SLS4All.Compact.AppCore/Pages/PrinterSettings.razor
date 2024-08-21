@@ -750,7 +750,7 @@
                                     }
                                     if (shownUpdates.Length > 0)
                                     {
-                                        var shownUpdatesOrdered = shownUpdates.OrderByDescending(x => x.PublishedAt.UtcDateTime).ToArray();
+                                        var shownUpdatesOrdered = shownUpdates.OrderDescending().ToArray();
                                         <tr class="h-100">
                                             <td class="align-middle" colspan="2">
                                                 <div class="listview listview--hover listview--bordered update-list">
@@ -763,11 +763,11 @@
                                                                     {
                                                                         <span class="float-right badge badge-pill badge-success">Current</span>
                                                                     }
-                                                                    else if (info.PublishedAt < updateCurrent?.PublishedAt)
+                                                                    else if (info.CompareTo(updateCurrent) < 0)
                                                                     {
                                                                         <span class="float-right badge badge-pill badge-warning">Older</span>
                                                                     }
-                                                                    else if (info.PublishedAt > updateCurrent?.PublishedAt)
+                                                                    else if (info.CompareTo(updateCurrent) > 0)
                                                                     {
                                                                         <span class="float-right badge badge-pill badge-primary">Newer</span>
                                                                     }

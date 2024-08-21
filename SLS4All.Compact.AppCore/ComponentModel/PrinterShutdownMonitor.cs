@@ -32,7 +32,7 @@ namespace SLS4All.Compact.Printer
         public double UnsafeTemperatureIncreaseAfterShutdown { get; set; } = 10;
         public double UnsafeChamberTemperatureAfterShutdown { get; set; } = 100;
         public double UnsafeSurfaceTemperatureAfterShutdown { get; set; } = 100;
-        public TimeSpan ShutdownGracePeriod { get; set; } = TimeSpan.FromSeconds(5);
+        public TimeSpan ShutdownGracePeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
 
     public sealed class PrinterShutdownMonitor : IPrinterClientInitializer

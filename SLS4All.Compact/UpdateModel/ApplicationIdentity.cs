@@ -5,6 +5,7 @@
 // file located in the root directory of the repository.
 
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SLS4All.Compact.UpdateModel
 {
@@ -14,5 +15,19 @@ namespace SLS4All.Compact.UpdateModel
         public required string Platform { get; set; }
         public required string VersionString { get; set; }
         public required string Channel { get; set; }
+
+        public static bool TryParseVersion(string? versionString, [MaybeNullWhen(false)] out Version version)
+        {
+            if (string.IsNullOrWhiteSpace(versionString))
+            {
+                version = null;
+                return false;
+            }
+            var dash = versionString.IndexOf('-');
+            if (dash == -1)
+                return Version.TryParse(versionString, out version);
+            else
+                return Version.TryParse(versionString.Substring(0, dash), out version);
+        }
     }
 }

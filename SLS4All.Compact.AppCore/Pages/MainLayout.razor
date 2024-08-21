@@ -36,7 +36,7 @@
     var isShutdownScheduled = SafeShutdownManager.IsShutdownScheduled;
     var isMaintenanceRequired = MaintenanceManager.IsMaintenanceRequired;
     var latestUpdate = _updateLastState?.NewerInfos.Length > 0
-        ? _updateLastState?.NewerInfos.OrderByDescending(x => x.PublishedAt.UtcDateTime).First()
+        ? _updateLastState?.NewerInfos.OrderDescending().First()
         : null;
 }
 
