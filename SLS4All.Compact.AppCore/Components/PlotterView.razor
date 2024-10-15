@@ -26,7 +26,10 @@
     private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
 
     private string PlotterImageUri
-        => string.Create(CultureInfo.InvariantCulture, $"/api/PlottedImage/{Plotter.Version}?age={s_period.TotalSeconds}");
+        => string.Create(CultureInfo.InvariantCulture, $"/api/PlottedImage/{Plotter.Version}?age={s_period.TotalSeconds}&maxsize={MaxSize}");
+
+    [Parameter]
+    public int? MaxSize { get; set; }
 
     public PlotterView()
     {

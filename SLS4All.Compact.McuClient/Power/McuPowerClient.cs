@@ -30,6 +30,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using SLS4All.Compact.Storage.PrinterSettings;
 
 namespace SLS4All.Compact.Power
 {
@@ -37,7 +38,6 @@ namespace SLS4All.Compact.Power
     {
         public TimeSpan LowFrequencyPeriod { get; set; } = TimeSpan.FromSeconds(1);
         public string LaserId { get; set; } = "laser";
-        public double LaserMinimumVisibleFactor { get; set; } = 0.02;
         public TimeSpan SetPinTime { get; set; } = TimeSpan.FromSeconds(0.1);
         public TimeSpan LaserChangedNotifyPeriod { get; set; } = TimeSpan.FromSeconds(1);
     }
@@ -67,11 +67,10 @@ namespace SLS4All.Compact.Power
         public AsyncEvent<PowerState> StateChangedLowFrequency { get; } = new();
         public AsyncEvent<PowerState> StateChangedHighFrequency { get; } = new();
         public string LaserId => _laserId;
-        public double LaserMinimumVisibleFactor => _options.CurrentValue.LaserMinimumVisibleFactor;
 
         public McuPowerClient(
             ILogger<McuPowerClient> logger, 
-            IOptionsMonitor<McuPowerClientOptions> options, 
+            IOptionsMonitor<McuPowerClientOptions> options,
             IMediator mediator, 
             McuPrinterClient printerClient)
             : base(logger)

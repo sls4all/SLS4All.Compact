@@ -1,0 +1,76 @@
+﻿@using SLS4All.Compact.IO
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.UpdateModel
+@implements IDisposable
+@inject IApplicationUpdate ApplicationUpdate
+@inject IInputClient InputClient
+
+@{
+    var currentVersion = ApplicationUpdate.CurrentInfo;
+    var isSafeButtonOn = InputClient.CurrentState.TryGetEntry(InputClient.SafeButtonId, out var state) && state.Value;
+}
+
+<div class="logo">
+    @if (Title != null && Title.ChildContent != null)
+    {
+        @Title.ChildContent
+    }
+    else if (Title != null)
+    {
+        <div class="page-title @(isSafeButtonOn ? "safe-button-on" : "")" style="font-family: 'Audiowide', sans-serif; font-size: 24px;">
+            @if (Title.Image != null)
+            {
+                <img src="@Title.Image" class="img-fluid main-title-image" />
+            }
+            else if (Title.IconClass != null)
+            {
+                <i class="main-title-icon @Title.IconClass"></i>
+            }
+            <div class="page-name-version d-none d-sm-block ">
+                <span class="pr-3 page-name">SLS4All Compact</span>
+                @if (currentVersion != null)
+                {
+                    <span class="page-version">@currentVersion.Identity.VersionString (@currentVersion.Identity.Channel)</span>
+                }
+                else
+                {
+                    <span class="page-version">0.0.0 (local)</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly TimeSpan s_timerPeriod = TimeSpan.FromSeconds(1);
+    private Timer? _timer;
+
+    [Parameter]
+    public PrinterPageTitle? Title { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _timer = new Timer(OnTimer, null, s_timerPeriod, s_timerPeriod);
+    }
+
+    private void OnTimer(object? state)
+    {
+        _ = InvokeAsync(() =>
+        {
+            try
+            {
+                StateHasChanged();
+            }
+            catch (Exception)
+            {
+                // swallow
+            }
+        });     
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

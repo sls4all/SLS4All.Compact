@@ -49,7 +49,6 @@ namespace SLS4All.Compact.Power
     public interface IPowerClient
     {
         string LaserId { get; }
-        double LaserMinimumVisibleFactor { get; }
         PowerState CurrentState { get; }
         AsyncEvent<PowerState> StateChangedLowFrequency { get; }
         AsyncEvent<PowerState> StateChangedHighFrequency { get; }

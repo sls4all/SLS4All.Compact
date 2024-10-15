@@ -53,6 +53,9 @@ namespace SLS4All.Compact.McuClient.Sensors
         public required int MaxX { get; set; }
         public required int MinY { get; set; }
         public required int MaxY { get; set; }
+
+        public TemperatureBox Box
+            => new TemperatureBox(MinX, MinY, MaxX, MaxY);
     }
 
     public class InovaSurfaceHeaterSection : InovaSurfaceHeaterBox, IOptionsItemEnable
@@ -156,7 +159,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly Queue<float[]> _matrices;
         private volatile StrongBox<float>? _target;
         private volatile McuTemperatureSensorData? _current;
-        private volatile PrinterPowerSettings _powerSettings;
+        private volatile PrinterPowerSettingsSnapshot _powerSettings;
         private float[]? _matrix;
         private bool _isReady;
 
@@ -235,7 +238,7 @@ namespace SLS4All.Compact.McuClient.Sensors
             _settingsStorage = settingsStorage;
             _name = name;
 
-            _powerSettings = settingsStorage.GetPowerSettings();
+            _powerSettings = settingsStorage.Power;
             _validationSupressor = new();
             _readEventQueue = new();
             _calcTemperatureTemp = new();
@@ -344,7 +347,7 @@ namespace SLS4All.Compact.McuClient.Sensors
                 }
                 var avgTemperature = sumTemperature / _sections.Length;
                 var current = new McuTemperatureSensorData(avgTemperature, time);
-                _powerSettings = _settingsStorage.GetPowerSettings();
+                _powerSettings = _settingsStorage.Power;
                 _current = current;
 
                 Action action;
@@ -701,25 +704,40 @@ namespace SLS4All.Compact.McuClient.Sensors
         {
             var options = _options.Value;
             var width = _camera.Width;
+            var height = _camera.Height;
             var values = _calcTemperatureTemp;
             var matrix = _matrix!;
+            var mainBox = _camera.MainBox;
 
             values.Clear();
             if (section2 == null)
             {
-                for (var y = section1.Source.MinY; y <= section1.Source.MaxY; y++)
-                    for (int x = section1.Source.MinX; x <= section1.Source.MaxX; x++)
-                        values.Add(matrix[x + y * width]);
+                var box1 = mainBox.OffsetInTopLeft(section1.Source.Box);
+                var minX = box1.MinX; // leftmost
+                var maxX = box1.MaxX; // rightmost
+                var minY = box1.MinY; // inner top
+                var maxY = box1.MaxY; // inner bottom
+                for (var y = minY; y <= maxY; y++)
+                {
+                    for (int x = minX; x <= maxX; x++)
+                    {
+                        if (x >= 0 && x < width && y >= 0 && y < height)
+                            values.Add(matrix[x + y * width]);
+                    }
+                }
             }
             else
             {
+                var box1 = mainBox.OffsetInTopLeft(section1.Source.Box);
+                var box2 = mainBox.OffsetInTopLeft(section2.Source.Box);
+
                 // get values from triangular shape getting smaller to the center of the box, constructed from first/second row/column
                 if (section1.LogicalY == section2.LogicalY) // row
                 {
-                    var minX = Math.Min(section1.Source.MinX, section2.Source.MinX); // leftmost
-                    var maxX = Math.Max(section1.Source.MaxX, section2.Source.MaxX); // rightmost
-                    var minY = Math.Max(section1.Source.MinY, section2.Source.MinY); // inner top
-                    var maxY = Math.Min(section1.Source.MaxY, section2.Source.MaxY); // inner bottom
+                    var minX = Math.Min(box1.MinX, box2.MinX); // leftmost
+                    var maxX = Math.Max(box1.MaxX, box2.MaxX); // rightmost
+                    var minY = Math.Max(box1.MinY, box2.MinY); // inner top
+                    var maxY = Math.Min(box1.MaxY, box2.MaxY); // inner bottom
 
                     if (options.SmallerTriangles)
                     {
@@ -736,15 +754,18 @@ namespace SLS4All.Compact.McuClient.Sensors
                             ? (y - minY) * (maxX - minX + 1) / (2 * (maxY - minY)) // on first row: start with smallest border 
                             : (maxY - y) * (maxX - minX + 1) / (2 * (maxY - minY)); // on second row: start with largest border
                         for (int x = minX + border, xe = maxX - border; x <= xe; x++)
-                            values.Add(matrix[x + y * width]);
+                        {
+                            if (x >= 0 && x < width && y >= 0 && y < height)
+                                values.Add(matrix[x + y * width]);
+                        }
                     }
                 }
                 else // column
                 {
-                    var minX = Math.Max(section1.Source.MinX, section2.Source.MinX); // inner left 
-                    var maxX = Math.Min(section1.Source.MaxX, section2.Source.MaxX); // inner right
-                    var minY = Math.Min(section1.Source.MinY, section2.Source.MinY); // topmost
-                    var maxY = Math.Max(section1.Source.MaxY, section2.Source.MaxY); // bottommost
+                    var minX = Math.Max(box1.MinX, box2.MinX); // inner left 
+                    var maxX = Math.Min(box1.MaxX, box2.MaxX); // inner right
+                    var minY = Math.Min(box1.MinY, box2.MinY); // topmost
+                    var maxY = Math.Max(box1.MaxY, box2.MaxY); // bottommost
 
                     if (options.SmallerTriangles)
                     {
@@ -761,10 +782,15 @@ namespace SLS4All.Compact.McuClient.Sensors
                             ? (x - minX) * (maxY - minY + 1) / (2 * (maxX - minX)) // on first column: start with smallest border 
                             : (maxX - x) * (maxY - minY + 1) / (2 * (maxX - minX)); // on second column: start with largest border
                         for (int y = minY + border, ye = maxY - border; y <= ye; y++)
-                            values.Add(matrix[x + y * width]);
+                        {
+                            if (x >= 0 && x < width && y >= 0 && y < height)
+                                values.Add(matrix[x + y * width]);
+                        }
                     }
                 }
             }
+            if (values.Count == 0)
+                values.Add(0);
             var actualMode = mode ?? options.Mode;
             switch (actualMode)
             {

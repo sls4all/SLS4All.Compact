@@ -1,0 +1,42 @@
+﻿@page "/thermocameracompare"
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Temperature;
+@inherits AppPage
+@inject ITemperatureClient TemperatureClient
+@inject IOptionsMonitor<ThermoCameraCompareOptions> Options
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
+
+@{
+    var state = TemperatureClient.CurrentState;
+    var stateEntries = state.Entries.ToDictionary(x => x.Id);
+}
+
+<div class="root-container">
+    <div class="container-flex">
+        <div class="row">
+            <div class="col-6">
+                <ThermoCameraView @key="_cameraViewKey" @ref="_cameraView" class="w-100" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" RefreshRate="Options.CurrentValue.RefreshRate" Average="Options.CurrentValue.Average" ExternalCssScope="@CssScope" />
+            </div>
+            <div class="col-6">
+                <ThermoCameraView @key="_cameraViewKey2" @ref="_cameraView2" PrimaryCamera="false" class="w-100" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" RefreshRate="Options.CurrentValue.RefreshRate" Average="Options.CurrentValue.Average" ExternalCssScope="@CssScope" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public class ThermoCameraCompareOptions
+    {
+        public double RefreshRate { get; set; } = 4;
+        public double Average { get; set; } = 1;
+    }
+
+    private const string CssScope = "b-thermo-camera-compare";
+    public const string SelfPath = "/thermocameracompare";
+    private readonly object _cameraViewKey = new object();
+    private readonly object _cameraViewKey2 = new object();
+    private ThermoCameraView? _cameraView;
+    private ThermoCameraView? _cameraView2;
+}

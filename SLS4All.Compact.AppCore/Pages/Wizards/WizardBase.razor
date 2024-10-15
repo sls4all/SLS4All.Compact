@@ -1,0 +1,104 @@
+﻿@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@typeparam TStep
+@inherits AppPage
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+
+<CancelModal @ref="_cancelModal" />
+<CancelModal @ref="_progressModal" ProgressCurrent="_done" ProgressTotal="_total" />
+
+@if (IsPrinting)
+{
+    <div class="printing-notification">
+        <p>
+            <span class="badge badge-dark text-wrap">
+                <i class="bi bi-play" /> Printing is in progress, wizards are unavailable.
+            </span>
+        </p>
+        <p>
+            <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+        </p>
+    </div>
+    return;
+}
+
+@code {
+    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private Timer? _timer;
+    private CancelModal? _cancelModal, _progressModal;
+    private TStep _stepIndex = default(TStep)!;
+    private double _done, _total;
+
+    protected bool IsPrinting => PrintingGlobal.BackgroundTask.Status?.IsCompleted == false;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string ReturnAddress { get; set; } = IndexPage.SelfPath;
+
+    protected CancelModal CancelModal => _cancelModal!;
+    protected CancelModal ProgressModal => _progressModal!;
+
+    protected TStep StepIndex
+    {
+        get => _stepIndex;
+        set => _stepIndex = value;
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _timer = new Timer(OnTimer, null, s_period, s_period);
+    }
+
+    private void OnTimer(object? state)
+        => TryInvokeStateHasChanged(OnTimerOverride);
+
+    protected virtual ValueTask<bool> OnTimerOverride()
+        => ValueTask.FromResult(true);
+
+    protected void NavigateAfterFinished()
+    {
+        NavigationManager.NavigateTo(ReturnAddress);
+    }
+
+    protected void ResetStatus()
+    {
+        _done = 0;
+        _total = 1;
+        StateHasChanged();
+    }
+
+    protected Task OnStatus(double done, double total, TimeSpan? estimate, object? status)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            _done = done;
+            _total = total;
+            return ValueTask.CompletedTask;
+        });
+        return Task.CompletedTask;
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        await base.DisposeAsync();
+    }
+}

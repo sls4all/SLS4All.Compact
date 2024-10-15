@@ -7,6 +7,7 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using SLS4All.Compact.Helpers
 @using SLS4All.Compact.Network
+@using SLS4All.Compact.Pages.Wizards
 @using SLS4All.Compact.Printer
 @using SLS4All.Compact.ComponentModel
 @using SLS4All.Compact.Slicing
@@ -367,7 +368,10 @@
                         <a class="nav-link @(_tabIndex is TabIndex.Data ? "active" : "")" @onclick="() => SelectTab(TabIndex.Data)">Data</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link @(_tabIndex is TabIndex.Advanced or TabIndex.Testing ? "active" : "")" @onclick="() => SelectTab(TabIndex.Advanced)">Advanced</a>
+                        <a class="nav-link @(_tabIndex is TabIndex.Advanced ? "active" : "")" @onclick="() => SelectTab(TabIndex.Advanced)">Advanced</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_tabIndex is TabIndex.Testing ? "active" : "")" @onclick="() => SelectTab(TabIndex.Testing)">Testing</a>
                     </li>
                 </ul>
             </div>
@@ -828,7 +832,7 @@
                                     </td>
                                 </tr>
                             }
-                            else if (_tabIndex is TabIndex.Advanced or TabIndex.Testing)
+                            else if (_tabIndex is TabIndex.Advanced)
                             {
                                 <tr>
                                     <td colspan="4">
@@ -858,8 +862,10 @@
                                     valueEntered: EventCallback.Factory.Create(this, SaveSettings),
                                     nameof(temperature.SurfaceOffset1),
                                     nameof(temperature.SurfaceTemperature1),
+                                    nameof(temperature.ThermoCameraOffsetX),
                                     nameof(temperature.SurfaceOffset2),
-                                    nameof(temperature.SurfaceTemperature2)
+                                    nameof(temperature.SurfaceTemperature2),
+                                    nameof(temperature.ThermoCameraOffsetY)
                                 )
                                 <tr>
                                     <td colspan="4">
@@ -874,26 +880,49 @@
                                     valueEntered: EventCallback.Factory.Create(this, () => WatchDogSaveSettings(false)),
                                     nameof(watchDog.IsWatchDogEnabled)
                                 )
+                            }
+                            else if (_tabIndex is TabIndex.Testing)
+                            {
                                 <tr>
                                     <td colspan="4">
                                         <p class="list-header">
-                                            TESTING
+                                            TESTING AND CALIBRATION
                                         </p>
                                     </td>
                                 </tr>
                                 <tr class="hide-top-line">
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.OpticalSetup?ReturnAddress=@SelfPath/@TabIndex.Testing">Optical setup</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@OpticalSetupWizard.SelfPath?ReturnAddress=@GetReloadUri()">Optical setup</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Guides trough setting up printer optical path.
+                                            Guides trough setting up the printer optical path.
                                         </p>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@SelfPath/@TabIndex.Testing">Homing and motor check</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@GalvoCalibrationWizard.SelfPath?ReturnAddress=@GetReloadUri()">Galvo calibration</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Guides trough printing a galvo calibration pattern and setting calibration data.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@ThermoSetupWizard.SelfPath?ReturnAddress=@GetReloadUri()">Thermo camera setup</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Guides trough setting up the thermo camera.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@GetReloadUri()">Homing and motor check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -903,7 +932,7 @@
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@SelfPath/@TabIndex.Testing">Halogen heater check</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@GetReloadUri()">Halogen heater check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -913,7 +942,7 @@
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.ChamberHeaterCheck?ReturnAddress=@SelfPath/@TabIndex.Testing">Chamber heaters check</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@ChamberHeaterCheckWizard.SelfPath?ReturnAddress=@GetReloadUri()">Chamber heaters check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">

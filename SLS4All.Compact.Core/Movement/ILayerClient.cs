@@ -39,8 +39,13 @@ namespace SLS4All.Compact.Movement
         public TimeSpan TemperatureDelay { get; set; }
         /// <summary>
         /// Makes the Z movement behave similarily like normal, but in fact Z will not additively move down or up in consequent layer moves calls.
+        /// This should effectively be the same as setting <see cref="LayerThickness"/> to zero.
         /// </summary>
         public bool DisableLayerAdditiveMovement { get; set; }
+        /// <summary>
+        /// Disables Z movement entirely
+        /// </summary>
+        public bool DisableZMovement { get; set; }
     }
 
     public class BeginLayerSetup
@@ -79,8 +84,13 @@ namespace SLS4All.Compact.Movement
         public double SinteredVolumeFactor { get; set; }
         /// <summary>
         /// Makes the Z movement behave similarily like normal, but in fact Z will not additively move down or up in consequent layer moves calls.
+        /// This should effectively be the same as setting <see cref="LayerThickness"/> to zero.
         /// </summary>
         public bool DisableLayerAdditiveMovement { get; set; }
+        /// <summary>
+        /// Disables Z movement entirely
+        /// </summary>
+        public bool DisableZMovement { get; set; }
     }
 
     public class PrintCapSetup
@@ -107,8 +117,13 @@ namespace SLS4All.Compact.Movement
         public TimeSpan TemperatureDelay { get; set; }
         /// <summary>
         /// Makes the Z movement behave similarily like normal, but in fact Z will not additively move down or up in consequent layer moves calls.
+        /// This should effectively be the same as setting <see cref="LayerThickness"/> to zero.
         /// </summary>
         public bool DisableLayerAdditiveMovement { get; set; }
+        /// <summary>
+        /// Disables Z movement entirely
+        /// </summary>
+        public bool DisableZMovement { get; set; }
     }
 
     public class PowderVolumeSetup
@@ -178,6 +193,8 @@ namespace SLS4All.Compact.Movement
         /// </summary>
         double MinimumPowderBedDepth { get; }
         PowderVolumeTotals GetPowderVolume(PowderVolumeSetup setup);
+        Task BedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task FinishBedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default);
         Task BeginPrint(CancellationToken cancel = default);
         Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
         Task BeginLayer(BeginLayerSetup setup, CancellationToken cancel = default);

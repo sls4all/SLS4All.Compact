@@ -85,7 +85,7 @@ namespace SLS4All.Compact.ComponentModel
                     {
                         Type = ToastMessageType.Warning,
                         HeaderText = "Safety switch error",
-                        BodyText = "The laser cannot be turned on since the printer lid or powder bin is open. If a printing is in progress, it will probably be incomplete. It may also be warped due to rapid cooling if the lid has been opened mid-printing.",
+                        BodyText = "The laser cannot be turned on since the laser key is off, or printer lid or powder bin is open. If a printing is in progress, it will probably be incomplete. It may also be warped due to rapid cooling if the lid has been opened mid-printing.",
                         Key = this,
                     });
                 }

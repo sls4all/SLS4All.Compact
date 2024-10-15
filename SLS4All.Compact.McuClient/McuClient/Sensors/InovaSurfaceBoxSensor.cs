@@ -21,6 +21,8 @@ using System.Threading.Tasks;
 using static System.Collections.Specialized.BitVector32;
 using System.Xml.Linq;
 using SLS4All.Compact.Helpers;
+using System.Reflection.Metadata.Ecma335;
+using SLS4All.Compact.Collections;
 
 namespace SLS4All.Compact.McuClient.Sensors
 {
@@ -30,6 +32,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         public required int MaxX { get; set; }
         public required int MinY { get; set; }
         public required int MaxY { get; set; }
+        public TemperatureBox Box => new TemperatureBox(MinX, MinY, MaxX, MaxY);
         public required InovaSurfaceHeaterMode Mode { get; set; }
     }
 
@@ -95,11 +98,19 @@ namespace SLS4All.Compact.McuClient.Sensors
             var options = _options.Value;
             var matrix = _camera.CurrentPixels;
             var width = _camera.Width;
+            var height = _camera.Height;
             var values = _calcTemperatureTemp;
+            var mainBox = _camera.MainBox;
+            var box = mainBox.OffsetInTopLeft(options.Box);
             values.Clear();
-            for (var y = options.MinY; y <= options.MaxY; y++)
-                for (int x = options.MinX; x <= options.MaxX; x++)
-                    values.Add(matrix[x + y * width]);
+            for (var y = box.MinY; y <= box.MaxY; y++)
+                for (int x = box.MinX; x <= box.MaxX; x++)
+                {
+                    if (x >= 0 && x < width && y >= 0 && y < height)
+                        values.Add(matrix[x + y * width]);
+                }
+            if (values.Count == 0)
+                values.Add(0);
             float temperature;
             switch (options.Mode)
             {

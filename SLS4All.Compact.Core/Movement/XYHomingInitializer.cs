@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Movement
 {
-    public sealed class XYHomingInitializer : IPrinterClientInitializer
+    public class XYHomingInitializer : IPrinterClientInitializer
     {
         private readonly ILogger<XYHomingInitializer> _logger;
         private readonly IMovementClient _movementClient;
@@ -27,7 +27,7 @@ namespace SLS4All.Compact.Movement
             _movementClient = movementClient;
         }
 
-        public async Task InitializeClient(IPrinterClient client, IPrinterClientCommandContext? context, CancellationToken cancel)
+        public virtual async Task InitializeClient(IPrinterClient client, IPrinterClientCommandContext? context, CancellationToken cancel)
         {
             _logger.LogDebug($"Homing XY");
             await _movementClient.HomeXY(context, cancel);

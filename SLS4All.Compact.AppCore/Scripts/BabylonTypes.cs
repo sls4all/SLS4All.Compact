@@ -17,7 +17,7 @@ namespace SLS4All.Compact.Scripts
         [JSField("scaleGizmoEnabled")]
         ValueTask<bool> ScaleGizmoEnabled(JSFieldValue<bool> value = default);
     }
-
+    
     public interface IBabylonAbstractMesh : IJSProxy
     {
         [JSField("isVisible")]

@@ -30,6 +30,13 @@ namespace SLS4All.Compact.Temperature
         public double? LayersTemperatureEnd { get; set; }
         public TimeSpan? LayersPeriod { get; set; }
 
+        public void DisableHeatingLayers()
+        {
+            LayersTemperatureStart = null;
+            LayersTemperatureEnd = null;
+            LayersPeriod = null;
+        }
+
         public ControlledHeatingSetup Clone()
             => (ControlledHeatingSetup)MemberwiseClone();
     }

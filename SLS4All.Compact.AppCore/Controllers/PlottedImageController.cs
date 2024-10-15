@@ -46,7 +46,7 @@ namespace SLS4All.Compact.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task Image(string id, [FromQuery] double age = 0)
+        public async Task Image(string id, [FromQuery] double age = 0, [FromQuery] int? maxSize = null)
         {
             MimeData image;
             lock (_singleThreadedCreateImageLock)
@@ -56,7 +56,7 @@ namespace SLS4All.Compact.Controllers
                 //_comparer.FinalizeMask(size.width, size.height, mask);
                 //_plotter.ReplaceWith(mask);
 
-                image = _plotter.CreateImage(newerThan: TimeSpan.FromSeconds(age), drawHotspot: true);
+                image = _plotter.CreateImage(newerThan: TimeSpan.FromSeconds(age), drawHotspot: true, maxSize: maxSize);
             }
             Response.ContentType = image.ContentType;
             Response.Headers["Cache"] = "no-store, no-cache, must-revalidate";

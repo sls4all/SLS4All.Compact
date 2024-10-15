@@ -1,0 +1,93 @@
+﻿.dummy {
+}
+
+p {
+    font-size: 20px;
+}
+
+.printing-notification {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+}
+
+    .printing-notification .btn {
+        font-size: 17px;
+    }
+
+.validation-notification {
+}
+
+.step-indicator {
+    font-size: 17px;
+}
+
+.table th {
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.table td {
+    font-size: 17px;
+}
+
+.table tr.powder-total-row {
+    background: #fff3;
+}
+
+.lead a {
+    margin-right: 8px;
+}
+
+.video-container {
+    flex-grow: 1;
+    position: relative;
+}
+
+    .video-container .light-control-container {
+        position: absolute;
+        height: 100%;
+    }
+
+    .video-container button {
+        opacity: 75%;
+        white-space: nowrap;
+    }
+
+        .video-container button.last-button {
+            position: absolute;
+            bottom: 0px;
+        }
+
+hr {
+    width: 100%;
+}
+
+.container {
+    height: 100%;
+}
+
+    .container .jumbotron {
+        display: flex;
+        flex-direction: column;
+    }
+
+.modal-progress {
+    text-align: center;
+    font-size: 17px;
+}
+
+.preview-container {
+    padding: 0px !important;
+    background-color: transparent;
+}
+
+.table-sm td, .table-sm th {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.halogen-camera-view {
+    width: 100%;
+    height: 380px;
+}

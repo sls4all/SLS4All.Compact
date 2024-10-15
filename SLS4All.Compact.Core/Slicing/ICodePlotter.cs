@@ -24,7 +24,7 @@ namespace SLS4All.Compact.Slicing
         SystemTimestamp[] TimestampMap { get; }
 
         void Clear();
-        MimeData CreateImage(TimeSpan newerThan = default, string caption = "", int? layerIndex = null, bool drawHotspot = false);
+        MimeData CreateImage(TimeSpan newerThan = default, string caption = "", int? layerIndex = null, bool drawHotspot = false, int? maxSize = null);
         (int width, int height) GetMask(ref float[] output);
         void ReplaceWith(float[] mask);
         Vector2 GetCenter();

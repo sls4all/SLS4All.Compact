@@ -182,6 +182,28 @@
     </div>
 </Modal>
 
+<Modal @ref="_analyseModal" class="fade" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Analyse heating
+            </h5>
+        </div>
+        <div class="modal-body">
+            <div class="input-group input-group-sm mb-1">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">Analyse target [deg]</span>
+                </div>
+                <input type="number" step="any" class="form-control virtual-keyboard" style="width: 11ch" @bind="Values.AnalyseTargetTemperature" />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => StartAnalyseHeating(modal)" class="btn btn-primary">Start analysis!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
 <FileBrowserModal @ref="_fileBrowser"
     MaxSelectedCount="1"
     Masks="@(new[] { "*.csv.br", "*.csv.gz", "*.csv", "*.mlnet", "*.s4a-sha" })"
@@ -215,7 +237,7 @@
                     }
                     @if (!AnalyseHeating.IsRunning)
                     {
-                        <a class="dropdown-item" href="javascript:void(0)" @onclick="StartAnalyseHeating">Start heating analysis</a>
+                        <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _analyseModal!.Show()">Start heating analysis...</a>
                     }
                     else
                     {
@@ -357,12 +379,14 @@
         public decimal LayersTemperatureEnd = 0;
         public decimal LayersPeriodSeconds = 60;
         public decimal MinimumTimeMinutes = 70;
+        public decimal AnalyseTargetTemperature = 170;
     }
 
     private readonly Dictionary<string, double> _newTargetValues = new();
     private Modal? _heatingModal;
     private Modal? _coolingModal;
     private Modal? _softSurfaceHeaterModal;
+    private Modal? _analyseModal;
     private FileBrowserModal? _fileBrowser;
     private decimal? _newPowermanMax;
     private string? _lastMeasureReport;
@@ -392,7 +416,7 @@
         }
         catch (ObjectDisposedException)
         {
-        /* swallow */
+            /* swallow */
         }
     });
 
@@ -462,33 +486,42 @@
         }
     }
 
-    private async Task StartAnalyseHeating()
+    private async Task StartAnalyseHeating(Modal modal)
     {
-        try
+        await modal.Close();
+        _ = Task.Run(async () =>
         {
-            await AnalyseHeating.Start(null, ex =>
+            try
+            {
+                await AnalyseHeating.Start(null,
+                    new AnalyseHeatingSetup
+                    {
+                        TargetTemperature = (double)Values.AnalyseTargetTemperature
+                    },
+                    ex =>
+                    {
+                        ToastProvider.Show(new ToastMessage
+                        {
+                            Type = ToastMessageType.Error,
+                            HeaderText = "Error during analyse",
+                            BodyText = ex.Message,
+                            Key = this,
+                            Exception = ex,
+                        });
+                    }, ToastAnalyseSuccess);
+            }
+            catch (Exception ex)
             {
                 ToastProvider.Show(new ToastMessage
                 {
                     Type = ToastMessageType.Error,
-                    HeaderText = "Error during analyse",
+                    HeaderText = "Error starting analyse",
                     BodyText = ex.Message,
                     Key = this,
                     Exception = ex,
                 });
-            }, ToastAnalyseSuccess);
-        }
-        catch (Exception ex)
-        {
-            ToastProvider.Show(new ToastMessage
-            {
-                Type = ToastMessageType.Error,
-                HeaderText = "Error starting analyse",
-                BodyText = ex.Message,
-                Key = this,
-                Exception = ex,
-            });
-        }
+            }
+        });
     }
 
     private async Task StopAnalyseHeating()

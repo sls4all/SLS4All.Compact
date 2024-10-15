@@ -32,5 +32,7 @@ namespace SLS4All.Compact.Movement
         public IBedProjection Recreate(
             Vector3 laserOffset,
             Vector3 laserDirectionBase);
+        public bool ValidateJsonConfig(string? json);
+        public Task<bool> SetJsonConfig(string? json, CancellationToken cancel = default);
     }
 }

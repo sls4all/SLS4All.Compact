@@ -96,9 +96,6 @@ namespace SLS4All.Compact.Movement
             return ValueTask.CompletedTask;
         }
 
-        public override Task EnableProjectionPattern(bool enable, CancellationToken cancel = default)
-            => Task.CompletedTask;
-
         public override Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();

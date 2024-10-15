@@ -1,0 +1,576 @@
+﻿@page "/wizard/optical-setup"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using Nito.AsyncEx
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@inherits WizardBase<OpticalSetupWizard.Step>
+@inject IToastProvider ToastProvider
+@inject ILayerClient LayerClient
+@inject IMovementClient MovementClient
+@inject IPowerClient PowerClient
+@inject IPrinterSafetySessionManager SafetySession
+@inject IPrinterSettingsStorage PrinterSettings
+@inject IOptionsMonitor<OpticalSetupWizardOptions> Options
+
+@{
+    base.BuildRenderTree(__builder);
+    var powerState = PowerClient.CurrentState;
+    var laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
+
+    RenderFragment laserControls = @<text>
+        @if (_laserEnabling)
+        {
+            <button b-camera-view class="btn btn-danger btn--icon-text" role="button" disabled>
+                <text><i b-camera-view class="bi bi-square" /> Enabling laser...</text>
+            </button>
+        }
+        else if (_laserDisabling)
+        {
+            <button b-camera-view class="btn btn-danger btn--icon-text" role="button" disabled>
+            <text><i b-camera-view class="bi bi-border-all" /> Disabling laser...</text>
+            </button>
+        }
+        else if (laserOn)
+        {
+            <button b-camera-view class="btn btn-danger btn--icon-text" role="button" @onclick="() => ToggleLaser(desiredState: false)">
+                <text><i b-camera-view class="bi bi-border-all" /> Disable laser</text>
+            </button>
+        }
+        else
+        {
+            <button b-camera-view class="btn btn-danger btn--icon-text" role="button" @onclick="() => ToggleLaser(desiredState: true)">
+                <text><i b-camera-view class="bi bi-square" /> Enable laser</text>
+            </button>
+        }
+    </text>;
+
+    RenderFragment videoView = @<text>
+        @if (!_fullScreen)
+        {
+            <p class="lead pt-3">
+                <a class="btn btn-secondary btn-lg" role="button" @onclick="EnterFullscreen">
+                    <i b-camera-view class="bi bi-arrows-fullscreen" /> Show video and controls...
+                </a>
+            </p>
+        }
+        else
+        {
+            <VideoCameraView @key="_cameraViewKey" class="video-container" ExternalCssScope="@CssScope" Mode="CameraMode.LaserMinimal">
+                <br />
+                <button b-camera-view class="btn btn-secondary btn--icon-text" role="button" @onclick="ExitFullscreen">
+                    <text><i b-camera-view class="bi bi-arrows-fullscreen" /> Close</text>
+                </button>
+                <br />
+                <br />
+            @laserControls
+            </VideoCameraView>
+        }
+    </text>;
+}
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_laserEnableModal" class="app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Power on laser?
+            </h5>
+        </div>
+        <div class="modal-body">
+            Are you <b>really</b> sure you want to enable the <b>laser power</b>? Laser will be powered to minimum intensity but you <b>must</b> still wear <b>correct protective goggles</b>!
+        </div>
+        <div class="modal-footer">
+            @if (!_doubleConfirmed)
+            {
+                <button @onclick="() => _doubleConfirmed = true" class="btn btn-danger">Enable laser power!</button>
+            }
+            else
+            {
+                <button @onclick="() => ToggleLaser(true)" class="btn btn-danger" style="font-weight: bold">Really enable laser power!</button>
+            }
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="container">
+    <div class="jumbotron @(_fullScreen ? "p-0" : "pt-4 pb-2") h-100">
+        @switch (StepIndex)
+        {
+            case Step.Homing:
+                <h2>
+                    Optical setup
+                </h2>
+                <hr class="my-3">
+                <p>
+                    This wizard will help you focus the laser beam, mechanically center the galvo motors and galvo holder.
+                    This generally needs to be done once after you install or move the optical components, like the laser, lens or galvo holder.
+                </p>
+                <p>
+                    Please ensure that the printer is free of any powder and the both beds can move to the top unrestricted.
+                </p>
+                <p>
+                    Before you click continue, please do following:
+                    <ul>
+                        <li>Ensure that you have the correct laser safety goggles ready.</li>
+                        <li>
+                            Place a dark/black piece of paper to the print bed. This piece of paper should cover the entiriety of the moving part of the print bed.
+                            You may need to cut the piece of paper with scissors or knife to prepare it to fit.
+                            Please note that the print bed will move up and down in the next steps,
+                            so please ensure the paper is not bigger than the moving part and will move with the bed Z axis.
+                        </li>
+                        <li>Mark the exact center of the print bed on the paper with a thin cross.</li>
+                    </ul>
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Home the X/Y/Z axis...</a>
+                    @if (MainLayout!.IsDeveloperMode)
+                    {
+                        <a class="btn btn-danger btn-lg" role="button" @onclick="() => DoStep(skip: true)">Skip step...</a>
+                    }
+                </p>
+                break;
+            case Step.CenteringMotors1:
+                if (!_fullScreen)
+                {
+                    <h2>
+                        Centering galvo motors
+                    </h2>
+                    <hr class="my-3">
+                    <p>
+                        Please uncover the plastic parts of galvo holder.
+                        Loosen the two screws in the metal galvo enclosure that hold the X and Y galvo motors in place.
+                        Once you click the <b>Enable laser</b> button below, look at the live camera view to fix the X and Y
+                        galvo motors in a position that points the laser to the center of the bed you marked in the step before.
+                    </p>
+                    <p>
+                        Once you center the galvo motors by looking at the live camera view, you can very carefully look trough the top opening of the galvo holder to fine tune
+                        galvo motor positions before finally tightening the screws.
+                    </p>
+                    <p class="validation-notification">
+                        <span class="badge badge-warning text-wrap text-left" style="line-height: 150%">
+                            <i class="bi bi-exclamation-triangle" /> By clicking <b>Enable laser</b> button, the laser will be turned on. It is absolutely neccessary to
+                            <b>wear protective goggles</b> that are applicable for the used laser type and wavelength!
+                        </span>
+                    </p>
+                }
+                @videoView
+                if (!_fullScreen)
+                {
+                    <hr class="my-3">
+                    <p class="lead">
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">I have centered the motors...</a>
+                    </p>
+                }
+                break;
+            case Step.FocusingLaser:
+                if (!_fullScreen)
+                {
+                    <h2>
+                        Focusing the laser beam
+                    </h2>
+                    <hr class="my-3">
+                    <p>
+                        Loosen the four screws that hold the laser base in place.
+                        Once you click the <b>Enable laser</b> button below, carefully look trough the to opening of the galvo holder.
+                        Move the laser base (with the laser) to the left and right to focus the laser beam the best. Focused laser beam has the smallest hotspot size as seen on the bed.
+                    </p>
+                    <p class="validation-notification">
+                        <span class="badge badge-warning text-wrap text-left" style="line-height: 150%">
+                            <i class="bi bi-exclamation-triangle" /> By clicking <b>Enable laser</b> button, the laser will be turned on. It is absolutely neccessary to
+                            <b>wear protective goggles</b> that are applicable for the used laser type and wavelength!
+                        </span>
+                    </p>
+                }
+                @laserControls
+                if (!_fullScreen)
+                {
+                    <hr class="my-3">
+                    <p class="lead">
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">I have focused the laser...</a>
+                        <a class="btn btn-secondary btn-lg" role="button" @onclick="() => DoReverseStep()">Go back...</a>
+                    </p>
+                }
+                break;
+            case Step.CenteringGalvoHolder:
+                if (!_fullScreen)
+                {
+                    <h2>
+                        Centering galvo holder
+                    </h2>
+                    <hr class="my-3">
+                    <p>
+                        Loosen the screws that hold the plastic galvo holder on the top electronics plate. Prepare a piece of white paper strip you will insert behind the X mirror of the galvo.
+                        Move the galvo holder back and forth to ensure that the laser beam spills the least outside the mirror to the paper behind it. Ideally the laser beam should point to the
+                        middle of the mirror.
+                    </p>
+                    <p>
+                        Please note that the mirror is now turned slightly to so it represents the position pointing to one of the corners of the bed.
+                    </p>
+                    <p class="validation-notification">
+                        <span class="badge badge-warning text-wrap text-left" style="line-height: 150%">
+                            <i class="bi bi-exclamation-triangle" /> By clicking <b>Enable laser</b> button, the laser will be turned on. It is absolutely neccessary to
+                            <b>wear protective goggles</b> that are applicable for the used laser type and wavelength!
+                        </span>
+                    </p>
+                }
+                @laserControls
+                if (!_fullScreen)
+                {
+                    <hr class="my-3">
+                    <p class="lead">
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">I have centered the holder...</a>
+                        <a class="btn btn-secondary btn-lg" role="button" @onclick="() => DoReverseStep()">Go back...</a>
+                    </p>
+                }
+                break;
+            case Step.CenteringMotors2:
+                if (!_fullScreen)
+                {
+                    <h2>
+                        Re-Centering galvo motors
+                    </h2>
+                    <hr class="my-3">
+                    <p>
+                        If you have moved the galvo holder in the previous step, please ensure again that the galvo motors still point the laser to the center of the bed.
+                    </p>
+                    <p>
+                        If not so, please loosen the two screws in the metal galvo enclosure that hold the X and Y galvo motors in place.
+                        Once you click the <b>Enable laser</b> button below, look at the live camera view to fix the X and Y
+                        galvo motors in a position that points the laser to the center of the bed you marked in the step before.
+                    </p>
+                    <p>
+                        Once you center the galvo motors by looking at the live camera view, you can very carefully look trough the top opening of the galvo holder to fine tune
+                        galvo motor positions before finally tightening the screws.
+                    </p>
+                    <p class="validation-notification">
+                        <span class="badge badge-warning text-wrap text-left" style="line-height: 150%">
+                            <i class="bi bi-exclamation-triangle" /> By clicking <b>Enable laser</b> button, the laser will be turned on. It is absolutely neccessary to
+                            <b>wear protective goggles</b> that are applicable for the used laser type and wavelength!
+                        </span>
+                    </p>
+                }
+                @videoView
+                if (!_fullScreen)
+                {
+                    <hr class="my-3">
+                    <p class="lead">
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Done!</a>
+                        <a class="btn btn-secondary btn-lg" role="button" @onclick="() => DoReverseStep()">Go back...</a>
+                    </p>
+                }
+                break;
+        }
+    </div>
+</div>
+
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Homing,
+        CenteringMotors1,
+        FocusingLaser,
+        CenteringGalvoHolder,
+        CenteringMotors2,
+    }
+
+    public const string SelfPath = "/wizard/optical-setup";
+    private const string CssScope = "b-optical-setup-wizard";
+
+    private readonly object _cameraViewKey = new();
+    private ModalWrapper? _laserEnableModal;
+    private bool _doubleConfirmed;
+    private bool _laserMayNeedDisabling;
+    private bool _laserEnabling;
+    private bool _laserDisabling;
+    private bool _fullScreen;
+    private IAsyncDisposable? _laserSafetySession;
+    private readonly AsyncLock _laserLock = new();
+
+    protected override void OnInitialized()
+    {
+        StepIndex = Step.Homing;
+        base.OnInitialized();
+    }
+
+    private async Task DoReverseStep(bool force = false)
+    {
+        await DisableLaserInner();
+        switch (StepIndex)
+        {
+            case Step.FocusingLaser:
+                await Reverse();
+                break;
+            case Step.CenteringGalvoHolder:
+                await Reverse();
+                break;
+            case Step.CenteringMotors2:
+                await Reverse();
+                break;
+        }
+    }
+
+    private async Task DoStep(bool skip = false)
+    {
+        await DisableLaserInner();
+        switch (StepIndex)
+        {
+            case Step.Homing:
+                if (!skip)
+                    await HomeAndSetBeds();
+                await Advance();
+                break;
+            case Step.CenteringMotors1:
+                await Advance();
+                break;
+            case Step.FocusingLaser:
+                await Advance();
+                break;
+            case Step.CenteringGalvoHolder:
+                await Advance();
+                break;
+            case Step.CenteringMotors2:
+                await Advance();
+                break;
+        }
+    }
+
+    private async Task Reverse()
+    {
+        StepIndex--;
+        await OnStep();
+    }
+
+    private async Task Advance()
+    {
+        if (StepIndex == Step.CenteringMotors2)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Information,
+                    HeaderText = "Success",
+                    BodyText = "Wizard has completed successfully",
+                    Silent = true, // user is interacting, no beeping is necessary
+                });
+            NavigateAfterFinished();
+            return;
+        }
+        StepIndex++;
+        await OnStep();
+    }
+
+    private async Task HomeAndSetBeds()
+    {
+        var options = Options.CurrentValue;
+        await CancelModal.Execute(async cancel =>
+            {
+                await LayerClient.HomeBedsAndRecoater(0, cancel: cancel);
+                await MovementClient.MoveAux(MovementAxis.Z2, new MoveAuxItem
+                    {
+                        Relative = false,
+                        Value = options.Z2FocusDepth,
+                    },
+                    cancel: cancel);
+                await MovementClient.FinishMovement(cancel: cancel);
+            },
+            titleText: "Please wait",
+            bodyText: "Moving beds...",
+            cancelText: "Cancel",
+            errorToastHeaderText: "Error moving beds");
+    }
+
+    private async Task OnStep()
+    {
+        var options = Options.CurrentValue;
+        await CancelModal.Execute(async cancel =>
+            {
+                switch (StepIndex)
+                {
+                    case Step.CenteringMotors1:
+                        await MovementClient.HomeXY(cancel: cancel);
+                        break;
+                    case Step.FocusingLaser:
+                        await MovementClient.HomeXY(cancel: cancel);
+                        break;
+                    case Step.CenteringGalvoHolder:
+                        await MovementClient.HomeXY(cancel: cancel);
+                        await MovementClient.MoveXY(options.GalvoHolderLaserX, options.GalvoHolderLaserY, false, cancel: cancel);
+                        break;
+                    case Step.CenteringMotors2:
+                        await MovementClient.HomeXY(cancel: cancel);
+                        break;
+                }
+                await MovementClient.FinishMovement(cancel: cancel);
+            },
+            titleText: "Please wait",
+            bodyText: "Moving X/Y...",
+            cancelText: "Cancel",
+            errorToastHeaderText: "Error moving X/Y");
+    }
+
+    private async Task ToggleLaser(bool fromModal = false, bool? desiredState = null)
+    {
+        if (IsPrinting) // page will render error
+            return;
+        using (await _laserLock.LockAsync())
+        {
+            var options = Options.CurrentValue;
+            var desiredLaserWattage = StepIndex switch
+            {
+                Step.CenteringMotors1 or Step.CenteringMotors2 or Step.FocusingLaser => options.LaserMinimumVisibleWattageLow,
+                Step.CenteringGalvoHolder => options.LaserMinimumVisibleWattageHigh,
+                _ => 0,
+            };
+            var laserFactor = Math.Clamp(desiredLaserWattage / (double)PrinterSettings.Power.LaserWattage, 0, 1);
+            var laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
+            if (desiredState == laserOn)
+                return;
+            if (!laserOn)
+            {
+                if (!fromModal)
+                {
+                    _doubleConfirmed = false;
+                    await _laserEnableModal!.Show();
+                }
+                else
+                {
+                    await _laserEnableModal!.Close();
+                    _laserMayNeedDisabling = true;
+                    _laserEnabling = true;
+                    try
+                    {
+                        StateHasChanged();
+                        _laserSafetySession = await SafetySession.BeginSafetySession(default);
+                        await MovementClient.SetLaser(laserFactor);
+                        await Task.Delay(MovementClient.GetQueueAheadDuration());
+                        for (int i = 0; i < 50; i++)
+                        {
+                            laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
+                            if (laserOn)
+                                break;
+                            await Task.Delay(100);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ToastProvider.Show(new ToastMessage
+                            {
+                                Key = this,
+                                Type = ToastMessageType.Error,
+                                HeaderText = "Failed to enable laser",
+                                BodyText = ex.Message,
+                                Exception = ex,
+                                Silent = true, // user is interacting, no beeping is necessary
+                            });
+                    }
+                    finally
+                    {
+                        _laserEnabling = false;
+                    }
+                }
+            }
+            else
+            {
+                _laserDisabling = true;
+                try
+                {
+                    StateHasChanged();
+                    await DisableLaserInner();
+                    await Task.Delay(MovementClient.GetQueueAheadDuration());
+                    for (int i = 0; i < 50; i++)
+                    {
+                        laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
+                        if (!laserOn)
+                            break;
+                        await Task.Delay(100);
+                    }
+                }
+                finally
+                {
+                    _laserDisabling = false;
+                }
+            }
+        }
+    }
+
+    private async Task DisableLaserInner()
+    {
+        if (_laserMayNeedDisabling)
+        {
+            _laserMayNeedDisabling = false;
+            try
+            {
+                await MovementClient.SetLaser(0);
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Failed to disable laser",
+                        BodyText = ex.Message,
+                        Exception = ex,
+                        Silent = false, // NOTE: this is a critical error
+                    });
+            }
+        }
+        if (_laserSafetySession != null)
+        {
+            try
+            {
+                await _laserSafetySession.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Failed to disable laser safety",
+                        BodyText = ex.Message,
+                        Exception = ex,
+                        Silent = false, // NOTE: this is a critical error
+                    });
+            }
+            _laserSafetySession = null;
+        }
+    }
+
+    private async Task EnterFullscreen()
+    {
+        _fullScreen = true;
+        await Task.CompletedTask;
+    }
+
+    private async Task ExitFullscreen()
+    {
+        await DisableLaserInner();
+        _fullScreen = false;
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await DisableLaserInner();
+        await base.DisposeAsync();
+    }
+}

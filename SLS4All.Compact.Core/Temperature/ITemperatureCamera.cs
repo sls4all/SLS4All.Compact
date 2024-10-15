@@ -21,6 +21,10 @@ namespace SLS4All.Compact.Temperature
         TemperatureMatrix GetBedMatrix();
     }
 
+    public interface ITemperatureCamera2 : ITemperatureCamera
+    {
+    }
+
     public delegate (int width, int height) FakeCameraGenerator(float[] pixels);
 
     public interface IFakeTemperatureCamera : ITemperatureCamera

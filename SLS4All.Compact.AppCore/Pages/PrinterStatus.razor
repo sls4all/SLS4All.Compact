@@ -3,6 +3,7 @@
 @using System.Diagnostics
 @using SLS4All.Compact.Camera;
 @using SLS4All.Compact.Movement
+@using SLS4All.Compact.Pages.Wizards
 @using SLS4All.Compact.Power
 @using SLS4All.Compact.Printer;
 @using SLS4All.Compact.Printing
@@ -169,7 +170,7 @@
                                                                 <text>performing print cap <span class="status-progress">(@(status.PhaseDone + 1)/@status.PhaseTotal)</span></text>
                                                                 break;
                                                             case PrintingStatus status when status.Phase == PrintingPhase.Heating:
-                                                                <text>heating up before print <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
+                                                                <text>heating up before job <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
                                                                 break;
                                                             case PrintingStatus status when status.Phase == PrintingPhase.Heating2:
                                                                 <text>heating up for bed prep. <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
@@ -181,7 +182,7 @@
                                                                 <text>heating analysis <span class="status-progress">(@status.PhaseDone.RoundToDecimal(0)/@status.PhaseTotal.RoundToDecimal(0) steps)</span></text>
                                                                 break;
                                                             case PrintingStatus status when status.Phase == PrintingPhase.Cooling:
-                                                                <text>cooling down after print <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
+                                                                <text>cooling down after job <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
                                                                 break;
                                                             default:
                                                                 <text>printing in progress...</text>
@@ -419,7 +420,7 @@
                         <div class="col status-plot-camera-container">
                             <PlotterView @key="_plotterViewKey" class="status-any-view status-plot-view" style="@(imagePageNow == ImagePage.Plot ? "opacity: 100%": "opacity: 0%")" ExternalCssScope="@CssScope" />
                             <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Thermo">
-                                <ThermoCameraView @key="_thermoCameraViewKey" class="status-any-view status-thermo-view" style="@(imagePageNow == ImagePage.Thermo ? "opacity: 100%": "opacity: 0%")" ExternalCssScope="@CssScope" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" />
+                                <ThermoCameraView @key="_thermoCameraViewKey" class="status-any-view status-thermo-view" style="@(imagePageNow == ImagePage.Thermo ? "opacity: 100%": "opacity: 0%")" BedControlsEnabled="false" ExternalCssScope="@CssScope" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" />
                             </TimeoutContainer>
                             <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Live">
                                 <VideoCameraView @key="_cameraViewKey" class="status-any-view status-camera-view" style="@(imagePageNow == ImagePage.Live ? "opacity: 100%": "opacity: 0%")" LightsControlsEnabled="false" ExternalCssScope="@CssScope" />
@@ -570,7 +571,7 @@
 
     private Task OnEject()
     {
-        NavigationManager.NavigateTo($"{PrintWizard.SelfPath}/{PrintWizard.Step.Eject}");
+        NavigationManager.NavigateTo($"{EjectWizard.SelfPath}");
         return Task.CompletedTask;
     }
 

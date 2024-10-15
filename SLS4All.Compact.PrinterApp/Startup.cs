@@ -222,6 +222,18 @@ namespace SLS4All.Compact
                     break;
             }
 
+            switch (applicationOptions.TemperatureCameraClient2)
+            {
+                case TemperatureCameraClientType.Mlx90640Fake:
+                    services.Configure<Mlx90640Camera2Options>(Configuration.GetSection("Mlx90640Camera2"));
+                    services.AddAsImplementationAndInterfaces<Mlx90640FakeCamera2>(ServiceLifetime.Singleton, type => type == typeof(IHostedService) || type == typeof(ITemperatureCamera2));
+                    break;
+                case TemperatureCameraClientType.Mlx90640Local:
+                    services.Configure<Mlx90640Camera2Options>(Configuration.GetSection("Mlx90640Camera2"));
+                    services.AddAsImplementationAndInterfaces<Mlx90640Camera2>(ServiceLifetime.Singleton, type => type == typeof(IHostedService) || type == typeof(ITemperatureCamera2));
+                    break;
+            }
+
             services.Configure<DefaultTemperatureHistoryOptions>(Configuration.GetSection("DefaultTemperatureHistory"));
             services.AddAsImplementationAndInterfaces<DefaultTemperatureHistory>(ServiceLifetime.Singleton);
             services.Configure<DefaultTemperatureLoggerOptions>(Configuration.GetSection("DefaultTemperatureLogger"));
@@ -329,6 +341,9 @@ namespace SLS4All.Compact
 
             services.Configure<DefaultPrintProfileInitializerOptions>(Configuration.GetSection("DefaultPrintProfileInitializer"));
             services.AddAsImplementationAndInterfaces<DefaultPrintProfileInitializer>(ServiceLifetime.Transient);
+
+            services.Configure<PrinterPowerPinSafetySessionManagerOptions>(Configuration.GetSection("PrinterPowerPinSafetySessionManager"));
+            services.AddAsImplementationAndInterfaces<PrinterPowerPinSafetySessionManager>(ServiceLifetime.Singleton);
 
             services.Configure<PrintingServiceOptions>(Configuration.GetSection("PrintingService"));
             services.AddAsImplementationAndInterfaces<PrintingServiceScoped>(ServiceLifetime.Scoped);

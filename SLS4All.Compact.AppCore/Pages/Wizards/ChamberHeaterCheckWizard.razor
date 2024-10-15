@@ -1,0 +1,135 @@
+﻿@page "/chamber-heater-check-wizard"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@inherits WizardBase<ChamberHeaterCheckWizard.Step>
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject IChamberHeaterChecker ChamberHeaterChecker
+
+@{
+    base.BuildRenderTree(__builder);
+}
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_doChamberHeaters" class="app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Perform chamber heaters check?
+            </h5>
+        </div>
+        <div class="modal-body">
+            Do you want to continue?
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoStep(true)" class="btn btn-danger">Perform chamber heater check</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Stay at this step</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        @switch (StepIndex)
+        {
+            case Step.ChamberHeaterCheck:
+                <h2>
+                    Chamber heater check
+                </h2>
+                <hr class="my-3">
+                <p>
+                    The printer will now check that the temperature sensors in the chambers are correctly paired with chamber heaters and that the heaters work as expected. Both chambers should be empty to ensure correct results.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Continue and check the heaters...</a>
+                </p>
+                break;
+        }
+    </div>
+</div>
+
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        ChamberHeaterCheck,
+    }
+
+    public const string SelfPath = "/chamber-heater-check-wizard";
+    private const string CssScope = "b-chamber-heater-check-wizard";
+    private ModalWrapper? _doChamberHeaters;
+
+    protected override void OnInitialized()
+    {
+        StepIndex = Step.ChamberHeaterCheck;
+        base.OnInitialized();
+    }
+
+    private async Task DoStep(bool force = false)
+    {
+        switch (StepIndex)
+        {
+            case Step.ChamberHeaterCheck:
+                if (!force)
+                    await _doChamberHeaters!.Show();
+                else
+                {
+                    await _doChamberHeaters!.Close();
+                    if (await DoChamberHeatersCheck())
+                        await Advance();
+                }
+                break;
+        }
+    }
+
+    private Task Advance(Step? advanceTo = null)
+    {
+        ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Information,
+                    HeaderText = "Success",
+                    BodyText = "Wizard has completed successfully. All the heaters seem to be correctly paired with corresponding temperature sensords.",
+                    Silent = true, // user is interacting, no beeping is necessary
+                });
+        NavigateAfterFinished();
+        return Task.CompletedTask;
+    }
+
+    private async Task<bool> DoChamberHeatersCheck()
+    {
+        if (IsPrinting) // page will render error
+            return false;
+        ResetStatus();
+        return await ProgressModal.Execute(
+            async cancel =>
+            {
+                await ChamberHeaterChecker.CheckChamberHeaters(OnStatus, cancel);
+                return true;
+            },
+            false,
+            titleText: "Please wait",
+            bodyText: "Chamber heater check in progress...",
+            cancelText: "Interrupt chamber heater check",
+            errorToastHeaderText: "Error when checking halogen heaters");
+    }
+}

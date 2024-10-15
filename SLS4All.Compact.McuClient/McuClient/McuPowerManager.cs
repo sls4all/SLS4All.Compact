@@ -75,7 +75,7 @@ namespace SLS4All.Compact.McuClient
         private readonly long _baseConsumption = 0;
         private readonly List<PinInfo> _switchList;
         private readonly List<PinInfo> _powerOffList;
-        private volatile PrinterPowerSettings _powerSettings;
+        private volatile PrinterPowerSettingsSnapshot _powerSettings;
         private long _currentConsumption = 0;
         private long _maxConsumption = 0;
 
@@ -93,7 +93,7 @@ namespace SLS4All.Compact.McuClient
             _switchList = new();
             _powerOffList = new();
             _infos = new();
-            _powerSettings = _printerSettings.GetPowerSettings();
+            _powerSettings = _printerSettings.Power;
             _baseConsumption = GetConsumption(o.BaseConsumption, PowerPinType.NotSet, _powerSettings);
             _currentConsumption = 0;
             SetTotalMaxConsumption(o.MaxConsumption);
@@ -226,7 +226,7 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private bool TryPowerOnInner(PinInfo info, SystemTimestamp now, bool force, PrinterPowerSettings powerSettings)
+        private bool TryPowerOnInner(PinInfo info, SystemTimestamp now, bool force, PrinterPowerSettingsSnapshot powerSettings)
         {
             if (info.PowerTime.IsEmpty) // not powered on
             {
@@ -251,7 +251,7 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private bool TryPowerOffInner(PinInfo info, SystemTimestamp now, PrinterPowerSettings powerSettings)
+        private bool TryPowerOffInner(PinInfo info, SystemTimestamp now, PrinterPowerSettingsSnapshot powerSettings)
         {
             if (!info.PowerTime.IsEmpty)
             {
@@ -278,7 +278,7 @@ namespace SLS4All.Compact.McuClient
                 {
                     lock (_syncRoot)
                     {
-                        var powerSettings = _printerSettings.GetPowerSettings();
+                        var powerSettings = _printerSettings.Power;
                         _powerSettings = powerSettings;
                         SwitchPinsInner(powerSettings);
                     }
@@ -300,7 +300,7 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private void SwitchPinsInner(PrinterPowerSettings powerSettings, PinInfo? explicitPin = null, bool powerOnOnly = false)
+        private void SwitchPinsInner(PrinterPowerSettingsSnapshot powerSettings, PinInfo? explicitPin = null, bool powerOnOnly = false)
         {
             var now = SystemTimestamp.Now;
             var somethingPoweredOffButShouldBeOn = false;
@@ -393,7 +393,7 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private static long GetConsumption(double watts, PowerPinType type, PrinterPowerSettings powerSettings)
+        private static long GetConsumption(double watts, PowerPinType type, PrinterPowerSettingsSnapshot powerSettings)
         {
             if (watts < 0)
                 throw new ArgumentOutOfRangeException(nameof(watts));

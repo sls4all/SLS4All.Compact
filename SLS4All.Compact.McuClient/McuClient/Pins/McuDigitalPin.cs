@@ -4,7 +4,7 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using SLS4All.Compact.Diagnostics;
+using SLS4All.Compact.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +29,7 @@ namespace SLS4All.Compact.McuClient.Pins
         private (McuCommand cmd, int valueIndex) _update = (McuCommand.PlaceholderCommand, 0);
         private McuSendResult? _updateResult;
         private long _lastClock;
+        private volatile bool _hasBuiltConfig;
 
         public McuPinDescription Pin => _pin;
         public IMcu Mcu => _pin.Mcu;
@@ -78,6 +79,13 @@ namespace SLS4All.Compact.McuClient.Pins
         {
             if (_isStatic)
                 throw new InvalidOperationException($"Cannot change value of static pin {_pin}");
+            if (!_hasBuiltConfig)
+            {
+                if (_currentValue == value.Single)
+                    return;
+                else
+                    throw new InvalidOperationException($"Has not yet built config");
+            }
             _currentValue = value.Single;
             if (clock == 0)
             {
@@ -133,6 +141,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 _set.clockIndex = _set.cmd.GetArgumentIndex("clock");
                 _set.valueIndex = _set.cmd.GetArgumentIndex("value");
             }
+            _hasBuiltConfig = true;
             return ValueTask.CompletedTask;
         }
 

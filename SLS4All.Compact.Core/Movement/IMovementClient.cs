@@ -52,7 +52,6 @@ namespace SLS4All.Compact.Movement
         ValueTask MoveContinuous(MovementAxis axis, bool positive, double speed, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask SetLaser(double value, bool noCompensation = false, IPrinterClientCommandContext ? context = null, CancellationToken cancel = default);
-        Task EnableProjectionPattern(bool enable, CancellationToken cancel = default);
 
         ValueTask MoveXYCode(ChannelWriter<CodeCommand> channel, double x, double y, bool relative, double? speed = null, CancellationToken cancel = default);
         ValueTask MoveAuxCode(ChannelWriter<CodeCommand> channel, MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, CancellationToken cancel = default);

@@ -69,7 +69,6 @@ LaserOffMinDurationSteps = 30
 
 [McuPowerClient]
 LaserId = "laser"
-LaserMinimumVisibleFactor = 0.02
 
 [McuInputClient]
 
@@ -183,7 +182,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
 
     [McuManager.Steppers.z1.Tmc2209Driver]
     UartPin = "P1.10"
-    Fields.SGTHRS = 95
+    Fields.SGTHRS = 120
     RunCurrent = 1.5
     HoldCurrent = 0.5
     Microsteps = 64
@@ -200,7 +199,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
 
     [McuManager.Steppers.z2.Tmc2209Driver]
     UartPin = "P1.9"
-    Fields.SGTHRS = 95
+    Fields.SGTHRS = 120
     RunCurrent = 1.5
     HoldCurrent = 0.5
     Microsteps = 64
@@ -217,7 +216,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
 
     [McuManager.Steppers.r.Tmc2209Driver]
     UartPin = "P1.8"
-    Fields.SGTHRS = 85
+    Fields.SGTHRS = 95
     EndstopMoveFields.StuckDetection.SGTHRS = 120
     RunCurrent = 1.0
     HoldCurrent = 0.001
@@ -411,6 +410,9 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         CsPin = "P1.20"
         Channel = 0
         SpiSpeed = 15_000_000
+	# NOTE: enable shorter read period and averaging for beds, the sensor has a large noise
+        ReadPeriod = "0:0:0.15"
+	AverageDuration = "0:0:1.0"
 
         [McuManager.Heaters.powderBed.VerifySensor]
         MinTemperature = 0
@@ -433,6 +435,9 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         CsPin = "P1.20"
         Channel = 1
         SpiSpeed = 15_000_000
+	# NOTE: enable shorter read period and averaging for beds, the sensor has a large noise
+        ReadPeriod = "0:0:0.15"
+	AverageDuration = "0:0:1.0"
 
         [McuManager.Heaters.printBed.VerifySensor]
         MinTemperature = 0
@@ -480,31 +485,31 @@ KeepaliveEnableMaxDuraton = "0:0:5"
 
         [McuManager.Heaters.surface.InovaSurface.Quadrant1]
         HeaterPins = [ "zero1:PC4", "zero1:PC1" ]
-        MinX = 10
-        MinY = 8
-        MaxX = 16
-        MaxY = 15
+        MinX = 0
+        MinY = 0
+        MaxX = 6
+        MaxY = 7
 
         [McuManager.Heaters.surface.InovaSurface.Quadrant2]
         HeaterPins = [ "zero1:PC1", "zero1:PC2" ] 
-        MinX = 17
-        MinY = 8
-        MaxX = 23
-        MaxY = 15
+        MinX = 7
+        MinY = 0
+        MaxX = 14
+        MaxY = 7
 
         [McuManager.Heaters.surface.InovaSurface.Quadrant3]
         HeaterPins = [ "zero1:PC2", "zero1:PC3" ] 
-        MinX = 17
-        MinY = 16
-        MaxX = 23
-        MaxY = 21
+        MinX = 7
+        MinY = 8
+        MaxX = 14
+        MaxY = 14
 
         [McuManager.Heaters.surface.InovaSurface.Quadrant4]
         HeaterPins = [ "zero1:PC3", "zero1:PC4" ]
-        MinX = 10
-        MinY = 16
-        MaxX = 16
-        MaxY = 21
+        MinX = 0
+        MinY = 8
+        MaxX = 6
+        MaxY = 14
 
         [McuManager.Heaters.surface.VerifySensor]
         MinTemperature = 0
@@ -513,10 +518,11 @@ KeepaliveEnableMaxDuraton = "0:0:5"
 
     # surface sensors
     [McuManager.TemperatureSensors.surfaceAvg.InovaSurfaceBox]
-    MinX = 10
-    MinY = 8
-    MaxX = 16
-    MaxY = 15
+    # two steps smaller than overall rectangle to not to include potentially "colder" corners outside print area
+    MinX = 2
+    MinY = 2
+    MaxX = 12
+    MaxY = 12
     Mode = "Avg"
 
         [McuManager.TemperatureSensors.surfaceAvg.VerifySensor]
@@ -525,10 +531,10 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         ExpectChangeInTemperature = true
 
     [McuManager.TemperatureSensors.quadrant1.InovaSurfaceBox]
-    MinX = 10
-    MinY = 8
-    MaxX = 16
-    MaxY = 15
+    MinX = 0
+    MinY = 0
+    MaxX = 6
+    MaxY = 7
     Mode = "Max"
 
         [McuManager.TemperatureSensors.quadrant1.VerifySensor]
@@ -537,10 +543,10 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
 
     [McuManager.TemperatureSensors.quadrant2.InovaSurfaceBox]
-    MinX = 17
-    MinY = 8
-    MaxX = 23
-    MaxY = 15
+    MinX = 7
+    MinY = 0
+    MaxX = 14
+    MaxY = 7
     Mode = "Max"
 
         [McuManager.TemperatureSensors.quadrant2.VerifySensor]
@@ -549,10 +555,10 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
 
     [McuManager.TemperatureSensors.quadrant3.InovaSurfaceBox]
-    MinX = 17
-    MinY = 16
-    MaxX = 23
-    MaxY = 21
+    MinX = 7
+    MinY = 8
+    MaxX = 14
+    MaxY = 14
     Mode = "Max"
 
         [McuManager.TemperatureSensors.quadrant3.VerifySensor]
@@ -561,10 +567,10 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
 
     [McuManager.TemperatureSensors.quadrant4.InovaSurfaceBox]
-    MinX = 10
-    MinY = 16
-    MaxX = 16
-    MaxY = 21
+    MinX = 0
+    MinY = 8
+    MaxX = 6
+    MaxY = 14
     Mode = "Max"
 
         [McuManager.TemperatureSensors.quadrant4.VerifySensor]
@@ -573,10 +579,11 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
 
     [McuManager.TemperatureSensors.surfaceMax.InovaSurfaceBox]
-    MinX = 10
-    MinY = 8
-    MaxX = 23
-    MaxY = 21
+    # for overall max use entire capture area, for safety verification. Cold corners do not matter for Mode=Max
+    MinX = 0
+    MinY = 0
+    MaxX = 14
+    MaxY = 14
     Mode = "Max"
 
         [McuManager.TemperatureSensors.surfaceMax.VerifySensor]
@@ -585,11 +592,11 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         ExpectChangeInTemperature = false # max is not a good mode for this to be enabled, we do this in "AVG"
 
     [McuManager.TemperatureSensors.surfaceMin.InovaSurfaceBox]
-    # ~one step smaller than overall rectangle to not to include potentially "colder" corners
-    MinX = 11
-    MinY = 10
-    MaxX = 22
-    MaxY = 20
+    # two steps smaller than overall rectangle to not to include potentially "colder" corners outside print area
+    MinX = 2
+    MinY = 2
+    MaxX = 12
+    MaxY = 12
     Mode = "Min"
 
         [McuManager.TemperatureSensors.surfaceMin.VerifySensor]
@@ -601,6 +608,10 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         
         [McuManager.Buttons.safe.Pins.1-1]
         Pin = "host:gpiochip4/gpio24"
+
+    [McuManager.OutputPins.laserSafety]
+    Type = "Digital"
+    Pin = "P2.5" # BTB_HB
 
     [McuManager.OutputPins.fanGalvo]
     Type = "SoftPwm"
@@ -614,7 +625,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     
     [McuManager.OutputPins.io-en]
     Type = "Digital"
-    Pin = "P1.31"
+    Pin = "!P1.31"
 
     # watchdog pins
     [McuManager.OutputPins.wd-en]

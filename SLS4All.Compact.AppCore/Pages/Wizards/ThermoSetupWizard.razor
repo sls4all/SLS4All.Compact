@@ -1,0 +1,349 @@
+﻿@page "/wizard/thermo-setup"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using Nito.AsyncEx
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@inherits WizardBase<ThermoSetupWizard.Step>
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject ILayerClient LayerClient
+@inject IPrinterSettingsStorage PrinterSettings
+@inject ITemperatureClient TemperatureClient
+@inject IOptionsMonitor<ThermoSetupWizardOptions> Options
+
+@{
+    base.BuildRenderTree(__builder);
+
+    RenderFragment videoView = @<text>
+        @if (!_fullScreen)
+        {
+            <p class="lead pt-3">
+                <a class="btn btn-secondary btn-lg" role="button" @onclick="EnterFullscreen">
+                    <i b-camera-view class="bi bi-arrows-fullscreen" /> Show thermo camera and controls...
+                </a>
+            </p>
+        }
+        else
+        {
+            <ThermoCameraView @key="_cameraViewKey" class="video-container" ExternalCssScope="@CssScope" ControlsEnabled="true" BedControlsEnabled="false">
+                <br />
+                <button b-camera-view class="btn btn-secondary btn--icon-text" role="button" @onclick="ExitFullscreen">
+                    <text><i b-camera-view class="bi bi-arrows-fullscreen" /> Close</text>
+                </button>
+                <br />
+                <br />
+                <button b-camera-view class="btn btn-secondary btn--icon-text" @onclick="() => IsBedEnabled = !IsBedEnabled">
+                    @if (IsBedEnabled)
+                {
+                    <text><i b-camera-view class="bi bi-cup-hot" /> Stop heating</text>
+                }
+                else
+                {
+                    <text><i b-camera-view class="bi bi-cup" /> Start heating</text>
+                }
+                </button>
+
+                <br />
+                <br />
+
+                <span b-camera-view class="text-nowrap">
+                    <button b-camera-view class="btn btn-primary btn--icon-text invisible">
+                        <text><i b-camera-view class="bi bi-arrow-left-square" /></text>
+                    </button>
+                    <button b-camera-view class="btn btn-primary btn--icon-text" @onclick="() => Move(0, -1)">
+                        <text><i b-camera-view class="bi bi-arrow-up-square" /></text>
+                    </button>
+                    <button b-camera-view class="btn btn-primary btn--icon-text invisible">
+                        <text><i b-camera-view class="bi bi-arrow-right-square" /></text>
+                    </button>
+                </span>
+
+                <br />
+
+                <span class="text-nowrap">
+                    <button b-camera-view class="btn btn-primary btn--icon-text" @onclick="() => Move(-1, 0)">
+                        <text><i b-camera-view class="bi bi-arrow-left-square" /></text>
+                    </button>
+                    <button b-camera-view class="btn btn-primary btn--icon-text invisible">
+                        <text><i b-camera-view class="bi bi-arrow-right-square" /></text>
+                    </button>
+                    <button b-camera-view class="btn btn-primary btn--icon-text" @onclick="() => Move(1, 0)">
+                        <text><i b-camera-view class="bi bi-arrow-right-square" /></text>
+                    </button>
+                </span>
+
+                <br />
+
+                <span class="text-nowrap">
+                    <button b-camera-view class="btn btn-primary btn--icon-text invisible">
+                        <text><i b-camera-view class="bi bi-arrow-left-square" /></text>
+                    </button>
+                    <button b-camera-view class="btn btn-primary btn--icon-text" @onclick="() => Move(0, 1)">
+                        <text><i b-camera-view class="bi bi-arrow-down-square" /></text>
+                    </button>
+                    <button b-camera-view class="btn btn-primary btn--icon-text invisible">
+                        <text><i b-camera-view class="bi bi-arrow-right-square" /></text>
+                    </button>
+                </span>
+        </ThermoCameraView>
+        }
+    </text>;
+}
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<div class="container">
+    <div class="jumbotron @(_fullScreen ? "p-0" : "pt-4 pb-2") h-100">
+        @switch (StepIndex)
+        {
+            case Step.Homing:
+                <h2>
+                    Thermo camera setup
+                </h2>
+                <hr class="my-3">
+                <p>
+                    This wizard will help you center the thermo camera.
+                    This generally needs to be done once after you install the thermo camera module.
+                </p>
+                <p>
+                    Please ensure that the printer is free of any powder and the both beds can move to the top unrestricted.
+                </p>
+                <p>
+                    Before you click continue, please do following:
+                    <ul>
+                        <li>
+                            Remove anyting from the metal surface of the <b>Print bed</b>. This includes any thermal tape or powder dust.
+                            The metal of the bed surface should be relatively shiny.
+                        </li>
+                        <li>
+                            Mark a cross over the whole <b>Print bed</b> (the right movable plate) with a <b>Capton tape</b>.
+                        </li>
+                        <li>
+                            The cross should go trough the exact center of the plate and should be made from two strips of 
+                            the tape next to each other (without overlap and any space between)
+                        </li>
+                        <li>
+                            Make sure to use the <b>Capton tape and not any other tape</b>, otherwise you risk that the tape will bake itself 
+                            to the metal in next steps.
+                        </li>
+                    </ul>
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Home the Z axis...</a>
+                    @if (MainLayout!.IsDeveloperMode)
+                    {
+                        <a class="btn btn-danger btn-lg" role="button" @onclick="() => DoStep(skip: true)">Skip step...</a>
+                    }
+                </p>
+                break;
+            case Step.Centering:
+                if (!_fullScreen)
+                {
+                    <h2>
+                        Centering thermal camera
+                    </h2>
+                    <hr class="my-3">
+                    <p>
+                        Close the printer (if not already) and click the <b>Start heating</b> button. You should start to see the temperature rising on the thermal camera view in a few moments .
+                        You should also start see the cross you made with a <b>Capton tape</b> in the previous step.
+                    </p>
+                    <p>
+                        Use the arrow buttons on the camera view to move the image in corresponding direction. You have centered the camera once the two crosses align their <b>centers</b>.
+                        One cross is made of the higher temperatures of the capton tape. 
+                        Second cross is made from the white/black dashed lines in the image (center is near the center of the image).
+                    </p>
+                }
+                @videoView
+                if (!_fullScreen)
+                {
+                    <hr class="my-3">
+                    <p class="lead">
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Done!</a>
+                    </p>
+                }
+                break;
+        }
+    </div>
+</div>
+
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Homing,
+        Centering,
+    }
+
+    public const string SelfPath = "/wizard/thermo-setup";
+    private const string CssScope = "b-thermo-setup-wizard";
+
+    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private readonly object _cameraViewKey = new();
+    private bool? _isEnabled;
+    private bool _hasTouchedTemperatures;
+    private bool _fullScreen;
+    private Timer _timer;
+    private const int _timerPeriod = 500;
+    private readonly AsyncLock _lock = new();
+
+    private bool IsBedEnabled
+    {
+        get => _isEnabled ??
+           (TemperatureClient.PrintBedHeaterIds.Any(x => TemperatureClient.CurrentState.TryGetValue(x.Id, out var item) && item.TargetTemperature > 0));
+        set
+        {
+            if (_isEnabled == value)
+                return;
+            _hasTouchedTemperatures = true;
+            _isEnabled = value;
+            _ = UpdateBedEnabled();
+        }
+    }
+
+    public ThermoSetupWizard()
+    {
+        _timer = new Timer(OnTimer);
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            _isEnabled = null;
+            return ValueTask.FromResult(true);
+        });
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        _timer.Dispose();
+        _isEnabled = false;
+        await UpdateBedEnabled();
+        await base.DisposeAsync();
+    }
+
+    private async Task UpdateBedEnabled()
+    {
+        if (_hasTouchedTemperatures) // NOTE: prevent spewing errors when disposing and printer is not ready or shutdown
+        {
+            try
+            {
+                var options = Options.CurrentValue;
+                _timer.Change(_timerPeriod, _timerPeriod);
+                if (!PrintingGlobal.IsPrinting)
+                {
+                    foreach (var item in TemperatureClient.PrintBedHeaterIds)
+                        await TemperatureClient.SetTarget(item.Id, _isEnabled == true && options.TargetPrintBedTemperature > 0 ? (double)options.TargetPrintBedTemperature : null);
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Failed to enable/disable bed heater",
+                        BodyText = ex.Message,
+                        Key = this,
+                        Exception = ex,
+                    });
+                _isEnabled = null;
+            }
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        StepIndex = Step.Homing;
+        base.OnInitialized();
+    }
+
+    private async Task DoStep(bool skip = false)
+    {
+        switch (StepIndex)
+        {
+            case Step.Homing:
+                if (!skip)
+                    await HomeBeds();
+                await Advance();
+                break;
+            case Step.Centering:
+                await Advance();
+                break;
+        }
+    }
+
+    private async Task Advance()
+    {
+        if (StepIndex == Step.Centering)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Information,
+                    HeaderText = "Success",
+                    BodyText = "Wizard has completed successfully",
+                    Silent = true, // user is interacting, no beeping is necessary
+                });
+            NavigateAfterFinished();
+            return;
+        }
+        StepIndex++;
+        await Task.CompletedTask;
+    }
+
+    private async Task HomeBeds()
+    {
+        var options = Options.CurrentValue;
+        await CancelModal.Execute(async cancel =>
+            {
+                await LayerClient.HomeBedsAndRecoater(0, cancel: cancel);
+            },
+            titleText: "Please wait",
+            bodyText: "Homing beds...",
+            cancelText: "Cancel",
+            errorToastHeaderText: "Error homing beds");
+    }
+
+
+    private async Task EnterFullscreen()
+    {
+        _fullScreen = true;
+        await Task.CompletedTask;
+    }
+
+    private async Task ExitFullscreen()
+    {
+        _isEnabled = false;
+        _fullScreen = false;
+        await UpdateBedEnabled();
+    }
+
+    private async Task Move(int rx, int ry)
+    {
+        using (await _lock.LockAsync())
+        {
+            var settings = PrinterSettings.GetTemperatureSettings();
+            settings.ThermoCameraOffsetX += rx;
+            settings.ThermoCameraOffsetY += ry;
+            await PrinterSettings.SetTemperatureSettings(settings);
+        }
+    }
+}

@@ -145,8 +145,6 @@ namespace SLS4All.Compact.Movement
         public ValueTask DwellCode(ChannelWriter<CodeCommand> channel, TimeSpan delay, CancellationToken cancel = default)
             => channel.WriteAsync(_dwellFormatter.Create((float)delay.TotalSeconds), cancel);
 
-        public abstract Task EnableProjectionPattern(bool enable, CancellationToken cancel = default);
-
         public abstract Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public ValueTask FinishMovementCode(ChannelWriter<CodeCommand> channel, CancellationToken cancel = default)

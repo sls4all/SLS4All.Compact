@@ -6,6 +6,7 @@
 
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SLS4All.Compact.Collections;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Helpers;
 using SLS4All.Compact.McuClient.Messages;
@@ -27,7 +28,8 @@ namespace SLS4All.Compact.McuClient.Sensors
         public required float MinTemperature { get; set; }
         public required float MaxTemperature { get; set; }
         public int SpiSpeed { get; set; } = 15_000_000;
-        public TimeSpan Period { get; set; } = TimeSpan.FromSeconds(0.3);
+        public TimeSpan ReadPeriod { get; set; } = TimeSpan.FromSeconds(0.3);
+        public TimeSpan AverageDuration { get; set; } = TimeSpan.FromSeconds(0);
     }
 
     public sealed class InovaGate1TemperatureSensor : IMcuTemperatureSensor
@@ -42,6 +44,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly McuSpi _spi;
         private readonly TaskQueue _readEventQueue;
         private readonly object _shutdownReadSync = new();
+        private readonly PrimitiveDeque<(float Temperature, SystemTimestamp Timestamp)> _averageQueue;
         private McuSendResult? _shutdownReadSend;
         private Timer? _shutdownReadTimer;
         private bool _hasStatedShutdownReadTimer;
@@ -77,6 +80,7 @@ namespace SLS4All.Compact.McuClient.Sensors
             _readEventQueue = new();
 
             var o = options.Value;
+            _averageQueue = new();
             _validationSupressor = new();
             _spi = new McuSpi(
                 manager.ClaimBus(o.Bus, shareType: nameof(InovaGate1TemperatureSensor)),
@@ -151,7 +155,7 @@ namespace SLS4All.Compact.McuClient.Sensors
                                 }
                             }
                         }
-                    }, null, options.Period, options.Period);
+                    }, null, options.ReadPeriod, options.ReadPeriod);
                 }
             }
         }
@@ -159,7 +163,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private ValueTask OnSetup(CancellationToken token)
         {
             var options = _options.Value;
-            _reportClock = (int)Mcu.ClockSync.GetClockDuration(options.Period);
+            _reportClock = (int)Mcu.ClockSync.GetClockDuration(options.ReadPeriod);
             Mcu.RegisterResponseHandler(null, _queryCmdResponse, OnResponse);
             var cmd = Mcu.LookupCommand("query_thermocouple oid=%c clock=%u rest_ticks=%u min_value=%u max_value=%u")
                 .Bind("oid", _oid)
@@ -224,9 +228,18 @@ namespace SLS4All.Compact.McuClient.Sensors
             if (command != null && command[_queryCmdResponseOid].UInt32 == _oid)
             {
                 //var isFault = command[_queryCmdResponseFault].Int32 != 0; // NOTE: fault not used with InovaGATE1
+                var options = _options.Value;
                 var timestamp = SystemTimestamp.Now;
-                var temperature = CalcTemperature(command[_queryCmdResponseValue].Int32);
-                var value = new McuTemperatureSensorData(temperature, timestamp);
+                var rawTemperature = CalcTemperature(command[_queryCmdResponseValue].Int32);
+                var evictTimestamp = timestamp - options.AverageDuration;
+                while (_averageQueue.Count > 0 && _averageQueue.PeekFront().Timestamp <= evictTimestamp)
+                    _averageQueue.PopFront();
+                var sum = 0.0f;
+                _averageQueue.PushBack((rawTemperature, timestamp));
+                for (int i = 0; i < _averageQueue.Count; i++)
+                    sum += _averageQueue[i].Temperature;
+                var avgTemperature = sum / _averageQueue.Count;
+                var value = new McuTemperatureSensorData(avgTemperature, timestamp);
                 _lastValue = value;
                 _readEventQueue.EnqueueValue(() => ReadEvent.Invoke(value, _manager.RunningCancel), null);
             }

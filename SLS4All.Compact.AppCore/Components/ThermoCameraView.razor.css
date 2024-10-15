@@ -1,6 +1,18 @@
 ﻿.camera-view {
 }
 
+    .camera-view .light-control-container {
+        height: 0px;
+        z-index: 100;
+    }
+
+        .camera-view .light-control-container button {
+            font-size: 20px;
+            line-height: 20px;
+            margin-bottom: 5px;
+            opacity: 50%;
+        }
+
     .camera-view .video-image-container {
         height: 0px;
         flex-grow: 1;

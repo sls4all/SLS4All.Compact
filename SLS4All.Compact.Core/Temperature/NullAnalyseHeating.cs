@@ -30,7 +30,7 @@ namespace SLS4All.Compact.Temperature
 
         public string[] FilenameMasks => [];
 
-        public Task Start(string? name, Action<Exception>? errorHandler, Action? completedHandler, StatusUpdater? onStatus = null, CancellationToken cancel = default)
+        public Task Start(string? name, AnalyseHeatingSetup setup, Action<Exception>? errorHandler, Action? completedHandler, StatusUpdater? onStatus = null, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public Task Stop()

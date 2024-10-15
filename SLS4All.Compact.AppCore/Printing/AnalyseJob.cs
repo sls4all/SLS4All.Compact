@@ -30,6 +30,8 @@ namespace SLS4All.Compact.Printing
         public required string Name { get; set; }
         public required PrintProfileReference PrintProfile { get; set; }
 
+        public bool NeedsLaser => false;
+
         public IStorageObject Clone()
             => (AnalyseJob)MemberwiseClone();
         public void MergeFrom(IStorageObject other)

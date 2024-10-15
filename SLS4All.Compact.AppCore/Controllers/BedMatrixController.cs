@@ -47,27 +47,26 @@ namespace SLS4All.Compact.Controllers
     {
         public bool Cropped { get; set; } = false;
         public UnitConverterFlags Units { get; set; }
+        public double RefreshRate { get; set; } = 1.0;
+        public double? Average { get; set; }
     }
 
     [Route("api/[controller]")]
     [ApiController]
     public class BedMatrixController : ControllerBase
     {
-        private readonly static ConcurrentDictionary<(double Average, bool Cropped, UnitConverterFlags Units), BedMatrixGrabber> _grabbers = new();
-        private readonly ITemperatureClient _client;
+        private readonly static ConcurrentDictionary<(double Average, double RefreshRate, bool Cropped, UnitConverterFlags Units, Type Type), BedMatrixGrabber> _grabbers = new();
         private readonly ITemperatureCamera _camera;
         private readonly ILogger<BedMatrixController> _logger;
         private readonly IOptionsMonitor<BedMatrixControllerOptions> _options;
         private readonly ImageStreamingHelper _streamingHelper;
 
         public BedMatrixController(
-            ITemperatureClient client,
             ITemperatureCamera camera,
             ILogger<BedMatrixController> logger,
             IOptionsMonitor<BedMatrixControllerOptions> options,
             ImageStreamingHelper streamingHelper)
         {
-            _client = client;
             _camera = camera;
             _logger = logger;
             _options = options;
@@ -77,7 +76,7 @@ namespace SLS4All.Compact.Controllers
         [HttpGet("image/{id}")]
         public Task Image(string id, double seconds, [FromQuery] BedMatrixControllerQuery query, CancellationToken cancel)
         {
-            var grabber = GetGrabber(0, query);
+            var grabber = GetGrabber(query.Average ?? 0, query);
             return _streamingHelper.PullImage(
                 id,
                 grabber.ImageCaptured,
@@ -88,7 +87,7 @@ namespace SLS4All.Compact.Controllers
         [HttpGet("average/{id}/{seconds}")]
         public Task Average(string id, double seconds, [FromQuery] BedMatrixControllerQuery query, CancellationToken cancel)
         {
-            var grabber = GetGrabber(seconds, query);
+            var grabber = GetGrabber(query.Average ?? seconds, query);
             return _streamingHelper.PullImage(
                 id,
                 grabber.ImageCaptured,
@@ -97,13 +96,13 @@ namespace SLS4All.Compact.Controllers
         }
 
         private BedMatrixGrabber GetGrabber(double seconds, BedMatrixControllerQuery query)
-            => _grabbers.GetOrAdd((seconds, query.Cropped, query.Units), key => new BedMatrixGrabber(
+            => _grabbers.GetOrAdd((seconds, query.RefreshRate, query.Cropped, query.Units, GetType()), key => new BedMatrixGrabber(
                 _logger,
                 _options,
                 _camera,
-                _client,
                 seconds,
                 query.Cropped,
-                query.Units));
+                query.Units,
+                query.RefreshRate));
     }
 }

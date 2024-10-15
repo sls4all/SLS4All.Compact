@@ -83,11 +83,12 @@ namespace SLS4All.Compact.DependencyInjection
             }
         }
 
-        public static void AddAsImplementationAndInterfaces<TImplementation>(this IServiceCollection services, ServiceLifetime lifetime)
+        public static void AddAsImplementationAndInterfaces<TImplementation>(this IServiceCollection services, ServiceLifetime lifetime, Func<Type, bool>? serviceFilter = null)
             => AddAsImplementationAndInterfaces(
                 services, 
                 typeof(TImplementation), 
-                lifetime);
+                lifetime,
+                serviceFilter: serviceFilter);
 
         public static void AddAsObjectFactory(this IServiceCollection services, Type iface, Type implementation)
         {
@@ -108,7 +109,7 @@ namespace SLS4All.Compact.DependencyInjection
                 ServiceLifetime.Singleton));
         }
 
-        public static void AddAsImplementationAndInterfaces(this IServiceCollection services, Type implementation, ServiceLifetime lifetime, bool noPlugins = false)
+        public static void AddAsImplementationAndInterfaces(this IServiceCollection services, Type implementation, ServiceLifetime lifetime, bool noPlugins = false, Func<Type, bool>? serviceFilter = null)
         {
             var actualImplementation = !noPlugins
                 ? PluginReplacements.GetValueOrDefault(implementation, implementation)
@@ -125,6 +126,9 @@ namespace SLS4All.Compact.DependencyInjection
 
             foreach (var iface in actualImplementation.GetInterfaces())
             {
+                if (serviceFilter?.Invoke(iface) == false)
+                    continue;
+
                 services.Add(new ServiceDescriptor(iface, provider => provider.GetRequiredService(actualImplementation), lifetime));
                 services.AddAsObjectFactory(iface, actualImplementation);
 

@@ -24,8 +24,6 @@ namespace SLS4All.Compact.Power
     {
         public string LaserId => "laser";
 
-        public double LaserMinimumVisibleFactor => 0.01;
-
         public PowerState CurrentState { get; } = new PowerState(Array.Empty<PowerEntry>(), new PowermanState(0, 0, 0, ""));
 
         public AsyncEvent<PowerState> StateChangedLowFrequency { get; } = new AsyncEvent<PowerState>();

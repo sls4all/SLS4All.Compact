@@ -3,22 +3,91 @@
 @using SLS4All.Compact.ComponentModel
 @using SLS4All.Compact.IO
 @using SLS4All.Compact.Numerics
+@using SLS4All.Compact.Printing
 @using SLS4All.Compact.Slicing;
 @using SLS4All.Compact.Temperature;
 @using System.Text
 @using System.Buffers.Text
 @using SLS4All.Compact.Threading
 @using System.Diagnostics
+@using System.Globalization
 @inject ImageStreamingHelper ImageStreamingHelper
 @inject IJSRuntime JSRuntime
+@inject IPrintingService PrintingGlobal
+@inject ITemperatureClient TemperatureClient
+@inject ISurfaceHeater SurfaceHeater
+@inject IToastProvider ToastProvider
+@inject ValuesContainer Values
+
+<ModalWrapper @ref="_targetModal" class="fade app-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Temperature targets
+            </h5>
+        </div>
+        <div class="modal-body">
+            If you enable heater here, the following temperatures will be set as the target.
+            <br/>
+            Bed temperature:
+            <br />
+            <ValueEditor Title="Bed temperature" @bind-Value="Values.TargetBedTemperature"Unit="°C" ValueEntered="OnValueEntered" />
+            <br />
+            Surface temperature (halogens):
+            <br />
+            <ValueEditor Title="Surface temperarture" @bind-Value="Values.TargetSurfaceTemperature" Unit="°C" ValueEntered="OnValueEntered" />
+        </div>
+        <div class="modal-footer">
+            <a @onclick="() => _targetModal!.Close()" class="btn btn-secondary">Close</a>
+        </div>
+    </div>
+</ModalWrapper>
+
+@{
+    var isBedEnabled = IsBedEnabled;
+    var hasSetupTargets = Values.TargetBedTemperature > 0 || Values.TargetSurfaceTemperature > 0;
+}
 
 <div @ref="@ElementRef" id="@ElementId" class="d-flex flex-column camera-view @ClassNames" style="@StyleNames" @attributes="@AttributesWithCssScope">
+    @if (ControlsEnabled && !PrintingGlobal.IsPrinting)
+    {
+        <div class="light-control-container" @attributes="@JustAttributesWithCssScope">
+            <div class="light-control-container" @attributes="@JustAttributesWithCssScope">
+                @if (BedControlsEnabled)
+                {
+                    @if (isBedEnabled || hasSetupTargets)
+                    {
+                        <button class="btn btn-secondary btn--icon-text" @onclick="() => IsBedEnabled = !IsBedEnabled">
+                            @if (isBedEnabled)
+                            {
+                                <text><i class="bi bi-cup-hot" /> Heat</text>
+                            }
+                            else
+                            {
+                                <text><i class="bi bi-cup" /> Heat</text>
+                            }
+                        </button>
+                    }
+                    <button class="btn btn-secondary btn--icon-text" @onclick="() => _targetModal!.Show()">
+                        <text><i class="bi bi-three-dots" /></text>
+                    </button>
+                }
+                @ChildContent
+            </div>
+        </div>
+    }
     <div class="video-image-container" @attributes="@JustAttributesWithCssScope">
         <img id="@_id" @key="_streamKey" class="video-image" src="@StreamUri" @attributes="@JustAttributesWithCssScope" />
     </div>
 </div>
 
 @code {
+    public class ValuesContainer
+    {
+        public decimal TargetBedTemperature { get; set; } = 0;        
+        public decimal TargetSurfaceTemperature { get; set; } = 0;
+    }
+
     public const string CssScope = "b-thermo-camera-view";
     private readonly object _streamKey = new();
     private readonly string _id = Guid.NewGuid().ToString();
@@ -26,12 +95,48 @@
     private const int _timerPeriod = 500;
     private ImageStreamingHandle? _streamHandle;
     private long _streamCounter;
+    private bool? _isEnabled;
+    private bool _hasTouchedTemperatures;
+    private ModalWrapper? _targetModal;
 
-    private string StreamUri => 
-        $"/api/bedmatrix/image/{_id}?cropped=true&units={(int)UnitConverterFlags}&c={_streamCounter}";
+    private string StreamUri =>
+        string.Create(CultureInfo.InvariantCulture, $"/api/{(PrimaryCamera ? "bedmatrix" : "bedmatrix2")}/image/{_id}?cropped=true&units={(int)UnitConverterFlags}&c={_streamCounter}&refreshRate={RefreshRate}&average={Average}");
+
+    [Parameter]
+    public bool BedControlsEnabled { get; set; } = true;
 
     [Parameter]
     public UnitConverterFlags UnitConverterFlags { get; set; }
+
+    [Parameter]
+    public bool PrimaryCamera { get; set; } = true;
+
+    [Parameter]
+    public double RefreshRate { get; set; } = 1.0;
+
+    [Parameter]
+    public double Average { get; set; } = 0.0;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool ControlsEnabled { get; set; } = true;
+
+    private bool IsBedEnabled
+    {
+        get => _isEnabled ??
+           ((TemperatureClient.PrintBedHeaterIds.Any(x => TemperatureClient.CurrentState.TryGetValue(x.Id, out var item) && item.TargetTemperature > 0)) ||
+            SurfaceHeater.TargetTemperature != null);
+        set
+        {
+            if (_isEnabled == value)
+                return;
+            _hasTouchedTemperatures = true;
+            _isEnabled = value;
+            _ = UpdateBedEnabled();
+        }
+    }
 
     public ThermoCameraView()
     {
@@ -58,7 +163,9 @@
     {
         TryInvokeStateHasChanged(() =>
         {
-            return ValueTask.FromResult(TryRegisterImageReady());
+            if (!TryRegisterImageReady())
+                _isEnabled = null;
+            return ValueTask.FromResult(true);
         });
     }
 
@@ -73,6 +180,42 @@
     {
         TryUnregisterImageReady();
         _timer.Dispose();
+        _isEnabled = false;
+        await UpdateBedEnabled();
         await base.DisposeAsync();
+    }
+
+    private async Task UpdateBedEnabled()
+    {
+        if (_hasTouchedTemperatures) // NOTE: prevent spewing errors when disposing and printer is not ready or shutdown
+        {
+            try
+            {
+                _timer.Change(_timerPeriod, _timerPeriod);
+                if (!PrintingGlobal.IsPrinting)
+                {
+                    foreach (var item in TemperatureClient.PrintBedHeaterIds)
+                        await TemperatureClient.SetTarget(item.Id, _isEnabled == true && Values.TargetBedTemperature > 0 ? (double)Values.TargetBedTemperature : null);
+                    await SurfaceHeater.SetTarget(_isEnabled == true && Values.TargetSurfaceTemperature > 0 ? (double)Values.TargetSurfaceTemperature : null);
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Failed to enable/disable bed heater",
+                        BodyText = ex.Message,
+                        Key = this,
+                        Exception = ex,
+                    });
+                _isEnabled = null;
+            }
+        }
+    }
+
+    private async Task OnValueEntered()
+    {
+        await UpdateBedEnabled();
     }
 }

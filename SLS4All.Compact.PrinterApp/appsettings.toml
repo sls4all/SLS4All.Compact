@@ -89,74 +89,76 @@ SpeedFactor = 1.0
 HistoryDepth = "1000"
 
 [InovaBedProjection]
-XOffsetRelative = 0.005982588
-YOffsetRelative = 0.0025991062
+XOffsetRelative = -0.00042625368
+YOffsetRelative = -0.0055346275
 XYAngle = 0
-LaserYaw = 0
-LaserPitch = 0
+LaserYaw = 0.010719172
+LaserPitch = 0.17444047
 LaserXOffset = -88
-LaserYOffset = 0
-LaserZOffset = 0
-M = 7.000523
-I = 7.000523
-H = 251
+LaserYOffset = -0.48745188
+LaserZOffset = -0.41944468
+M = 7.367788
+I = 7.367788
+H = 250.73325
 LidAngle = 0
 MinH = 100
 MaxH = 400
-MirrorAOffset = -0.06751146
-MirrorBOffset = -0.06751146
+MirrorAOffset = -0.018136093
+MirrorBOffset = -0.018136093
 Width = 175
 Height = 175
 PositionTolerance = 0.001
 HeightTolerance = 0.001
-AlphaMinAngle = -18.85869375616312
-AlphaMaxAngle = 18.92158223129809
-BetaMinAngle = -18.84591054916382
-BetaMaxAngle = 18.406323742121458
-AlphaCenter = -0.3492792174220085
-BetaCenter = -0.03971324092708528
-AlphaOffset = 0.5065432322444394
-BetaOffset = 0.49044246412813663
-AlphaCurve = [
-  0.021546645627670464,
-  -0.021367899425383613,
-  0.02181014102783955,
-  0.004592016496980865,
-  0.004442676530423651,
-  0.00445713236483634,
-  0.004088087436420419,
-  0.003567955536301606,
-  0.0017355267721837293,
-  0.0012576813066422562,
-  0.001276703474783781,
-  0.0009005696456554049,
-  0.021890197031423496,
-  0.021831416153751025,
-  -0.02185188940117074
+AlphaMinAngle = -10.197872478049248
+AlphaMaxAngle = 10.136052426882088
+BetaMinAngle = -10.774388470570557
+BetaMaxAngle = 10.630084188189358
+AlphaCenter = -0.09345776215195656
+BetaCenter = 0.02351364170317538
+AlphaOffset = 0.48584465973544866
+BetaOffset = 0.5037775267551297
+XScale = 1
+YScale = 1
+AlphaCurves.1-1 = [
+  -0.002828941613323452,
+  -0.002060089990232341,
+  -0.0006359149686742974,
+  0.0008207091749338259,
+  0.0021927221568196886,
+  0.00239894048520146,
+  0.001700959170529654,
+  -0.000130626880688565,
+  -0.0017344885023904007,
+  -0.0024188455027111706,
+  -0.0026122586173351055,
+  -0.0021721363586570184,
+  -0.0005743124586214886,
+  0.0021484759237987185,
+  0.005784215072165997
 ]
-BetaCurve = [
-  -0.021908580287966432,
-  -0.0025050637722446,
-  0.02105517543174911,
-  0.00028933247955967685,
-  0.002728252987386545,
-  0.004123097951797399,
-  0.0044378909888189814,
-  0.002750236666884266,
-  0.003854419403482757,
-  0.005691922319714807,
-  0.007157077015108426,
-  0.008745977758187133,
-  -0.02151618709143576,
-  -0.021982592545021235,
-  0.0218760856586994
+BetaCurves.1-1 = [
+  0.0017769332391324537,
+  0.0009341600812174852,
+  0.0006005960663988928,
+  -0.000015550305417035912,
+  -0.00027245313928969217,
+  -0.00045109191617154426,
+  -0.0003916046246692559,
+  -0.00048727396665114464,
+  -0.0002635445718736301,
+  0.00015680333722391433,
+  0.00010360620048915166,
+  -0.0000790091903246349,
+  -0.00017181355684680444,
+  -0.0004313780752735258,
+  0.0038103175507013453
 ]
 InvertX = false
 InvertY = true
-MirrorAAxisPitch = 0.1825691
-MirrorAAxisRoll = 0.49067748
-MirrorBAxisYaw = 0.82322025
-MirrorBAxisRoll = -0.050493643
+MirrorAAxisPitch = 0.41942453
+MirrorAAxisRoll = -0.13322115
+MirrorBAxisYaw = 0.13568124
+MirrorBAxisRoll = -0.3060091
 
 # Options for "IdealCircle" hotspot calculator when "UseIdealCircleHotspotCalculator = true"
 [BitmapSliceIdealCircleHotspotCalculator]
@@ -311,8 +313,29 @@ IgnoredTemperatureFrames = 8
   [Mlx90640Camera.MainBox]
   MinX = 10
   MinY = 9
-  MaxX = 23
-  MaxY = 21
+  MaxX = 24
+  MaxY = 23
+
+# Second thermal camera for development/calibration tests.
+# Normally not used. If used, you should at least change Bus or Address.
+[Mlx90640Camera2] # [monitored]
+BusId = 1
+DeviceAddress = 51
+RefreshRate = "Hz8_0"
+Emissivity = 1
+EnableChessMode = true
+ReadPeriod = "0:0:0.05"
+FlipX = false
+FlipY = true
+RotateCW = false
+IgnoredTemperatureChange = 25
+IgnoredTemperatureFrames = 8
+
+  [Mlx90640Camera2.MainBox]
+  MinX = 10
+  MinY = 9
+  MaxX = 24
+  MaxY = 23
 
 [ControlledHeating] # [monitored]
 ControlPeriod = "0:0:1"
@@ -372,10 +395,12 @@ PowderChamberArea = 39_074
 PrintChamberArea = 31_109
 ChamberDepth = 200
 VolumeFactor = 1.1
-PowderBedLevelingDepth = 5
+PowderBedExtraDepth = 1 # [mm]
+BedLevelingStepDepth = 1 # [mm]
+BedLevelingStepCount = 5
 SettleTemperatureIncrease = 0
 SettleTemperatureIncreaseDuration = "0:0:0"
-RStuckCheckEnabled = true
+RStuckCheckEnabled = false
 
   [LayerClient.RMovesHome.1-1]
   Speed = 50
@@ -422,35 +447,35 @@ RStuckCheckEnabled = true
 [BedMatrixController] # [monitored]
 RefreshRate = 1
 
-  [BedMatrixController.MainBox]
-  MinX = 10
-  MinY = 8
-  MaxX = 23
-  MaxY = 21
-
   [BedMatrixController.Boxes.1-1]
-  MinX = 10
-  MinY = 8
-  MaxX = 16
-  MaxY = 15
+  MinX = 0
+  MinY = 0
+  MaxX = 6
+  MaxY = 7
 
   [BedMatrixController.Boxes.1-2]
-  MinX = 17
-  MinY = 8
-  MaxX = 23
-  MaxY = 15
+  MinX = 7
+  MinY = 0
+  MaxX = 14
+  MaxY = 7
 
   [BedMatrixController.Boxes.1-3]
-  MinX = 10
-  MinY = 16
-  MaxX = 16
-  MaxY = 21
+  MinX = 7
+  MinY = 8
+  MaxX = 14
+  MaxY = 14
 
   [BedMatrixController.Boxes.1-4]
-  MinX = 17
-  MinY = 16
-  MaxX = 23
-  MaxY = 21
+  MinX = 0
+  MinY = 8
+  MaxX = 6
+  MaxY = 14
+
+  [BedMatrixController.Boxes.1-5]
+  MinX = 2
+  MinY = 2
+  MaxX = 12
+  MaxY = 12
 
 [AnalyseHeating] # [monitored]
 # how long to wait to cool down before starting
@@ -461,12 +486,6 @@ CooldownTimeout = "0:4:0"
 CaptureTimeout = "0:0:5"
 # number of heaters counted from the start, that constitute "all" set of main heaters
 TargetTemperatureMainHeaterCount = 4
-# target temperature to stop heating with all main heaters [deg]
-TargetTemperatureAllMain = 170
-# target temperature to stop heating witk all aux heaters [deg]
-TargetTemperatureAllAux = 155
-# target temperature to stop heating with individual heaters [deg]
-TargetTemperature = 165
 # timeout that if elapsed, analysis will continue even if target was not reached
 TargetTemperatureTimeout = "0:3:0"
 # light PWM power [0..1]
@@ -475,33 +494,9 @@ Power = 1
 IncludeDouble = false
 # target temperature camera area
 
-  [AnalyseHeating.BedArea]
-  MinX = 10
-  MinY = 8
-  MaxX = 23
-  MaxY = 21
-
 [MeasureHeating] # [monitored]
 MeasureDuration = "0:0:30"
 OutlinerFactor = 0.80
-
-[SoftMLSurfaceHeater] # [monitored]
-LightCount = 4
-MinOnFactor = 0.2
-UpRange = 3.0
-DownRange = 3.0
-ReachedTolerance = 1.5
-SimulationNetworkFilename = "C:/Develop/SLS4All.Compact/SLS4All.Compact.MLSoftHeaterTest/bin/Release/net8.0/simulation_model.2024-04-09_22-23-42.mlnet"
-DecisionNetworkFilename = "C:/Develop/SLS4All.Compact/SLS4All.Compact.MLSoftHeaterTest/bin/Release/net8.0/decision_model.2024-04-10_00-27-31.mlnet"
-CameraAveragePeriod = "0:0:1.000"
-FactorAveragePeriod = "0:0:4.000"
-CriticalOvershoot = 2.0
-
-  [SoftMLSurfaceHeater.CaptureBox]
-  MinX = 10
-  MinY = 8
-  MaxX = 23
-  MaxY = 21
 
 [SoftAnalysisSurfaceHeater] # [monitored]
 # Heaters will never completely turn off if other conditions below are satisfited
@@ -569,12 +564,6 @@ FallbackLightCount = 4
 MinOnFactorDrainDuration = "0:0:0.5"
 EnableForcedAvgAll = false
 
-  [SoftAnalysisSurfaceHeater.FallbackCaptureBox]
-  MinX = 10
-  MinY = 8
-  MaxX = 23
-  MaxY = 21
-
 # Expected heating latency to compensate. Increasing the value causes more stable lighting/heating, decreasing causes frequent large flashes and rapid changes of power (oscillation).
 # Too low value might cause the lamps wont even turn on if the temperature difference is small, that is the reason we have different values for temperature target ranges.
 InterpolateHeatingLatencies = false
@@ -593,7 +582,7 @@ InterpolateHeatingLatencies = false
 
 [HalogenHeaterChecker] # [monitored]
 OnDurationMax = "0:0:15"
-OffDuration = "0:0:10"
+OffDuration = "0:0:15"
 ExpectedTemperatureIncrease = 5
 
 [ChamberHeaterChecker] # [monitored]
@@ -642,7 +631,7 @@ TimeScript.ArgsLinux = "{{Epoch}}"
 [BuzzerMelodyClient] # [monitored]
 
 	[BuzzerMelodyClient.Melodies.Information]
-		Pattern = "10 10 10 100 10 10 10 100"
+		Pattern = "30 10 30 100 30 10 30 100"
 	
 	[BuzzerMelodyClient.Melodies.Warning]
 		Pattern = "100 10 100 10 100"
@@ -665,6 +654,40 @@ RFactor = 0.001
 Z1Factor = 0.000_001
 Z2Factor = 0.000_001
 SavePeriod = "0:5:0"
+
+[PrinterPowerPinSafetySessionManager] # [monitored]
+InactiveStateGracePeriod = "0:0:1"
+	
+	[PrinterPowerPinSafetySessionManager.PowerPins.1-1]
+	PinName = "laserSafety"
+	ActiveValue = 1
+	InactiveValue = 0
+
+[ThermoCameraCompare] # [monitored]
+RefreshRate = 4.0
+Average = 1.0
+
+[OpticalSetupWizard] # [monitored]
+LaserMinimumVisibleWattageLow = 400
+LaserMinimumVisibleWattageHigh = 900
+GalvoHolderLaserX = 950
+GalvoHolderLaserY = 500
+Z2FocusDepth = 3500
+
+[ThermoSetupWizard] # [monitored]
+TargetPrintBedTemperature = 50
+
+[GalvoCalibrationWizard] # [monitored]
+Z2MoveDepth = 3500
+CalibrationRadius = 435
+CalibrationSteps = 42
+CalibrationDensityStep = 5
+CalibrationMargin = 5
+Dwell = "0:0:0"
+Steps = 360
+DefaultSpeedA = 75000
+DefaultSpeedARelativeLaserWattage = 10_000
+LaserOnPrecent = 100
 
 [Frontend] # [monitored]
 

@@ -58,7 +58,7 @@ namespace SLS4All.Compact.Slicing
         {
         }
 
-        public MimeData CreateImage(TimeSpan newerThan = default, string caption = "", int? layerIndex = null, bool drawHotspot = false)
+        public MimeData CreateImage(TimeSpan newerThan = default, string caption = "", int? layerIndex = null, bool drawHotspot = false, int? maxSize = null)
             => MimeData.BlackPng;
     }
 }

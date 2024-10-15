@@ -20,6 +20,12 @@ namespace SLS4All.Compact.Movement
 
         public double MinimumPowderBedDepth => 5;
 
+        public Task BedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default)
+            => Task.CompletedTask;
+
+        public Task FinishBedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default)
+            => Task.CompletedTask;
+
         public Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 

@@ -32,7 +32,6 @@
     var heightStr = (100 / _scale.Y).ToString(CultureInfo.InvariantCulture) + "%";
     var hasMemberId = MemberManager.HasMemberId;
     var hasInitializedSystemPassword = PrinterAuthentication.HasInitializedSystemPasswords;
-    var currentVersion = ApplicationUpdate.CurrentInfo;
     var isShutdownScheduled = SafeShutdownManager.IsShutdownScheduled;
     var isMaintenanceRequired = MaintenanceManager.IsMaintenanceRequired;
     var latestUpdate = _updateLastState?.NewerInfos.Length > 0
@@ -61,36 +60,7 @@
                     </div>
                 }
 
-                <div class="logo">
-                    @if (_title != null && _title.ChildContent != null)
-                    {
-                        @_title.ChildContent
-                    }
-                    else if (_title != null)
-                    {
-                        <div class="page-title" style="font-family: 'Audiowide', sans-serif; font-size: 24px;">
-                            @if (_title.Image != null)
-                            {
-                                <img src="@_title.Image" class="img-fluid main-title-image" />
-                            }
-                            else if (_title.IconClass != null)
-                            {
-                                <i class="main-title-icon @_title.IconClass"></i>
-                            }
-                            <div class="page-name-version d-none d-sm-block ">
-                                <span class="pr-3 page-name">SLS4All Compact</span>
-                                @if (currentVersion != null)
-                                {
-                                    <span class="page-version">@currentVersion.Identity.VersionString (@currentVersion.Identity.Channel)</span>
-                                }
-                                else
-                                {
-                                    <span class="page-version">0.0.0 (local)</span>
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
+                <MainLayoutTitleStatus Title="_title"/>
 
                 @*<form class="search">
                 <div class="search__inner">
@@ -559,6 +529,8 @@
                         <li><a href="@ThermoCameraDebug.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-ruler-h"></i> Thermo camera DEBUG</a></li>
 
                         <li><a href="@ThermoCamera.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-ruler-h"></i> Thermo camera</a></li>
+
+                        <li><a href="@ThermoCameraCompare.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-ruler-h"></i> Thermo camera compare</a></li>
 
                         <li><a href="/test2d" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-play"></i> Test 2D</a></li>
 

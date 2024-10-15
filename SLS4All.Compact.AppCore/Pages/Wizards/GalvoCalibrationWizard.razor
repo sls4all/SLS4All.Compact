@@ -1,0 +1,416 @@
+﻿@page "/wizard/galvo-calibration"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using Nito.AsyncEx
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@inherits WizardBase<GalvoCalibrationWizard.Step>
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject ILayerClient LayerClient
+@inject IPrinterSettingsStorage PrinterSettings
+@inject IOptionsMonitor<GalvoCalibrationWizardOptions> Options
+@inject IInputClient InputClient
+@inject IMovementClient MovementClient
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IPrinterSettingsStorage SettingsStorage
+@inject IObjectFactory<IEmergencyHelper, object> EmergencyHelper
+@inject IPrinterSafetySessionManager SafetySession
+@inject IBedProjection Projection
+@inject IPrinterClient PrinterClient
+@inject IMovementClient Movement
+@inject IHotspotCalculator HotspotCalculator
+@inject ILogger<GalvoCalibrationWizard> Logger
+@inject ICodePlotter Plotter
+
+@{
+    base.BuildRenderTree(__builder);
+    var isSafeButtonOn = InputClient.CurrentState.TryGetEntry(InputClient.SafeButtonId, out var state) && state.Value;
+}
+
+<CancelModal @ref="_printModal" ShowSpinner="false">
+    <Body>
+        <PlotterView @key="_plotterViewKey" class="plot-view" ExternalCssScope="@CssScope" />
+    </Body>
+</CancelModal>
+
+<ModalWrapper @ref="_doPrint" class="app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Print calibration pattern
+            </h5>
+        </div>
+        <div class="modal-body">
+            Do you really want to print the calibration pattern?
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoStep(force: true)" class="btn btn-danger">Print!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Stay at this step</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_enterCalibrationDataModal" class="app-modal" Context="modal" ExternalCssScope="@CssScope">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Enter calibration data
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                Paste the JSON calibration data here:
+            </p>
+            <textarea class="calibration-text" rows="14" @bind="CalibrationJson" @bind:event="oninput" placeholder="Paste or leave blank to clear any values you have set previously and fall back to internal defaults." />
+        </div>
+        <div class="modal-footer">
+            @if (_calibrationJsonValid)
+            {
+                <button @onclick="() => EnterCalibrationData(true)" class="btn btn-danger">Set the calibration data</button>
+            }
+            else
+            {
+                <button @onclick="() => {}" class="btn btn-danger disabled">Calibration data is invalid</button>
+            }
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        @switch (StepIndex)
+        {
+            case Step.Homing:
+                <h2>
+                    Galvo calibration
+                </h2>
+                <hr class="my-3">
+                <p>
+                    This wizard will guide you trough printing a calibration pattern on thermo paper to calibrate the printer X/Y precision.
+                    This generally needs to be done once after you install or move the optical components, like the laser, lens or galvo holder.
+                </p>
+                <p>
+                    Please ensure that the printer is free of any powder and the both beds can move to the top unrestricted. 
+                    Print bed should also be relatively cool, to avoid the thermo paper to change its color by just being inside of the printer.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Home the Z axis...</a>
+                    @if (MainLayout!.IsDeveloperMode)
+                    {
+                        <a class="btn btn-danger btn-lg" role="button" @onclick="() => DoStep(skip: true)">Skip step...</a>
+                    }
+                    <a class="btn btn-dark btn-lg" role="button" @onclick="() => EnterCalibrationData()">I just want to enter the calibration data...</a>
+                </p>
+                break;
+            case Step.Prepararion:
+                <h2>
+                    Inserting the calibration tool and thermo paper
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Please insert the <b>Calibration tool</b> and carefully install a fitting piece of <b>Thermo paper</b> on top of it. The paper should be placed to precisely match the top
+                    edges of the tool. Please ensure that the paper is laying exactly flat on the tool surface and no edges or parts bend or protrude upwards (even a small irregularity might be a problem).
+                    You can use very small amount of paper glue stick to ensure the paper is laying flat on the surface.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Continue</a>
+                </p>
+                break;
+            case Step.ReadyToPrint:
+                <h2>
+                    Ready to print
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Printer is now ready to print the calibration pattern on thermo paper.
+                </p>
+                @if (!isSafeButtonOn)
+                {
+                    <p class="pt-3">
+                        <span class="badge badge-warning text-wrap">
+                            Please close the <i>Printer Lid</i>, put on the <i>Over Powder Bin</i> and turn on the <i>Laser Safety Key</i> before continuing. Remember to turn off the <i>Laser Safety Key</i> while not printing!
+                        </span>
+                    </p>
+                }
+                <hr class="my-3">
+                <p class="lead">
+                    @if (isSafeButtonOn)
+                    {
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Print the calibration pattern...</a>
+                    }
+                    else
+                    {
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => MainLayout!.IsDeveloperMode ? DoStep() : Task.CompletedTask">Waiting for laser safety...</a>
+                    }
+                </p>
+                break;
+            case Step.Done:
+                <h2>
+                    The calibration pattern has been printed
+                </h2>
+                <hr class="my-3">
+                <p>
+                    You can now remove the calibration tool and the thermo paper from the printer. If you used a glue stick to flatten the thermo paper,
+                    you should remove the thermo paper from the tool now, otherwise it may tear if you remove it later.
+                </p>
+                <p>
+                    It is perfectly ok if the corners of the pattern are slightly outside the thermo paper. However the pattern should be more or less centered on it.
+                    If you measure the pattern size from the <b>center of the paper</b>, the whole printable area you wish to use while 3D printing, should be covered.
+                    If it does not, make sure you have mechanically centered the galvo motors.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Done!</a>
+                </p>
+                break;
+        }
+    </div>
+</div>
+
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Homing,
+        Prepararion,
+        ReadyToPrint,
+        Done,
+    }
+
+    public const string SelfPath = "/wizard/galvo-calibration";
+    private const string CssScope = "b-calibration-wizard";
+    private ModalWrapper? _doPrint, _enterCalibrationDataModal;
+    private CancelModal? _printModal;
+    private readonly object _plotterViewKey = new object();
+    private string _calibrationJson = "";
+    private bool _calibrationJsonValid = false;
+
+    private string CalibrationJson
+    {
+        get => _calibrationJson;
+        set
+        {
+            if (_calibrationJson == value)
+                return;
+            _calibrationJson = value;
+            _calibrationJsonValid = Projection.ValidateJsonConfig(value);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        StepIndex = Step.Homing;
+        base.OnInitialized();
+    }
+
+    private async Task DoStep(bool skip = false, bool force = false)
+    {
+        switch (StepIndex)
+        {
+            case Step.Homing:
+                if (!skip)
+                    await HomeAndSetBeds();
+                await Advance();
+                break;
+            case Step.Prepararion:
+                await Advance();
+                break;
+            case Step.ReadyToPrint:
+                if (!force)
+                    await _doPrint!.Show();
+                else
+                {
+                    await _doPrint!.Close();
+                    if (await PrintPattern())
+                        await Advance();
+                }
+                break;
+            case Step.Done:
+                await Advance();
+                break;
+        }
+    }
+
+    private async Task Advance()
+    {
+        if (StepIndex == Step.Done)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Information,
+                    HeaderText = "Success",
+                    BodyText = "Wizard has completed successfully",
+                    Silent = true, // user is interacting, no beeping is necessary
+                });
+            NavigateAfterFinished();
+            return;
+        }
+        StepIndex++;
+        await Task.CompletedTask;
+    }
+
+    private async Task HomeAndSetBeds()
+    {
+        var options = Options.CurrentValue;
+        await CancelModal.Execute(async cancel =>
+            {
+                await LayerClient.HomeBedsAndRecoater(0, cancel: cancel);
+                await MovementClient.MoveAux(MovementAxis.Z2, new MoveAuxItem
+                    {
+                        Relative = false,
+                        Value = options.Z2MoveDepth,
+                    },
+                    cancel: cancel);
+                await MovementClient.FinishMovement(cancel: cancel);
+            },
+            titleText: "Please wait",
+            bodyText: "Homing beds...",
+            cancelText: "Cancel",
+            errorToastHeaderText: "Error homing beds");
+    }
+
+
+    private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
+    {
+        var context = ValidationContextFactory.CreateContext();
+        var powerSettings = SettingsStorage.GetPowerSettings();
+        var powerSettingsValidation = await powerSettings.Validate(context);
+        if (!powerSettingsValidation!.IsValid)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Invalid settings",
+                    BodyText = "Printer power settings contain errors",
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                });
+            return null;
+        }
+        return powerSettings;
+    }
+
+    private async Task<bool> PrintPattern()
+    {
+        var options = Options.CurrentValue;
+        var res = await _printModal!.Execute<bool>(async cancel =>
+            {
+                System.Diagnostics.Stopwatch? watch = null;
+                PrintHelper2D? helper = null;
+                try
+                {
+                    var printerSettings = await GetPrinterPowerSettings();
+                    if (printerSettings == null)
+                        return false;
+                    var defaultSpeedA = options.DefaultSpeedA * options.DefaultSpeedARelativeLaserWattage / printerSettings.LaserWattage;
+                    var setup = new PrintHelper2D.Setup
+                        {
+                            CenterX = (double)Projection.Center.x,
+                            CenterY = (double)Projection.Center.y,
+                            CalibrationRadius = (double)options.CalibrationRadius,
+                            CalibrationSteps = options.CalibrationSteps,
+                            CalibrationDensityStep = (double)options.CalibrationDensityStep,
+                            CalibrationMargin = (double)options.CalibrationMargin,
+                            Dwell = options.Dwell,
+                            Steps = options.Steps,
+                            XCorrectionFactor = 1,
+                            YCorrectionFactor = 1,
+                            DefaultSpeedA = (double)defaultSpeedA,
+                            UseDefaultSpeed = true,
+                            LaserOnFactor = (double)options.LaserOnPrecent / 100,
+                        };
+
+                    StateHasChanged();
+                    await Task.Yield();
+
+                    helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
+                    PrinterStream closedScript = async (channel, cancel) =>
+                    {
+                        await helper.DrawCalibrationPattern(channel, setup);
+                        await helper.Close(channel, setup);
+                    };
+
+                    Plotter.Clear();
+                    Logger.LogInformation($"Starting to print calibration pattern");
+                    watch = System.Diagnostics.Stopwatch.StartNew();
+                    await using (await SafetySession.BeginSafetySession(cancel))
+                    {
+                        await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                    }
+                    watch.Stop();
+                    Plotter.Clear();
+                    Logger.LogInformation($"Printed calibration pattern in {watch.Elapsed}");
+                }
+                catch (Exception ex)
+                {
+                    await EmergencyHelper.CreateAndCall(x => x.EmergencyPowerOffLaser());
+                    ToastProvider.Show(new ToastMessage
+                        {
+                            Type = ToastMessageType.Error,
+                            HeaderText = "Error while printing patter",
+                            BodyText = ex.Message,
+                            Key = this,
+                            Exception = ex,
+                        });
+                    return false;
+                }
+                StateHasChanged();
+                return true;
+            },
+            false,
+            titleText: "Printing pattern...",
+            cancelText: "Cancel",
+            errorToastHeaderText: "Error printing pattern");
+        return res;
+    }
+
+    private async Task EnterCalibrationData(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            _calibrationJson = "";
+            _calibrationJsonValid = true;
+            await _enterCalibrationDataModal!.Show();
+        }
+        else
+        {
+            if (await Projection.SetJsonConfig(_calibrationJson))
+            {
+                await _enterCalibrationDataModal!.Close();
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Key = this,
+                        Type = ToastMessageType.Information,
+                        HeaderText = "Success",
+                        BodyText = "Calibration data has been successfully set. You will need to restart the software to apply the changes.",
+                        Silent = true, // user is interacting, no beeping is necessary
+                        TargetUri = ShutdownPage.SelfPath,
+                    });
+                NavigateAfterFinished();
+            }
+        }
+    }
+}

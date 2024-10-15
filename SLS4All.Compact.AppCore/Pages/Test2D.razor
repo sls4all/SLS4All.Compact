@@ -24,6 +24,7 @@
 @inject IToastProvider ToastProvider
 @inject ILogger<Test2D> Logger
 @inject IObjectFactory<IEmergencyHelper, object> EmergencyHelper
+@inject IPrinterSafetySessionManager SafetySession
 
 <PrinterPageTitle IconClass="zwicon-play"/>
 
@@ -65,6 +66,7 @@
                     @RenderValue(nameof(ValuesContainer.RadiusInc))
                     @RenderValue(nameof(ValuesContainer.RadiusStep))
                     @RenderValue(nameof(ValuesContainer.RadiusMax))
+                    @RenderValue(nameof(ValuesContainer.RadiusA))
                     @RenderValue(nameof(ValuesContainer.CalibrationRadius))
                     @RenderValue(nameof(ValuesContainer.CalibrationSteps))
                     @RenderValue(nameof(ValuesContainer.CalibrationDensityStep))
@@ -173,7 +175,7 @@
         }
 
         public string? GroupName { get; set; } = nameof(PrintHelper2D.DrawCircle);
-        
+
         [StorageName("Center X")]
         [StorageDescription("Center X position")]
         [StorageUnit(Units.Millimeter)]
@@ -212,7 +214,7 @@
         [Group(nameof(PrintHelper2D.DrawRectangle))]
         [Group(nameof(PrintHelper2D.DrawHeart))]
         [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
-        public decimal Radius { get; set; } = 50;
+        public decimal Radius { get; set; } = 5;
         [StorageName("Radius 2")]
         [StorageDescription("Radius for Y axis (height/2). Set to zero for same as `Radius`.")]
         [StorageUnit(Units.Millimeter)]
@@ -228,18 +230,23 @@
         [StorageDescription("Radius increment for next shape.")]
         [StorageUnit(Units.Millimeter)]
         [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
-        public decimal RadiusStep { get; set; } = 0;
+        public decimal RadiusStep { get; set; } = 5;
         [StorageName("Radius max")]
         [StorageDescription("Maximum radius to draw.")]
         [StorageUnit(Units.Millimeter)]
         [Group(nameof(PrintHelper2D.DrawCirclesSquaresTest))]
-        public decimal RadiusMax { get; set; } = 0;
+        public decimal RadiusMax { get; set; } = 80;
+        [StorageName("Radius(A)")]
+        [StorageDescription("Radius (width/2) in angular units (0-500). Set to zero to use `Radius` in mm.")]
+        [StorageUnit(Units.Permille)]
+        [Group(nameof(PrintHelper2D.DrawRectangle))]
+        public decimal RadiusA { get; set; } = 0;
         [StorageName("Calibration radius")]
         [StorageDescription("Maximum radius to draw, in angular permille units.")]
         [StorageUnit("‰")]
         [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
         [Group(nameof(PrintHelper2D.DrawCalibrationDots))]
-        public decimal CalibrationRadius { get; set; } = 231;
+        public decimal CalibrationRadius { get; set; } = 435;
         [StorageName("Calibration steps")]
         [StorageDescription("How many horizontal/vertical lines should be drawn.")]
         [Group(nameof(PrintHelper2D.DrawCalibrationPattern))]
@@ -285,7 +292,7 @@
         [StorageDescription("Laser/galvo speed when printing")]
         [StorageUnit("‰/sec")]
         [Group(nameof(PowerGroup))]
-        public decimal DefaultSpeedA { get; set; } = 550000;
+        public decimal DefaultSpeedA { get; set; } = 75000;
         [StorageName("Secondary angular speed")]
         [StorageDescription("Secondary angular speed to interploate to")]
         [StorageUnit("‰/sec")]
@@ -385,6 +392,7 @@
                     RadiusStep = (double)Values.RadiusStep,
                     RadiusMax = (double)Values.RadiusMax,
                     Radius2 = (double)(Values.Radius2 == 0 ? Values.Radius : Values.Radius2),
+                    RadiusA = (double)Values.RadiusA,
                     CalibrationRadius = (double)Values.CalibrationRadius,
                     CalibrationSteps = Values.CalibrationSteps,
                     CalibrationDensityStep = (double)Values.CalibrationDensityStep,
@@ -425,7 +433,12 @@
                 if (Values.IsDryRun)
                     await closedScript.Consume(cancel);
                 else
-                    await Printer.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                {
+                    await using (await SafetySession.BeginSafetySession(cancel))
+                    {
+                        await Printer.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                    }
+                }
                 _stats = $"Time = {watch.Elapsed}, A = {helper.MinAngle.a} ~ {helper.MaxAngle.a}, B = {helper.MinAngle.b} ~ {helper.MaxAngle.b}, L = {helper.Length.min} ~ {helper.Length.max}, SpeedA = {helper.MinMaxSpeedA.min} ~ {helper.MinMaxSpeedA.max}, SpeedXY = {helper.MinMaxSpeedXY.min} ~ {helper.MinMaxSpeedXY.max}, Area = {helper.MinMaxArea.min} ~ {helper.MinMaxArea.max}, FillAccel = {helper.FillSpacingAcceleration}";
             }
             catch (Exception ex)

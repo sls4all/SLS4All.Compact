@@ -166,9 +166,6 @@ namespace SLS4All.Compact.Movement
             return ValueTask.CompletedTask;
         }
 
-        public override Task EnableProjectionPattern(bool enable, CancellationToken cancel = default)
-            => Task.CompletedTask;
-
         private (TimeSpan Duration, SystemTimestamp Timestamp) GetRemainingPrintTimeOfKeyInner(
             LockMasterQueueDisposable master,
             object key,

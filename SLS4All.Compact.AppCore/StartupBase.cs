@@ -50,6 +50,7 @@ using SLS4All.Compact.Processing.Slicing;
 using SLS4All.Compact.Validation;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using SLS4All.Compact.Pages.Wizards;
 
 namespace SLS4All.Compact
 {
@@ -73,6 +74,7 @@ namespace SLS4All.Compact
             typeof(SystemPrinterAuthenticationSavedOptions),
             typeof(PrinterWearCaptureSavedOptions),
             typeof(PrinterMaintenanceManagerSavedOptions),
+            typeof(InovaAdvancedBedProjectionSavedOptions),
         ];
         public static string[] ConfigurationSources { get; set; } = [];
         public static bool AppsettingsSafeModeEnabled { get; set; }
@@ -160,6 +162,8 @@ namespace SLS4All.Compact
             services.AddAsImplementationAndInterfaces<Pages.SlicingPage.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Pages.MovementPage.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Components.TemperatureControl.ValuesContainer>(ServiceLifetime.Scoped);
+            services.AddAsImplementationAndInterfaces<Components.ThermoCameraView.ValuesContainer>(ServiceLifetime.Scoped);
+            services.Configure<Pages.ThermoCameraCompare.ThermoCameraCompareOptions>(Configuration.GetSection("ThermoCameraCompare"));
 
             services.Configure<ExhaustiveNesterOptions>(Configuration.GetSection("ExhaustiveNester"));
             services.AddAsImplementationAndInterfaces<ExhaustiveNesterLocalWorkerProvider>(ServiceLifetime.Singleton);
@@ -230,6 +234,10 @@ namespace SLS4All.Compact
 
             services.Configure<ImageStreamingHelperOptions>(Configuration.GetSection("ImageStreamingHelper"));
             services.AddAsImplementationAndInterfaces<ImageStreamingHelper>(ServiceLifetime.Singleton);
+            
+            services.Configure<OpticalSetupWizardOptions>(Configuration.GetSection("OpticalSetupWizard"));
+            services.Configure<ThermoSetupWizardOptions>(Configuration.GetSection("ThermoSetupWizard"));
+            services.Configure<GalvoCalibrationWizardOptions>(Configuration.GetSection("GalvoCalibrationWizard"));
 
             //services.AddAsImplementationAndInterfaces<BasicSlicerEdgeSorter>(ServiceLifetime.Transient);
             services.AddAsImplementationAndInterfaces<AdvancedSlicerEdgeSorter>(ServiceLifetime.Transient);

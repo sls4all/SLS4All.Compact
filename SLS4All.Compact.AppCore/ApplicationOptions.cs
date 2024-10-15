@@ -111,6 +111,7 @@ namespace SLS4All.Compact
         public McuSerialDeviceFactoryType McuSerialDeviceFactory { get; set; } = McuSerialDeviceFactoryType.NotSet;
         public VideoCameraClientType VideoCameraClient { get; set; } = VideoCameraClientType.Fake;
         public TemperatureCameraClientType TemperatureCameraClient { get; set; } = TemperatureCameraClientType.Mlx90640Fake;
+        public TemperatureCameraClientType TemperatureCameraClient2 { get; set; } = TemperatureCameraClientType.Mlx90640Fake;
         public NetworkManagerType NetworkManager { get; set; } = NetworkManagerType.Fake;
         public PrinterPloterType Plotter { get; set; } = PrinterPloterType.Fake;
         public SoftHeaterType SoftHeater { get; set; } = SoftHeaterType.SoftAnalysis;

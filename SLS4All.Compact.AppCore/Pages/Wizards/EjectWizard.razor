@@ -1,0 +1,176 @@
+﻿@page "/wizard/eject"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@inherits WizardBase<EjectWizard.Step>
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject ILayerClient LayerClient
+@inject IPrintSessionStorage PrintSessionStorage
+
+@{
+    base.BuildRenderTree(__builder);
+}
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_ejectConfirm" class="app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Confirm cake ejection
+            </h5>
+        </div>
+        <div class="modal-body">
+            Are you sure you want to <b>eject the printing cake</b>?
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => DoEject(true)" class="btn btn-warning">Eject the cake</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Stay at this step</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        @switch (StepIndex)
+        {
+            case Step.Eject:
+                <h2>
+                    Eject the finished print cake
+                </h2>
+                <hr class="my-3">
+                <p>
+                    @if (PrintSessionStorage.CanEjectCake)
+                    {
+                        <text>Press the eject button below when you are ready.</text>
+                    }
+                    else
+                    {
+                        <text>Eject should have completed and the print cake can be moved away for cleaning.</text>
+                    }
+                </p>
+                @if (PrintSessionStorage.CanEjectCake)
+                {
+                    <p class="lead pt-3">
+                        <a class="btn btn-theme btn-lg btn--icon-text" @onclick="() => DoEject()">
+                            <i class="bi bi-eject" /> Eject the print cake...
+                        </a>
+                    </p>
+                }
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg btn--icon-text" role="button" @onclick="() => DoStep()">
+                        <i class="bi bi-clipboard-check" /> Done, the cake was delicious!
+                    </a>
+                    @if (PrintSessionStorage.CanEjectCake)
+                    {
+                        <a class="btn btn-secondary btn-lg" role="button" href="@PrinterStatus.SelfPath">I have changed my mind</a>
+                    }
+                </p>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Eject,
+    }
+
+    public const string SelfPath = "/wizard/eject";
+    private const string CssScope = "b-eject-wizard";
+
+    private ModalWrapper? _ejectConfirm;
+
+    protected override void OnInitialized()
+    {
+        StepIndex = Step.Eject;
+        base.OnInitialized();
+    }
+
+    private async Task DoStep(bool force = false)
+    {
+        switch (StepIndex)
+        {
+            case Step.Eject:
+                await FinishedEject();
+                break;
+        }
+    }
+
+    private async Task<PrintSessionDetail?> TryGetLastSession()
+    {
+        await foreach (var item in PrintSessionStorage.GetSessionsDescending())
+        {
+            return await PrintSessionStorage.TryGetDetail(item.Id);
+        }
+        return null;
+    }
+
+    private async Task DoEject(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            await _ejectConfirm!.Show();
+            return;
+        }
+
+        await _ejectConfirm!.Close();
+        await CancelModal!.Execute(
+            async cancel =>
+            {
+                var session = await TryGetLastSession();
+                if (session != null)
+                {
+                    await LayerClient.EjectCake((double?)session.FinalPrintDepth, cancel);
+                    await PrintSessionStorage.SetHasEjectedSession(session.Id);
+                }
+            },
+            titleText: "Please wait",
+            bodyText: "Ejecting the cake...",
+            // NOTE: no cancellation!
+            errorToastHeaderText: "Eject failed");
+    }
+
+    private async Task FinishedEject()
+    {
+        var session = await TryGetLastSession();
+        if (session != null)
+        {
+            await PrintSessionStorage.SetHasEjectedSession(session.Id);
+        }
+        NavigationManager.NavigateTo(PrinterStatus.SelfPath);
+    }
+
+    private Task Advance(Step? advanceTo = default(Step?))
+    {
+        ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Information,
+                    HeaderText = "Success",
+                    BodyText = "Wizard has completed successfully",
+                    Silent = true, // user is interacting, no beeping is necessary
+                });
+        NavigateAfterFinished();
+        return Task.CompletedTask;
+    }
+}

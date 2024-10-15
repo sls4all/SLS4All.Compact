@@ -19,13 +19,13 @@
             <input type="range" min="1" max="@_layerCount" style="width: 300px" @bind="LayerIndex" @bind:event="oninput" />
             <input type="number" @bind="LayerIndex" @bind:event="oninput" style="width: 6em" />
         </label>
-        @if (Plotter.OutsideDraw)
+@*         @if (Plotter.OutsideDraw)
         {
             <div class="alert alert-danger" role="alert">
                 Outside draw!
             </div>
         }
-    </div>
+ *@    </div>
 
     <img class="pt-3" style="height:0px; flex-grow: 1; object-fit: contain" src="@LayerUrl" />
 </div>

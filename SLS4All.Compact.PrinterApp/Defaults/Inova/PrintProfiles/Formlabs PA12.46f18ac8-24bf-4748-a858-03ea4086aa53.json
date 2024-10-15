@@ -39,6 +39,7 @@
   "HeatingTargetPrintBed2Thickness1": 0,
   "HeatingTargetPrintBed2Thickness2": 0,
   "BeginLayerTemperatureTarget": 178.5,
+  "HeatingTargetAnalyse": 170,
   "BeginLayerTemperatureDelay": "00:00:03",
   "BedPreparationTemperatureTarget": 178.5,
   "BedPreparationTemperatureDelay": "00:00:03",

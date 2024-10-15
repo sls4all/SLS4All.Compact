@@ -12,6 +12,11 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Temperature
 {
+    public class AnalyseHeatingSetup
+    {
+        public double TargetTemperature { get; set; } = 170;
+    }
+
     public interface IAnalyseHeating
     {
         Task AnalyseTask { get; }
@@ -22,6 +27,7 @@ namespace SLS4All.Compact.Temperature
 
         Task Start(
             string? name,
+            AnalyseHeatingSetup setup,
             Action<Exception>? errorHandler, 
             Action? completedHandler, 
             StatusUpdater? onStatus = null, 

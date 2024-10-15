@@ -38,7 +38,4 @@ Scripts = [
 [PrinterPerformanceProvider] # [monitored]
 GpuTemperatureUsingVcio = true
 
-[Mlx90640Camera]
-BusId = 1
-
 [Frontend] # [monitored]

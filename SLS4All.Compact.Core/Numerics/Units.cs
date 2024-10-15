@@ -9,6 +9,7 @@
         public const string Micrometer = "μm";
         public const string Liters = "liters";
         public const string Percent = "%";
+        public const string Permille = "‰";
 
         public const float InchesToMm = 25.4f;
         public const float LitersToMillimeter3 = 1_000_000;

@@ -37,6 +37,9 @@ namespace SLS4All.Compact.Pages
         [Inject]
         public IUnitConverter UnitConverter { get; set; } = default!;
 
+        public string GetReloadUri()
+            => MainLayout!.GetReloadUri();
+
         protected override async Task OnInitializedAsync()
         {
             _localization = PrinterSettingsStorage.GetLocalizationSettings();

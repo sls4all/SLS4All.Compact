@@ -72,6 +72,8 @@
         get => _isLightEnabled ?? Lights.CurrentState.IsEnabled;
         set
         {
+            if (_isLightEnabled == value)
+                return;
             _hasTouchedLights = true;
             _isLightEnabled = value;
             _ = UpdateLightEnabled();
@@ -103,13 +105,9 @@
     {
         TryInvokeStateHasChanged(() =>
         {
-            if (!TryRegisterImageReady() && _isLightEnabled == null)
-                return ValueTask.FromResult(false);
-            else
-            {
+            if (!TryRegisterImageReady())
                 _isLightEnabled = null;
-                return ValueTask.FromResult(true);
-            }
+            return ValueTask.FromResult(true);
         });
     }
 
@@ -145,14 +143,17 @@
 
     private async Task UpdateLightEnabled()
     {
-        try
+        if (_hasTouchedLights)
         {
-            _timer.Change(_timerPeriod, _timerPeriod);
-            await Lights.SetLights(_isLightEnabled!.Value, null, null, default);
-        }
-        catch (Exception ex)
-        {
-            if (_hasTouchedLights) // NOTE: prevent spewing errors when disposing and printer is not ready or shutdown
+            try
+            {
+                _timer.Change(_timerPeriod, _timerPeriod);
+                if (!PrintingGlobal.IsPrinting)
+                {
+                    await Lights.SetLights(_isLightEnabled == true, null, null, default);
+                }
+            }
+            catch (Exception ex)
             {
                 ToastProvider.Show(new ToastMessage
                     {
@@ -162,8 +163,8 @@
                         Key = this,
                         Exception = ex,
                     });
+                _isLightEnabled = null;
             }
-            _isLightEnabled = null;
         }
     }
 }

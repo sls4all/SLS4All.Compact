@@ -37,10 +37,8 @@ namespace SLS4All.Compact.Temperature
         public int XOffset { get; set; } = 1;
         public int YOffset { get; set; } = 10;
         public int Quality { get; set; } = 90;
-        public BedMatrixControllerBox? MainBox { get; set; }
         public Dictionary<string, BedMatrixControllerBox?>? Boxes { get; set; }
         public float PathDashLength { get; set; } = 20;
-        public int RefreshRate { get; set; } = 1;
     }
 
     public sealed class BedMatrixGrabber : ImageGrabber
@@ -49,10 +47,10 @@ namespace SLS4All.Compact.Temperature
         private readonly ILogger _logger;
         private readonly IOptionsMonitor<BedMatrixGrabberOptions> _options;
         private readonly ITemperatureCamera _camera;
-        private readonly ITemperatureClient _client;
         private readonly double _average;
         private readonly bool _cropped;
         private readonly UnitConverterFlags _units;
+        private readonly double _refreshRate;
 
         private readonly object _locker = new();
         private readonly SKTypeface _typeface;
@@ -69,19 +67,19 @@ namespace SLS4All.Compact.Temperature
             ILogger logger,
             IOptionsMonitor<BedMatrixGrabberOptions> options,
             ITemperatureCamera camera,
-            ITemperatureClient client,
             double average,
             bool cropped,
-            UnitConverterFlags units)
+            UnitConverterFlags units,
+            double refreshRate)
             : base(logger)
         {
             _logger = logger;
             _options = options;
             _camera = camera;
-            _client = client;
             _average = average;
             _cropped = cropped;
             _units = units;
+            _refreshRate = refreshRate;
 
             var o = _options.CurrentValue;
             using (var stream = GetType().Assembly.GetManifestResourceStream("SLS4All.Compact.Temperature.BedMatrixGrabber.ttf")!)
@@ -137,20 +135,18 @@ namespace SLS4All.Compact.Temperature
             {
                 _camera.CurrentPixelsChanged.AddHandler(OnPixelsChanged);
 
-                var timer = new PeriodicTimer(TimeSpan.FromSeconds(1) / options.RefreshRate);
+                var timer = new PeriodicTimer(TimeSpan.FromSeconds(1) / _refreshRate);
                 float[] avg = [];
                 do
                 {
-                    var state = _client.CurrentState;
-                    var e = state.BedMatrix;
-                    if (e != null && queue.Count > 0)
+                    if (queue.Count > 0)
                     {
                         lock (queue)
                         {
                             avg = CalcAvgValues(queue, avg);
                         }
                         stream.SetLength(0);
-                        WriteImage(_cropped, avg, e.Width, e.Height, stream);
+                        WriteImage(_cropped, avg, _camera.Width, _camera.Height, stream);
                         await ImageCaptured.Invoke(new MimeData(ImageMime, stream.AsMemory()), cancel);
                     }
                 }
@@ -245,10 +241,12 @@ namespace SLS4All.Compact.Temperature
                     boxPaint1.PathEffect = pathEffect1;
                     boxPaint2.PathEffect = pathEffect2;
                     var boxes = options.Boxes?.GetOrderedEnabledValues() ?? Array.Empty<BedMatrixControllerBox>();
+                    var mainBox = _camera.MainBox;
                     foreach (var box in boxes)
                     {
-                        canvas.DrawRect(box.MinX * scale, box.MinY * scale, (box.MaxX - box.MinX + 1) * scale - 1, (box.MaxY - box.MinY + 1) * scale - 1, boxPaint1);
-                        canvas.DrawRect(box.MinX * scale, box.MinY * scale, (box.MaxX - box.MinX + 1) * scale - 1, (box.MaxY - box.MinY + 1) * scale - 1, boxPaint2);
+                        var box2 = mainBox.OffsetInTopLeft(box.Box);
+                        canvas.DrawRect(box2.MinX * scale, box2.MinY * scale, (box2.MaxX - box2.MinX + 1) * scale - 1, (box2.MaxY - box2.MinY + 1) * scale - 1, boxPaint1);
+                        canvas.DrawRect(box2.MinX * scale, box2.MinY * scale, (box2.MaxX - box2.MinX + 1) * scale - 1, (box2.MaxY - box2.MinY + 1) * scale - 1, boxPaint2);
                     }
                     for (int y = 0; y < valuesHeight; y++)
                     {
@@ -264,9 +262,8 @@ namespace SLS4All.Compact.Temperature
                     }
                     canvas.Flush();
 
-                    if (cropped && options.MainBox != null)
+                    if (cropped)
                     {
-                        var mainBox = options.MainBox;
                         var changedBoxSize = mainBox.Width != _lastBoxWidth || mainBox.Height != _lastBoxHeight;
                         _lastBoxWidth = mainBox.Width;
                         _lastBoxHeight = mainBox.Height;

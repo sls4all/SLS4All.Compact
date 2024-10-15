@@ -160,6 +160,25 @@
     </div>
 </Modal>
 
+<Modal @ref="_recoatLayerModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Recoat layer
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                By clicking <b>Recoat layer</b> below, you will perform a single recoating move, without any Z movements.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => RecoatLayer()" class="btn btn-primary">Recoat layer!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</Modal>
+
 @{
     var isPrinting = IsPrinting;
 }
@@ -535,6 +554,7 @@
                     Layers
                 </button>
                 <div class="dropdown-menu">
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _recoatLayerModal!.Show()">Recoat layer...</a>
                     <a class="dropdown-item" href="javascript:void(0)" @onclick="BeginPrint">Begin print</a>
                     <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _bedPreparationModal!.Show()">Bed preparation...</a>
                     <a class="dropdown-item" href="javascript:void(0)" @onclick="() => _beginLayerModal!.Show()">Begin layer...</a>
@@ -595,6 +615,7 @@
     private Modal? _beginLayerModal;
     private Modal? _bedPreparationModal;
     private Modal? _printCapModal;
+    private Modal? _recoatLayerModal;
 
     private bool IsPrinting => PrintingGlobal.BackgroundTask.Status?.IsCompleted == false;
 
@@ -784,6 +805,19 @@
                 TemperatureDelay = TimeSpan.FromSeconds((double)Values.TemperatureDelay),
                 PrevLayerFillArea = Values.PrevLayerFillArea != 0 ? (double)Values.PrevLayerFillArea : null,
                 SinteredVolumeFactor = (double)Values.SinteredVolumeFactor,
+            };
+        await BackgroundTask(async cancel =>
+            {
+                await LayerClient.BeginLayer(setup, cancel: cancel);
+            });
+    }
+
+    private async Task RecoatLayer()
+    {
+        var setup = new Movement.BeginLayerSetup
+            {
+                Enabled = true,
+                DisableZMovement = true,
             };
         await BackgroundTask(async cancel =>
             {

@@ -146,6 +146,8 @@ while :; do
                         --disable-save-password-bubble \
                         --enable-features=WebUIDarkMode \
                         --force-dark-mode \
+                        --start-maximized \
+                        --start-fullscreen \
                         --kiosk $BASEURL/$INDEXURL \
                         --js-flags="--expose-gc" \
 			            --no-sandbox >/dev/null 2>&1 &

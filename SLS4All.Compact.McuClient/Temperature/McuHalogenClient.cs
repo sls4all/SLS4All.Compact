@@ -40,7 +40,7 @@ namespace SLS4All.Compact.Temperature
 
         private volatile LightsState _lowFrequencyState;
         private volatile int _lightCount;
-        private volatile PrinterPowerSettings _powerSettings;
+        private volatile PrinterPowerSettingsSnapshot _powerSettings;
 
         public LightsState CurrentState => _lowFrequencyState;
         public AsyncEvent<LightsState> StateChangedLowFrequency { get; } = new();
@@ -66,7 +66,7 @@ namespace SLS4All.Compact.Temperature
             _surfaceId = o.SurfaceId;
             _lowFrequencyState = new(false);
             _lowFrequencyTimer = new PeriodicTimer(o.LowFrequencyPeriod);
-            _powerSettings = _settingsStorage.GetPowerSettings();
+            _powerSettings = _settingsStorage.Power;
         }
 
         public IDisposable SupressValidation()
@@ -120,7 +120,7 @@ namespace SLS4All.Compact.Temperature
             {
                 try
                 {
-                    _powerSettings = _settingsStorage.GetPowerSettings();
+                    _powerSettings = _settingsStorage.Power;
                     var manager = _printerClient.ManagerIfReady;
                     if (manager != null)
                     {
