@@ -188,10 +188,6 @@ namespace SLS4All.Compact.Movement
 
     public interface ILayerClient
     {
-        /// <summary>
-        /// Minimum powder bed powder depth [mm]
-        /// </summary>
-        double MinimumPowderBedDepth { get; }
         PowderVolumeTotals GetPowderVolume(PowderVolumeSetup setup);
         Task BedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default);
         Task FinishBedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default);

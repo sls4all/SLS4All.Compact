@@ -1,8 +1,8 @@
 @inject IJSRuntime JSRuntime
 
-<Router AppAssembly="@typeof(FrontendOptions).Assembly" PreferExactMatches="@true">
+<Router AppAssembly="@typeof(FrontendOptions).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <RedirectingRouteView RouteData="@routeData" OriginalRouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
     </Found>
     <NotFound>
         <LayoutView Layout="@typeof(MainLayout)">

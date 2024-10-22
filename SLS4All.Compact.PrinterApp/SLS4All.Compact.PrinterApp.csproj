@@ -25,6 +25,7 @@
 
 	<ItemGroup>
 	  <None Remove="Defaults\Inova\Surface\Formlabs_PA12_2024-06-27_09-24-22.s4a-sha" />
+	  <None Remove="Defaults\Inova\Surface\Formlabs_PA12_2024-10-14_14-47-52.s4a-sha" />
 	  <None Remove="Firmware\.gitkeep" />
 	  <None Remove="sls4all_settime.sh" />
 	</ItemGroup>
@@ -48,7 +49,7 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<DependentUpon>appsettings.toml</DependentUpon>
 		</Content>
-		<Content Include="Defaults\Inova\Surface\Formlabs_PA12_2024-06-27_09-24-22.s4a-sha">
+		<Content Include="Defaults\Inova\Surface\Formlabs_PA12_2024-10-14_14-47-52.s4a-sha">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 		<Content Include="sls4all_settime.sh">
@@ -84,14 +85,14 @@
 		<ProjectReference Include="..\SLS4All.Compact.AppCore\SLS4All.Compact.AppCore.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.McuApp\SLS4All.Compact.McuApp.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.137.0.457"/>
-		<PackageReference Include="SLS4All.Compact.Platform" Version="1.137.0.457"/>
-		<PackageReference Include="SLS4All.Compact.Printing" Version="1.137.0.457"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.137.0.457"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.137.0.457"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.143.0.469"/>
+		<PackageReference Include="SLS4All.Compact.Platform" Version="1.143.0.469"/>
+		<PackageReference Include="SLS4All.Compact.Printing" Version="1.143.0.469"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.143.0.469"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.143.0.469"/>
 		<ProjectReference Include="..\SLS4All.Compact.McuClient\SLS4All.Compact.McuClient.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.Telegram\SLS4All.Compact.Telegram.csproj" />
-		<PackageReference Include="SLS4All.Compact.Temperature" Version="1.137.0.457"/>
+		<PackageReference Include="SLS4All.Compact.Temperature" Version="1.143.0.469"/>
 		<ProjectReference Include="..\SLS4All.Compact.Tomlet\SLS4All.Compact.Tomlet.csproj" />
 	</ItemGroup>
 

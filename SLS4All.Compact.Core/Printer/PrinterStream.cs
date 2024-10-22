@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using static System.Collections.Specialized.BitVector32;
 
 namespace SLS4All.Compact.Printer
 {
@@ -20,12 +21,12 @@ namespace SLS4All.Compact.Printer
     {
         private sealed class ListWriter : ChannelWriter<CodeCommand>
         {
-            private readonly List<CodeCommand> _list;
+            private readonly ICollection<CodeCommand> _list;
             private Exception? _exception;
 
             public Exception? Exception => _exception;
 
-            public ListWriter(List<CodeCommand> list)
+            public ListWriter(ICollection<CodeCommand> list)
             {
                 _list = list;
             }
@@ -56,17 +57,99 @@ namespace SLS4All.Compact.Printer
             }
         }
 
-        public static void Flatten(this PrinterStream script, List<CodeCommand> list, CancellationToken cancel)
+        public static void Flatten(this PrinterStream script, ICollection<CodeCommand> list, CancellationToken cancel = default)
         {
             var writer = new ListWriter(list);
             script(writer, cancel);
         }
 
-        public static CodeCommand[] Flatten(this PrinterStream script, CancellationToken cancel)
+        public static CodeCommand[] Flatten(this PrinterStream script, CancellationToken cancel = default)
         {
             var list = new List<CodeCommand>();
             Flatten(script, list, cancel);
             return list.ToArray();
+        }
+
+        public static async ValueTask Execute(this PrinterStream script, CancellationToken cancel = default)
+        {
+            var channel = Channel.CreateBounded<CodeCommand>(new BoundedChannelOptions(1000)
+            {
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.DropWrite,
+                SingleReader = true,
+                SingleWriter = true,
+            });
+            await Task.Run(async () =>
+            {
+                try
+                {
+                    await script(channel.Writer, cancel);
+                    channel.Writer.TryComplete();
+                }
+                catch (Exception ex)
+                {
+                    channel.Writer.TryComplete(ex);
+                }
+            });
+            await foreach (var command in channel.Reader.ReadAllAsync(cancel))
+            {
+            }
+        }
+
+        public static async ValueTask Execute(this PrinterStream script, Func<CodeCommand, CancellationToken, ValueTask> execute, CancellationToken cancel = default)
+        {
+            var channel = Channel.CreateBounded<CodeCommand>(new BoundedChannelOptions(1000)
+            {
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = true,
+            });
+            var task = Task.Run(async () =>
+            {
+                try
+                {
+                    await script(channel.Writer, cancel);
+                    channel.Writer.TryComplete();
+                }
+                catch (Exception ex)
+                {
+                    channel.Writer.TryComplete(ex);
+                }
+            });
+            await foreach (var command in channel.Reader.ReadAllAsync(cancel))
+            {
+                await execute(command, cancel);
+            }
+        }
+
+        public static async ValueTask<T?> Execute<T>(this PrinterStream script, Func<CodeCommand, CancellationToken, ValueTask<T>> execute, CancellationToken cancel = default)
+        {
+            var channel = Channel.CreateBounded<CodeCommand>(new BoundedChannelOptions(1000)
+            {
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = true,
+            });
+            var task = Task.Run(async () =>
+            {
+                try
+                {
+                    await script(channel.Writer, cancel);
+                    channel.Writer.TryComplete();
+                }
+                catch (Exception ex)
+                {
+                    channel.Writer.TryComplete(ex);
+                }
+            });
+            T? result = default;
+            await foreach (var command in channel.Reader.ReadAllAsync(cancel))
+            {
+                result = await execute(command, cancel);
+            }
+            return result;
         }
     }
 }

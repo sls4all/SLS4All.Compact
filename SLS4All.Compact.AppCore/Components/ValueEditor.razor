@@ -779,7 +779,7 @@
         if (_selectAll && Traits.Choices == null)
         {
             _selectAll = false;
-            await SelectAll();
+            await _input.TrySelectAll(JSRuntime);
             await _input.TryFocusAsync();
         }
         if (_choices != null && !_scrolled)
@@ -904,18 +904,6 @@
         if (range.End > valueText.Length)
             range.End = valueText.Length;
         return range;
-    }
-
-    private async Task SelectAll()
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "selectAll", _input);
-        }
-        catch (JSException)
-        {
-            // swallow
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

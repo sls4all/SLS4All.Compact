@@ -34,10 +34,6 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
             $(element).toast("show");
         }
         public static showModal(element: HTMLElement, owner: any, focus: boolean): void {
-            $(element).modal({
-                focus: focus,
-                backdrop: false
-            });
             if (owner) {
                 $(element).on('shown.bs.modal', async function () {
                     try {
@@ -52,6 +48,10 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
                     catch { }
                 });
             }
+            $(element).modal({
+                focus: focus,
+                backdrop: false
+            });
         }
         public static async setImageSrcById(id: string, src: string) {
             var element = document.getElementById(id) as HTMLImageElement;

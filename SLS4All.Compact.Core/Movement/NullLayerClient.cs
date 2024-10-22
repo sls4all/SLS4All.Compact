@@ -18,8 +18,6 @@ namespace SLS4All.Compact.Movement
     {
         public static NullLayerClient Instance { get; } = new();
 
-        public double MinimumPowderBedDepth => 5;
-
         public Task BedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 

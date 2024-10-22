@@ -31,9 +31,6 @@
 @inject IPrinterAuthentication PrinterAuthentication
 @inject IPrinterClient PrinterClient
 @inject ILogger<PrinterSettings> Logger
-@inject IPrinterSettingsStorage SettingsStorage
-@inject IPrintProfileStorage ProfileStorage
-@inject ICurrentPrintingParamsProvider PrintingParamsProvider
 @inject IPrintingService PrintingGlobal
 
 @{
@@ -41,38 +38,6 @@
 }
 
 <PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" IsFullPage="true" />
-
-<ModalWrapper @ref="_analyseHeatingModal" class="fade app-modal" Context="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h5 class="modal-title">
-                Pick the parameters for surface analysis
-            </h5>
-        </div>
-         <div class="modal-body">
-            <p>
-                Analysis will be saved using name: <ValueEditor Title="Analysis name" @bind-Value="_analyseHeatingJobName" />
-            </p>
-            <p>
-                Select printing profile for the target temperatures (only valid profiles are shown):
-            </p>
-            <div class="list-group">
-                @foreach (var __profile in _profiles)
-                {
-                    var profile = __profile;
-                    <a class="list-group-item list-group-item-action print-profile"
-                       @onclick="() => DoAnalyseHeating(profile)">
-                        <img src="/_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" width="40" height="40" />
-                        @profile.Name
-                    </a>
-                }
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button @onclick="() => modal.Close()" class="btn btn-secondary">Close</button>
-        </div>
-    </div>
-</ModalWrapper>
 
 <ModalWrapper @ref="_updateModal" class="fade app-modal" Context="modal">
     <div class="modal-content">
@@ -338,7 +303,9 @@
 
 @{
     var power = _power?.Settings ?? new();
+    var powerDefaults = _power?.Defaults ?? new();
     var temperature = _temperature?.Settings ?? new();
+    var temperatureDefaults = _temperature?.Defaults ?? new();
     var watchDog = _watchDog?.Settings ?? new();
     var localization = _localization?.Settings ?? new();
     var updateStatus = ApplicationUpdate.BackgroundTask.Status;
@@ -843,7 +810,7 @@
                                 </tr>
                                 @RenderValues(
                                     power,
-                                    power,
+                                    powerDefaults,
                                     valueEntered: EventCallback.Factory.Create(this, SaveSettings),
                                     nameof(power.LaserWattage),
                                     nameof(power.HalogenMaxPercent),
@@ -858,13 +825,13 @@
                                 </tr>
                                 @RenderValues(
                                     temperature,
-                                    temperature,
+                                    temperatureDefaults,
                                     valueEntered: EventCallback.Factory.Create(this, SaveSettings),
-                                    nameof(temperature.SurfaceOffset1),
                                     nameof(temperature.SurfaceTemperature1),
+                                    nameof(temperature.SurfaceOffset1),
                                     nameof(temperature.ThermoCameraOffsetX),
-                                    nameof(temperature.SurfaceOffset2),
                                     nameof(temperature.SurfaceTemperature2),
+                                    nameof(temperature.SurfaceOffset2),
                                     nameof(temperature.ThermoCameraOffsetY)
                                 )
                                 <tr>
@@ -892,21 +859,21 @@
                                 </tr>
                                 <tr class="hide-top-line">
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@OpticalSetupWizard.SelfPath?ReturnAddress=@GetReloadUri()">Optical setup</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@GetReloadUri()">Homing and motor check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Guides trough setting up the printer optical path.
+                                            This will check that the recoater, print bed and powder bed Z axis motors work correctly.
                                         </p>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@GalvoCalibrationWizard.SelfPath?ReturnAddress=@GetReloadUri()">Galvo calibration</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@OpticalSetupWizard.SelfPath?ReturnAddress=@GetReloadUri()">Optical setup</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Guides trough printing a galvo calibration pattern and setting calibration data.
+                                            This will help you to finalize the laser, galvo motors and galvo holder mechanical positions.
                                         </p>
                                     </td>
                                 </tr>
@@ -916,27 +883,7 @@
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Guides trough setting up the thermo camera.
-                                        </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@GetReloadUri()">Homing and motor check</a>
-                                    </td>
-                                    <td class="col pl-3 align-middle" colspan="3">
-                                        <p class="m-0">
-                                            Checks whether roller, powder chamber and print chamber stepper motors work correctly.
-                                        </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@GetReloadUri()">Halogen heater check</a>
-                                    </td>
-                                    <td class="col pl-3 align-middle" colspan="3">
-                                        <p class="m-0">
-                                            Checks whether halogen heaters that heat the print chamber surface work correctly.
+                                            This will help you to setup the thermo camera that is used for print surface temperature monitoring.
                                         </p>
                                     </td>
                                 </tr>
@@ -946,17 +893,37 @@
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Checks whether chamber heaters that heat work and are paired correctly with temperature sensors.
+                                            This will test the heat pads, heating cartridges and sensors in both chambers.
                                         </p>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => DoAnalyseHeating()">Analyse surface heating</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@GalvoCalibrationWizard.SelfPath?ReturnAddress=@GetReloadUri()">Galvo calibration</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Runs Soft Surface Heater analysis job for selected profile. Resulting file may be assigned to the profile for precise surface heating.
+                                            This will guide you through printing calibration patterns and entering calibration data.
+                                        </p>
+                                    </td>
+                                </tr>                                
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@GetReloadUri()">Halogen heater check</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Checks whether halogen heaters that heat the print chamber surface work correctly.
+                                        </p>
+                                    </td>
+                                </tr>                                
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@AnalyseHeatingWizard.SelfPath?ReturnAddress=@GetReloadUri()">Analyse surface heating</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            This will calibrate the surface heating process. Resulting file may be assigned to the profile for precise surface heating.
                                         </p>
                                     </td>
                                 </tr>
@@ -966,7 +933,7 @@
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
-                                            Allows to directly control the galvo and stepper motors.
+                                            Allows to directly control the galvo and stepper motors. For advanced users.
                                         </p>
                                     </td>
                                 </tr>
@@ -987,7 +954,7 @@
                                         </p>
                                     </td>
                                 </tr>
-                                <tr class="hide-top-line">
+                                <tr>
                                     <td class="col-4 align-middle">
                                         @if (!MainLayout!.IsDeveloperMode)
                                         {
@@ -1032,6 +999,7 @@
         where T : class, IStorageObject, new()
     {
         public T Settings { get; set; } = new();
+        public T Defaults { get; set; } = new();
         public T Original { get; set; } = new();
         public bool IsDefault { get; set; }
         public bool IsChanged => !Settings.Equals(Original);
@@ -1311,7 +1279,6 @@
     private Item<PrinterLocalizationSettings> _localization = default!;
     private IDisposable? _locationChangingSubscription;
     private bool _showAllApplicableVersions;
-    private ModalWrapper? _analyseHeatingModal;
     private ModalWrapper? _updateModal;
     private ModalWrapper? _watchdogDisableModal;
     private ModalWrapper? _memberIdModal;
@@ -1329,8 +1296,6 @@
     private string? _currentMemberId;
     private string? _currentPassword;
     private bool _doubleConfirmed;
-    private string _analyseHeatingJobName = "";
-    private PrintProfile[] _profiles = [];
 
     [Parameter]
     public string TabIndexName
@@ -1447,7 +1412,9 @@
         var watchDog = Storage.GetWatchDogSettings();
         var localization = Storage.GetLocalizationSettings();
         _power = UpdateItem(_power, power);
+        _power.Defaults = Storage.GetPowerSettingsDefaults();
         _temperature = UpdateItem(_temperature, temperature);
+        _temperature.Defaults = Storage.GetTemperatureSettingsDefaults();
         _watchDog = UpdateItem(_watchDog, watchDog);
         _localization = UpdateItem(_localization, localization);
         await ValidateInner();
@@ -1500,12 +1467,26 @@
     private async Task ValidateInner()
     {
         var power = _power.Settings;
-        var temperature = _power.Settings;
+        var powerStacked = _power.Defaults.Clone();
+        powerStacked.MergeFrom(power);
+        var temperature = _temperature.Settings;
+        var temperatureStacked = _temperature.Defaults.Clone();
+        temperatureStacked.MergeFrom(temperature);
         var localization = _localization.Settings;
         var watchDog = _watchDog.Settings;
-        var validationContext = ValidationContextFactory.CreateContext();
-        var helper = await power.Validate(validationContext);
-        var helper2 = await temperature.Validate(validationContext);
+        var validationContext = ValidationContextFactory.CreateContext() with
+        {
+            OverrideObj = x =>
+            {
+                if (x == powerStacked)
+                    return power;
+                if (x == temperatureStacked)
+                    return temperature;
+                return null;
+            }
+        };
+        var helper = await powerStacked.Validate(validationContext);
+        var helper2 = await temperatureStacked.Validate(validationContext);
         var helper3 = await localization.Validate(validationContext);
         var helper4 = await watchDog.Validate(validationContext);
         helper.ValidationErrors.AddRange(helper2.ValidationErrors);
@@ -2097,75 +2078,5 @@
         await Task.CompletedTask;
     }
 
-    private async Task<PrintingParameters?> TryGetParametersBeforeAnalyseHeating(PrintProfile profile)
-    {
-        var context = ValidationContextFactory.CreateContext();
-        var powerSettings = SettingsStorage.GetPowerSettings();
-        var powerSettingsValidation = await powerSettings.Validate(context);
-        if (!powerSettingsValidation!.IsValid)
-        {
-            ToastProvider.Show(new ToastMessage
-                {
-                    HeaderText = "Invalid settings",
-                    BodyText = "Printer power settings contain errors",
-                    Type = ToastMessageType.Error,
-                    Key = this,
-                    Silent = true, // user is interacting, no need for beeping
-                });
-            return default;
-        }
-        var setup = await PrintingGlobal.CreateSetup(profile, powerSettings);
-        setup.SoftHeaterFilename = null; // NOTE: do not confuse wizard with soft heater filename, it will not be used
-        return new PrintingParameters(
-            powerSettings,
-            profile,
-            [],
-            false,
-            setup,
-            new AnalyseJob
-            {
-                Name = _analyseHeatingJobName,
-                PrintProfile = new PrintProfileReference(profile.Id),
-            });
-    }
-
-    public async Task DoAnalyseHeating(PrintProfile? profile = null)
-    {
-        if (profile == null || string.IsNullOrWhiteSpace(_analyseHeatingJobName))
-        {
-            var validationContext = ValidationContextFactory.CreateContext();
-
-            var profiles = new List<PrintProfile>();
-            foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
-            {
-                var isValid = await item.Profile.Validate(validationContext);
-                if (isValid.IsValid)
-                    profiles.Add(item.Profile);
-            }
-            _profiles = profiles.ToArray();
-            _analyseHeatingJobName = $"analyse_heating_{DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture)}";
-            await _analyseHeatingModal!.Show();
-        }
-        else
-        {
-            await _analyseHeatingModal!.Close();
-            var printingParameters = await TryGetParametersBeforeAnalyseHeating(profile);
-            if (printingParameters == null)
-                return;
-            if (PrintingGlobal.BackgroundTask.Status?.IsCompleted == false)
-            {
-                ToastProvider.Show(new ToastMessage
-                    {
-                        HeaderText = "Cannot start job",
-                        BodyText = "Job is already in progress.",
-                        Type = ToastMessageType.Error,
-                        Key = this,
-                        Silent = true, // user is interacting, no need for beeping
-                    });
-                return;
-            }
-            PrintingParamsProvider.PrintingParams = printingParameters;
-            NavigationManager.NavigateTo(PrintWizard.SelfPath);
-        }
-    }
+    
 }

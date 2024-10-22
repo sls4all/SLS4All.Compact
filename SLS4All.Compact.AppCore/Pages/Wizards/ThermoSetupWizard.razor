@@ -340,9 +340,10 @@
     {
         using (await _lock.LockAsync())
         {
+            var snapshot = PrinterSettings.Temperature;
             var settings = PrinterSettings.GetTemperatureSettings();
-            settings.ThermoCameraOffsetX += rx;
-            settings.ThermoCameraOffsetY += ry;
+            settings.ThermoCameraOffsetX = snapshot.ThermoCameraOffsetX + rx;
+            settings.ThermoCameraOffsetY = snapshot.ThermoCameraOffsetY + ry;
             await PrinterSettings.SetTemperatureSettings(settings);
         }
     }

@@ -194,12 +194,14 @@ namespace SLS4All.Compact.Helpers
         public object?[]? Choices { get; }
         public bool IsNullable { get; }
         public InputValueTraitsAction[]? Actions { get; }
+        public string? Format { get; }
 
 
-        public DefaultInputValueTraits(Type type, InputValueTraitsAction[]? actions = null)
+        public DefaultInputValueTraits(Type type, InputValueTraitsAction[]? actions = null, string? format = null)
         {
             Type = type;
             Actions = actions;
+            Format = format;
             IsNullable = Nullable.GetUnderlyingType(type) != null;
             if (type == typeof(SByte) || type == typeof(SByte?) ||
                 type == typeof(Int16) || type == typeof(Int16?) ||
@@ -260,6 +262,8 @@ namespace SLS4All.Compact.Helpers
                 var seconds = (ts.TotalSeconds - hours * 60 * 60 - minutes * 60).RoundToDecimal(3);
                 return $"{(negate ? "-" : "")}{hours:00}:{minutes:00}:{(seconds < 10 ? "0" : "")}{seconds}";
             }
+            else if (!string.IsNullOrEmpty(Format) && value is IFormattable formattable)
+                return formattable.ToString(Format, CultureInfo.CurrentCulture) ?? "";
             else
                 return value.ToString() ?? "";
         }

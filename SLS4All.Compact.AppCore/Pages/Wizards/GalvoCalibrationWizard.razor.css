@@ -2,11 +2,11 @@
 }
 
 p {
-    font-size: 20px;
+    font-size: 17px;
 }
 
 li {
-    font-size: 20px;
+    font-size: 17px;
 }
 
 .printing-notification {
@@ -102,3 +102,13 @@ hr {
     font-family: monospace;
     overflow: scroll;
 }
+
+    .calibration-text::-moz-selection {
+        color: white;
+        background: gray;
+    }
+
+    .calibration-text::selection {
+        color: white;
+        background: gray;
+    }

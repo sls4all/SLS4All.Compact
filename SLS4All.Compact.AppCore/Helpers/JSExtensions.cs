@@ -11,6 +11,19 @@ namespace SLS4All.Compact.Helpers
 {
     public static class JSExtensions
     {
+        public static async ValueTask<bool> TrySelectAll(this ElementReference element, IJSRuntime runtime)
+        {
+            try
+            {
+                await runtime.InvokeVoidAsync("AppHelpersInvoke", "selectAll", element);
+            }
+            catch (JSException)
+            {
+                // swallow
+            }
+            return false;
+        }
+
         public static async ValueTask<bool> TryFocusAsync(this ElementReference element)
         {
             try

@@ -353,7 +353,8 @@
     private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
     {
         var context = ValidationContextFactory.CreateContext();
-        var powerSettings = SettingsStorage.GetPowerSettings();
+        var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
+        powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
         var powerSettingsValidation = await powerSettings.Validate(context);
         if (!powerSettingsValidation!.IsValid)
         {
@@ -431,7 +432,7 @@
 
                 watch = System.Diagnostics.Stopwatch.StartNew();
                 if (Values.IsDryRun)
-                    await closedScript.Consume(cancel);
+                    await closedScript.Execute(cancel);
                 else
                 {
                     await using (await SafetySession.BeginSafetySession(cancel))

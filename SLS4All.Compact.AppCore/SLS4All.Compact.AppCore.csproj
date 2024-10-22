@@ -28,9 +28,9 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.137.0.457"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.137.0.457"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.137.0.457"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.143.0.469"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.143.0.469"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.143.0.469"/>
 		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.10" />
 	</ItemGroup>
 
@@ -44,6 +44,7 @@
 		<None Update="Pages\BackupsPage.razor.css" CssScope="b-backups" />
 		<None Update="Pages\MaintenancePage.razor.css" CssScope="b-maintenance" />
 		<None Update="Pages\Test2D.razor.css" CssScope="b-test2d" />
+		<None Update="Pages\Wizards\AnalyseHeatingWizard.razor.css" CssScope="b-analyse-heating-wizard"/>
 		<None Update="Pages\Wizards\GalvoCalibrationWizard.razor.css" CssScope="b-calibration-wizard" />
 		<None Update="Pages\Wizards\ThermoSetupWizard.razor.css" CssScope="b-thermo-setup-wizard" />
 		<None Update="Pages\Wizards\PrintWizard.razor.css" CssScope="b-print-wizard" />
@@ -90,7 +91,7 @@
 		<Folder Include="wwwroot\bundles\" />
 	</ItemGroup>
 
-	<Target Name="NpmInstall" Inputs="package.json" Outputs="$(OutputPath)/.npm-install-stamp" BeforeTargets="BeforeBuild;BeforePublish" >
+	<Target Name="NpmInstall" Inputs="package.json" Outputs="$(OutputPath)/.npm-install-stamp" BeforeTargets="BeforeBuild;BeforePublish">
 		<Message Text="### NPM INSTALL ###" Importance="high" />
 		<Exec Command="npm ci" Condition="'$(RestorePackagesWithLockFile)' == 'true'" />
 		<Exec Command="npm install" Condition="'$(RestorePackagesWithLockFile)' != 'true'" />

@@ -1,0 +1,226 @@
+﻿@page "/wizard/analyse-heating"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@using System.Globalization
+@inherits WizardBase<AnalyseHeatingWizard.Step>
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject ILayerClient LayerClient
+@inject IPrintSessionStorage PrintSessionStorage
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IPrintProfileStorage ProfileStorage
+@inject IPrinterTimeManager TimeManager
+@inject ICurrentPrintingParamsProvider PrintingParamsProvider
+@inject IPrinterSettingsStorage SettingsStorage
+
+@{
+    base.BuildRenderTree(__builder);
+}
+
+<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_analyseHeatingModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Select the print profile
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                Select printing profile for the target temperatures (only valid profiles are shown):
+            </p>
+            <div class="list-group">
+                @foreach (var __profile in _profiles)
+                {
+                    var profile = __profile;
+                    <a class="list-group-item list-group-item-action print-profile"
+                       @onclick="() => DoAnalyseHeating(profile)">
+                        <img src="/_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" width="40" height="40" />
+                        @profile.Name
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        @switch (StepIndex)
+        {
+            case Step.Introduction:
+                <h2>
+                    Surface heating analysis
+                </h2>
+                <hr class="my-3">
+                <p>
+                    This wizard will start a <i>Job</i> that is intended to collect data neccesary for precise heating of the print surface. 
+                    This should be ideally done every time you change the heating parameters in a print profile, change the printing powder type, 
+                    modify the position of halogen shields or replace the halogen tubes with different type or manufacturer.
+                </p>
+                <p>
+                    When you continue, you will have to select an existing valid print profile so the analysis Job can use its heating parameters.
+                </p>
+                <p>
+                    After the job finishes, the analysis data will be saved using the name: <ValueEditor Title="Analysis name" @bind-Value="_analyseHeatingJobName" Placeholder="Select filename" />
+                </p>
+                <p>
+                    You should then select this file in all the printing profiles that share all the relevant parameters menitioned above. It will not be done automatically.
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg btn--icon-text" role="button" @onclick="() => DoStep()">
+                        <i class="bi bi-clipboard-check" /> Select the print profile...
+                    </a>
+                </p>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Introduction,
+    }
+
+    public const string SelfPath = "/wizard/analyse-heating";
+    private const string CssScope = "b-analyse-heating-wizard";
+
+    private string _analyseHeatingJobName = "";
+    private PrintProfile[] _profiles = [];
+    private ModalWrapper? _analyseHeatingModal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        StepIndex = Step.Introduction;
+        var validationContext = ValidationContextFactory.CreateContext();
+
+        var profiles = new List<PrintProfile>();
+        foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
+        {
+            var isValid = await item.Profile.Validate(validationContext);
+            if (isValid.IsValid)
+                profiles.Add(item.Profile);
+        }
+        _profiles = profiles.ToArray();
+        var timeZone = await TimeManager.GetTimeZone(MainLayout?.IsLocalSession ?? false, true) ?? TimeZoneInfo.Local;
+        var now = TimeZoneInfo.ConvertTimeFromUtc(System.DateTime.UtcNow, timeZone);
+        _analyseHeatingJobName = string.Create(CultureInfo.InvariantCulture, $"analysis_{now:yyyy-MM-dd_HH-mm-ss}");
+        await base.OnInitializedAsync();
+    }
+
+    private async Task DoStep(bool force = false)
+    {
+        switch (StepIndex)
+        {
+            case Step.Introduction:
+                await _analyseHeatingModal!.Show();
+                break;
+        }
+    }
+
+    private async Task<PrintSessionDetail?> TryGetLastSession()
+    {
+        await foreach (var item in PrintSessionStorage.GetSessionsDescending())
+        {
+            return await PrintSessionStorage.TryGetDetail(item.Id);
+        }
+        return null;
+    }
+
+    private Task Advance(Step? advanceTo = default(Step?))
+    {
+        ToastProvider.Show(new ToastMessage
+                {
+                    Key = this,
+                    Type = ToastMessageType.Information,
+                    HeaderText = "Success",
+                    BodyText = "Wizard has completed successfully",
+                    Silent = true, // user is interacting, no beeping is necessary
+                });
+        NavigateAfterFinished();
+        return Task.CompletedTask;
+    }
+
+    private async Task<PrintingParameters?> TryGetParametersBeforeAnalyseHeating(PrintProfile profile)
+    {
+        var context = ValidationContextFactory.CreateContext();
+        var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
+        powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
+        var powerSettingsValidation = await powerSettings.Validate(context);
+        if (!powerSettingsValidation!.IsValid)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Invalid settings",
+                    BodyText = "Printer power settings contain errors",
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            return default;
+        }
+        var setup = await PrintingGlobal.CreateSetup(profile, powerSettings);
+        setup.SoftHeaterFilename = null; // NOTE: do not confuse wizard with soft heater filename, it will not be used
+        return new PrintingParameters(
+            powerSettings,
+            profile,
+            [],
+            false,
+            setup,
+            new AnalyseJob
+                {
+                    Name = _analyseHeatingJobName,
+                    PrintProfile = new PrintProfileReference(profile.Id),
+                });
+    }
+
+    public async Task DoAnalyseHeating(PrintProfile profile)
+    {
+        await _analyseHeatingModal!.Close();
+        if (profile == null || string.IsNullOrWhiteSpace(_analyseHeatingJobName))
+        {
+            return;
+        }
+        var printingParameters = await TryGetParametersBeforeAnalyseHeating(profile);
+        if (printingParameters == null)
+            return;
+        if (PrintingGlobal.BackgroundTask.Status?.IsCompleted == false)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Cannot start job",
+                    BodyText = "Job is already in progress.",
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            return;
+        }
+        PrintingParamsProvider.PrintingParams = printingParameters;
+        NavigationManager.NavigateTo(PrintWizard.SelfPath);
+    }
+}

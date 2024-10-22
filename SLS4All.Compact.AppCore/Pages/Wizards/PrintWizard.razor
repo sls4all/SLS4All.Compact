@@ -705,7 +705,7 @@
                 var setup = new PowderVolumeSetup
                     {
                         LayerThickness = (double)_params.Profile.LayerThickness!.Value,
-                        JobChamberDepth = (double)LayerClient.MinimumPowderBedDepth,
+                        JobChamberDepth = 0,
                         ChamberDepth = (double)_params.Profile.PrintableDepth!.Value,
                         SinteredVolumeFactor = (double)_params.Profile.SinteredVolumeFactor!.Value,
                     };

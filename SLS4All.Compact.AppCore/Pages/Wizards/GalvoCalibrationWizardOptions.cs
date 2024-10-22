@@ -18,5 +18,8 @@ namespace SLS4All.Compact.Pages.Wizards
         public decimal DefaultSpeedA { get; set; } = 75000;
         public decimal LaserOnPrecent { get; set; } = 100;
         public decimal DefaultSpeedARelativeLaserWattage { get; set; } = 10000;
+        public decimal ScalingRadius { get; set; } = 80;
+        public decimal ScalingStep { get; set; } = 5;
+        public decimal Precision { get; set; } = 1;
     }
 }

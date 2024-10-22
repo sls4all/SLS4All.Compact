@@ -34,5 +34,6 @@ namespace SLS4All.Compact.Movement
             Vector3 laserDirectionBase);
         public bool ValidateJsonConfig(string? json);
         public Task<bool> SetJsonConfig(string? json, CancellationToken cancel = default);
+        public Task<string?> GetJsonConfig(CancellationToken cancel = default);
     }
 }

@@ -432,7 +432,6 @@
         await RereadJobs();
         _syncCollapse.Logger = Logger;
         _self = DotNetObjectReference.Create(this);
-        var powerSettings = SettingsStorage.GetPowerSettings();
         var validationContext = ValidationContextFactory.CreateContext();
 
         var profiles = new List<PrintProfileEntry>();

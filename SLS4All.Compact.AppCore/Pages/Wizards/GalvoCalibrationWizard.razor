@@ -38,6 +38,8 @@
 @inject IHotspotCalculator HotspotCalculator
 @inject ILogger<GalvoCalibrationWizard> Logger
 @inject ICodePlotter Plotter
+@inject IJSRuntime JSRuntime
+@inject GalvoCalibrationWizard.ValuesContainer Values
 
 @{
     base.BuildRenderTree(__builder);
@@ -54,11 +56,11 @@
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">
-                Print calibration pattern
+                Print the pattern
             </h5>
         </div>
         <div class="modal-body">
-            Do you really want to print the calibration pattern?
+            Do you really want to print the pattern?
         </div>
         <div class="modal-footer">
             <button @onclick="() => DoStep(force: true)" class="btn btn-danger">Print!</button>
@@ -67,7 +69,7 @@
     </div>
 </ModalWrapper>
 
-<ModalWrapper @ref="_enterCalibrationDataModal" class="app-modal" Context="modal" ExternalCssScope="@CssScope">
+<ModalWrapper @ref="_enterCalibrationDataModal" class="app-modal" Context="modal" ExternalCssScope="@CssScope" Opened="CalibrationDataModalOpened">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">
@@ -78,7 +80,7 @@
             <p>
                 Paste the JSON calibration data here:
             </p>
-            <textarea class="calibration-text" rows="14" @bind="CalibrationJson" @bind:event="oninput" placeholder="Paste or leave blank to clear any values you have set previously and fall back to internal defaults." />
+            <textarea @ref="_calibrationText" spellcheck="false" autocorrect="off" autocapitalize="off" class="calibration-text" rows="14" @bind="CalibrationJson" @bind:event="oninput" placeholder="Paste or leave blank to clear any values you have set previously and fall back to internal defaults." />
         </div>
         <div class="modal-footer">
             @if (_calibrationJsonValid)
@@ -100,38 +102,66 @@
     <div class="jumbotron pt-4 pb-2">
         @switch (StepIndex)
         {
-            case Step.Homing:
+            case Step.Selection:
                 <h2>
                     Galvo calibration
                 </h2>
                 <hr class="my-3">
                 <p>
-                    This wizard will guide you trough printing a calibration pattern on thermo paper to calibrate the printer X/Y precision.
+                    This wizard will guide you trough calibration of the printer X/Y precision.
                     This generally needs to be done once after you install or move the optical components, like the laser, lens or galvo holder.
                 </p>
                 <p>
-                    Please ensure that the printer is free of any powder and the both beds can move to the top unrestricted. 
-                    Print bed should also be relatively cool, to avoid the thermo paper to change its color by just being inside of the printer.
+                    <a class="btn btn-theme btn-lg w-50" @onclick="() => { _mode = Mode.CalibrationPattern; return DoStep(); }">Print the calibration pattern</a>
+                    This will print a pattern on thermo paper that can be scanned and processed in computer to produce a calibration data you can paste here.
+                    This will compensate any innacurracies in the optical and mechanical parts of this 3D printer.
+                </p>
+                <p>
+                    <a class="btn btn-theme btn-lg w-50" @onclick="() => EnterCalibrationData()">Enter calibration data</a>
+                    This will allow you to paste the calibration data you have produced on a computer from the calibration pattern.
+                </p>
+                <p>
+                    <a class="btn btn-theme btn-lg w-50" @onclick="() => { _mode = Mode.ScalingPattern; return DoStep(); }">Print the scaling pattern</a>
+                    This will print a pattern on thermo paper that you can easily measure yourself to fine tune the X and Y scale.
+                </p>
+                break;
+            case Step.Homing:
+                <h2>
+                    Printer homing
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Printer will now home both Z axes and recoater. Please ensure that the printer is free of any powder and the both beds and recoater can move unrestricted.
                 </p>
                 <hr class="my-3">
                 <p class="lead">
-                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Home the Z axis...</a>
+                    <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Home the printer...</a>
                     @if (MainLayout!.IsDeveloperMode)
                     {
                         <a class="btn btn-danger btn-lg" role="button" @onclick="() => DoStep(skip: true)">Skip step...</a>
                     }
-                    <a class="btn btn-dark btn-lg" role="button" @onclick="() => EnterCalibrationData()">I just want to enter the calibration data...</a>
                 </p>
                 break;
-            case Step.Prepararion:
+            case Step.Preparation:
                 <h2>
                     Inserting the calibration tool and thermo paper
                 </h2>
                 <hr class="my-3">
                 <p>
-                    Please insert the <b>Calibration tool</b> and carefully install a fitting piece of <b>Thermo paper</b> on top of it. The paper should be placed to precisely match the top
-                    edges of the tool. Please ensure that the paper is laying exactly flat on the tool surface and no edges or parts bend or protrude upwards (even a small irregularity might be a problem).
-                    You can use very small amount of paper glue stick to ensure the paper is laying flat on the surface.
+                    You can now prepare the 3D printed calibration tool and thermo paper. The paper should be cut and placed on top of the calibration tool to precisely match the outside
+                    edges. Please note that the print bed should be cool, to avoid the thermo paper to change its color by just being inside of the printer.
+                </p>
+                <p>
+                    Please ensure that the <b>thermal coated side of paper points upwards</b> (i.e. it is not facing to the tool). You can identify it by quickly dragging your fingernail over the
+                    paper, it should leave a slight black line.
+                </p>
+                <p>
+                    Easiest way of preparing the tool and paper is to use a paper glue stick and apply it <b>very slightly</b> to the top surface of the calibration tool. 
+                    You can than stick a larger piece of thermo paper on it. You then use a box cutter to nicely trace and remove the paper that exceeds the calibration tool 
+                    (but keep the inner "holes").
+                </p>
+                <p>
+                    Place the calibration tool with the paper side pointing upwards over the print bed (the right chamber) and center it precisely over the print chamber bed/hole.
                 </p>
                 <hr class="my-3">
                 <p class="lead">
@@ -144,8 +174,14 @@
                 </h2>
                 <hr class="my-3">
                 <p>
-                    Printer is now ready to print the calibration pattern on thermo paper.
+                    Printer is now ready to print the pattern on thermo paper.
                 </p>
+                @if (_mode == Mode.ScalingPattern)
+                {
+                    <p>
+                        Folowing projection scale will be used for the <i>scaling pattern</i>. X scale: <ValueEditor Title="X scale" @bind-Value="Values.ProjectionScaleX" class="w-auto" Unit="%" />, Y scale: <ValueEditor Title="Y scale" @bind-Value="Values.ProjectionScaleY" class="w-auto" Unit="%" />
+                    </p>
+                }
                 @if (!isSafeButtonOn)
                 {
                     <p class="pt-3">
@@ -158,7 +194,7 @@
                 <p class="lead">
                     @if (isSafeButtonOn)
                     {
-                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Print the calibration pattern...</a>
+                        <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Print the pattern...</a>
                     }
                     else
                     {
@@ -168,21 +204,37 @@
                 break;
             case Step.Done:
                 <h2>
-                    The calibration pattern has been printed
+                    The pattern has been printed
                 </h2>
                 <hr class="my-3">
                 <p>
                     You can now remove the calibration tool and the thermo paper from the printer. If you used a glue stick to flatten the thermo paper,
-                    you should remove the thermo paper from the tool now, otherwise it may tear if you remove it later.
+                    you should remove the thermo paper from the tool now, otherwise it may tear if you remove it later. 
+                    You can also wash away the glue from the tool with warm water.
                 </p>
-                <p>
-                    It is perfectly ok if the corners of the pattern are slightly outside the thermo paper. However the pattern should be more or less centered on it.
-                    If you measure the pattern size from the <b>center of the paper</b>, the whole printable area you wish to use while 3D printing, should be covered.
-                    If it does not, make sure you have mechanically centered the galvo motors.
-                </p>
+                @if (_mode == Mode.CalibrationPattern)
+                {
+                    <p>
+                        It is perfectly ok if the corners of the pattern are slightly outside the thermo paper. However the pattern should be more or less centered on it.
+                        If you measure the pattern size from the <b>center of the paper</b>, the whole printable area you wish to use while 3D printing should be covered.
+                        If it does not, make sure you have mechanically centered the galvo motors.
+                    </p>
+                }
+                else
+                {
+                    <p>
+                        The scaling pattern should be centered on the paper/tool. The whole printable area you wish to use while 3D printing should be covered.
+                        If it does not, make sure you have mechanically centered the galvo motors and entered the calibration data.
+                    </p>
+                    <p>
+                        If you notice that the thermal paper is not exactly flat and it has bent while printing, even a litle, the pattern might be deformed.
+                        If you suspect that is the case, try printing another pattern first before making adjustments.
+                    </p>
+                }
                 <hr class="my-3">
                 <p class="lead">
                     <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Done!</a>
+                    <a class="btn btn-secondary btn-lg" role="button" @onclick="() => DoStep(nextStep: Step.ReadyToPrint)">Print again...</a>
                 </p>
                 break;
         }
@@ -194,10 +246,24 @@
     public enum Step
     {
         NotSet = 0,
+        Selection,
         Homing,
-        Prepararion,
+        Preparation,
         ReadyToPrint,
         Done,
+    }
+
+    private enum Mode
+    {
+        NotSet = 0,
+        CalibrationPattern,
+        ScalingPattern,
+    }
+
+    public class ValuesContainer
+    {
+        public decimal ProjectionScaleX { get; set; } = 100;
+        public decimal ProjectionScaleY { get; set; } = 100;
     }
 
     public const string SelfPath = "/wizard/galvo-calibration";
@@ -207,6 +273,8 @@
     private readonly object _plotterViewKey = new object();
     private string _calibrationJson = "";
     private bool _calibrationJsonValid = false;
+    private Mode _mode;
+    private ElementReference _calibrationText;
 
     private string CalibrationJson
     {
@@ -222,20 +290,23 @@
 
     protected override void OnInitialized()
     {
-        StepIndex = Step.Homing;
+        StepIndex = Step.Selection;
         base.OnInitialized();
     }
 
-    private async Task DoStep(bool skip = false, bool force = false)
+    private async Task DoStep(bool skip = false, bool force = false, Step? nextStep = null)
     {
         switch (StepIndex)
         {
+            case Step.Selection:
+                await Advance();
+                break;
             case Step.Homing:
                 if (!skip)
                     await HomeAndSetBeds();
                 await Advance();
                 break;
-            case Step.Prepararion:
+            case Step.Preparation:
                 await Advance();
                 break;
             case Step.ReadyToPrint:
@@ -249,7 +320,10 @@
                 }
                 break;
             case Step.Done:
-                await Advance();
+                if (nextStep != null)
+                    StepIndex = nextStep.Value;
+                else
+                    await Advance();
                 break;
         }
     }
@@ -297,7 +371,8 @@
     private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
     {
         var context = ValidationContextFactory.CreateContext();
-        var powerSettings = SettingsStorage.GetPowerSettings();
+        var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
+        powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
         var powerSettingsValidation = await powerSettings.Validate(context);
         if (!powerSettingsValidation!.IsValid)
         {
@@ -320,49 +395,92 @@
             {
                 System.Diagnostics.Stopwatch? watch = null;
                 PrintHelper2D? helper = null;
+                PrinterStream? closedScript = null;
+
                 try
                 {
                     var printerSettings = await GetPrinterPowerSettings();
                     if (printerSettings == null)
                         return false;
-                    var defaultSpeedA = options.DefaultSpeedA * options.DefaultSpeedARelativeLaserWattage / printerSettings.LaserWattage;
-                    var setup = new PrintHelper2D.Setup
-                        {
-                            CenterX = (double)Projection.Center.x,
-                            CenterY = (double)Projection.Center.y,
-                            CalibrationRadius = (double)options.CalibrationRadius,
-                            CalibrationSteps = options.CalibrationSteps,
-                            CalibrationDensityStep = (double)options.CalibrationDensityStep,
-                            CalibrationMargin = (double)options.CalibrationMargin,
-                            Dwell = options.Dwell,
-                            Steps = options.Steps,
-                            XCorrectionFactor = 1,
-                            YCorrectionFactor = 1,
-                            DefaultSpeedA = (double)defaultSpeedA,
-                            UseDefaultSpeed = true,
-                            LaserOnFactor = (double)options.LaserOnPrecent / 100,
-                        };
 
                     StateHasChanged();
                     await Task.Yield();
 
-                    helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
-                    PrinterStream closedScript = async (channel, cancel) =>
+                    var defaultSpeedA = options.DefaultSpeedA * options.DefaultSpeedARelativeLaserWattage / printerSettings.LaserWattage!.Value;
+                    switch (_mode)
                     {
-                        await helper.DrawCalibrationPattern(channel, setup);
-                        await helper.Close(channel, setup);
-                    };
+                        case Mode.CalibrationPattern:
+                            {
+                                var setup = new PrintHelper2D.Setup
+                                {
+                                    CenterX = (double)Projection.Center.x,
+                                    CenterY = (double)Projection.Center.y,
+                                    CalibrationRadius = (double)options.CalibrationRadius,
+                                    CalibrationSteps = options.CalibrationSteps,
+                                    CalibrationDensityStep = (double)options.CalibrationDensityStep,
+                                    CalibrationMargin = (double)options.CalibrationMargin,
+                                    Dwell = options.Dwell,
+                                    Steps = options.Steps,
+                                    XCorrectionFactor = 1,
+                                    YCorrectionFactor = 1,
+                                    DefaultSpeedA = (double)defaultSpeedA,
+                                    UseDefaultSpeed = true,
+                                    LaserOnFactor = (double)options.LaserOnPrecent / 100,
+                                    Precision = (double)options.Precision,
+                                };
 
-                    Plotter.Clear();
-                    Logger.LogInformation($"Starting to print calibration pattern");
-                    watch = System.Diagnostics.Stopwatch.StartNew();
-                    await using (await SafetySession.BeginSafetySession(cancel))
-                    {
-                        await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                                helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
+                                closedScript = async (channel, cancel) =>
+                                {
+                                    await helper.DrawCalibrationPattern(channel, setup);
+                                    await helper.Close(channel, setup);
+                                };
+                                break;
+                            }
+                        case Mode.ScalingPattern:
+                            {
+                                if (Values.ProjectionScaleX <= 10 || Values.ProjectionScaleX >= 190 ||
+                                    Values.ProjectionScaleY <= 10 || Values.ProjectionScaleY >= 190)
+                                    throw new ApplicationException("Scale is out of range, use a value in percent");
+                                var setup = new PrintHelper2D.Setup
+                                    {
+                                        CenterX = (double)Projection.Center.x,
+                                        CenterY = (double)Projection.Center.y,
+                                        Radius = (double)options.ScalingRadius,
+                                        RadiusStep = (double)options.ScalingStep,
+                                        Dwell = options.Dwell,
+                                        Steps = options.Steps,
+                                        XCorrectionFactor = (double)(Values.ProjectionScaleX / 100),
+                                        YCorrectionFactor = (double)(Values.ProjectionScaleY / 100),
+                                        DefaultSpeedA = (double)defaultSpeedA,
+                                        UseDefaultSpeed = true,
+                                        LaserOnFactor = (double)options.LaserOnPrecent / 100,
+                                        Precision = (double)options.Precision,
+                                    };
+
+                                helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
+                                closedScript = async (channel, cancel) =>
+                                {
+                                    await helper.DrawScalingPattern(channel, setup);
+                                    await helper.Close(channel, setup);
+                                };
+                                break;
+                            }
                     }
-                    watch.Stop();
-                    Plotter.Clear();
-                    Logger.LogInformation($"Printed calibration pattern in {watch.Elapsed}");
+
+                    if (closedScript != null)
+                    {
+                        Plotter.Clear();
+                        Logger.LogInformation($"Starting to print pattern");
+                        watch = System.Diagnostics.Stopwatch.StartNew();
+                        await using (await SafetySession.BeginSafetySession(cancel))
+                        {
+                            await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                        }
+                        watch.Stop();
+                        Plotter.Clear();
+                        Logger.LogInformation($"Printed pattern in {watch.Elapsed}");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -391,7 +509,7 @@
     {
         if (!fromModal)
         {
-            _calibrationJson = "";
+            _calibrationJson = await Projection.GetJsonConfig() ?? "";
             _calibrationJsonValid = true;
             await _enterCalibrationDataModal!.Show();
         }
@@ -411,6 +529,19 @@
                     });
                 NavigateAfterFinished();
             }
+        }
+    }
+
+    private async Task CalibrationDataModalOpened()
+    {
+        try
+        {
+            await _calibrationText.TrySelectAll(JSRuntime);
+            await _calibrationText.TryFocusAsync();
+        }
+        catch
+        {
+            // swallow
         }
     }
 }

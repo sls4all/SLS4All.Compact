@@ -33,6 +33,7 @@ using SLS4All.Compact.Printing;
 using NReco.Logging.File;
 using SLS4All.Compact.Numerics;
 using SLS4All.Compact.Storage.PrintProfiles;
+using SLS4All.Compact.Components;
 
 namespace SLS4All.Compact
 {
@@ -351,6 +352,9 @@ namespace SLS4All.Compact
             services.Configure<DefaultLayerEstimateExtrapolatorOptions>(Configuration.GetSection("DefaultLayerEstimateExtrapolator"));
             services.AddAsImplementationAndInterfaces<DefaultLayerEstimateExtrapolator>(ServiceLifetime.Transient);
             services.AddSingleton(provider => new Func<ILayerEstimateExtrapolator>(() => provider.GetRequiredService<ILayerEstimateExtrapolator>()));
+
+            services.Configure<PageRedirectorOptions>(Configuration.GetSection("PageRedirector"));
+            services.AddAsImplementationAndInterfaces<PageRedirector>(ServiceLifetime.Singleton);
 
             RegisterPluginOptions(applicationOptions, services);
             RegisterPluginServices(applicationOptions, services);

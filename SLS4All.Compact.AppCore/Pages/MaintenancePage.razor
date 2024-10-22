@@ -474,15 +474,25 @@
     private IInputValueTraits? GetTraits(StorageValue value)
     {
         if (value.Path == nameof(MaintenanceInfo.LaserRemaining))
-            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _laserModal!.Show())]);
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _laserModal!.Show())], format: "0.0");
         else if (value.Path == nameof(MaintenanceInfo.HalogenRemaining))
-            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _halogenModal!.Show())]);
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _halogenModal!.Show())], format: "0.0");
         else if (value.Path == nameof(MaintenanceInfo.Z1Remaining))
-            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _z1Modal!.Show())]);
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _z1Modal!.Show())], format: "0.0");
         else if (value.Path == nameof(MaintenanceInfo.Z2Remaining))
-            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _z2Modal!.Show())]);
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _z2Modal!.Show())], format: "0.0");
         else if (value.Path == nameof(MaintenanceInfo.RRemaining))
-            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _rModal!.Show())]);
+            return new DefaultInputValueTraits(value.Type, actions: [new("Reset...", (value, handler) => _rModal!.Show())], format: "0.0");
+        else if (value.Path == nameof(MaintenanceInfo.LaserTotal))
+            return new DefaultInputValueTraits(value.Type, format: "0.0");
+        else if (value.Path == nameof(MaintenanceInfo.HalogenTotal))
+            return new DefaultInputValueTraits(value.Type, format: "0.0");
+        else if (value.Path == nameof(MaintenanceInfo.Z1Total))
+            return new DefaultInputValueTraits(value.Type, format: "0.0");
+        else if (value.Path == nameof(MaintenanceInfo.Z2Total))
+            return new DefaultInputValueTraits(value.Type, format: "0.0");
+        else if (value.Path == nameof(MaintenanceInfo.RTotal))
+            return new DefaultInputValueTraits(value.Type, format: "0.0");
         else if (value.Type == typeof(PrintSessionResult))
             return GetPrintSessionResultTraits();
         else if (value.Type == typeof(DateTimeOffset))

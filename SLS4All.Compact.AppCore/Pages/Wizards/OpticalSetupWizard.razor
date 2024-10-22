@@ -136,10 +136,13 @@
                             Please note that the print bed will move up and down in the next steps,
                             so please ensure the paper is not bigger than the moving part and will move with the bed Z axis.
                         </li>
+                        <li>
+                            Best way to prepare the piece of paper is to carefully trace around the <b>3D Printed calibration tool</b> with a box cutter. 
+                            This calibration tool comes with this printer as an accessory.
+                        </li>
                         <li>Mark the exact center of the print bed on the paper with a thin cross.</li>
                     </ul>
                 </p>
-                <hr class="my-3">
                 <p class="lead">
                     <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Home the X/Y/Z axis...</a>
                     @if (MainLayout!.IsDeveloperMode)
@@ -190,7 +193,7 @@
                     <hr class="my-3">
                     <p>
                         Loosen the four screws that hold the laser base in place.
-                        Once you click the <b>Enable laser</b> button below, carefully look trough the to opening of the galvo holder.
+                        Once you click the <b>Enable laser</b> button below, carefully look trough the top opening of the galvo holder.
                         Move the laser base (with the laser) to the left and right to focus the laser beam the best. Focused laser beam has the smallest hotspot size as seen on the bed.
                     </p>
                     <p class="validation-notification">
@@ -223,7 +226,7 @@
                         middle of the mirror.
                     </p>
                     <p>
-                        Please note that the mirror is now turned slightly to so it represents the position pointing to one of the corners of the bed.
+                        Please note that the mirror is now turned slightly so it represents the position pointing to one of the corners of the bed.
                     </p>
                     <p class="validation-notification">
                         <span class="badge badge-warning text-wrap text-left" style="line-height: 150%">

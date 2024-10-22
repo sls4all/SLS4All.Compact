@@ -24,11 +24,11 @@ namespace SLS4All.Compact.Scripts
         [JSField("isRenderEnabled")]
         ValueTask<bool> IsRenderEnabled(JSFieldValue<bool> value);
         [JSMethod("addMesh")]
-        ValueTask<IBabylonMesh> AddMesh(string name, byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool raw, bool instanced, bool showBoundingBox, RgbaF? gridColor, float? edgeRendering);
+        ValueTask<IBabylonMesh> AddMesh(string name, byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool raw, bool instanced, bool showBoundingBox, RgbaF? gridColor, float? edgeRendering, CancellationToken cancel);
         [JSMethod("replaceChamber")]
-        ValueTask<IBabylonMesh> ReplaceChamber(byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool transparent, bool raw, RgbaF color);
+        ValueTask<IBabylonMesh> ReplaceChamber(byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool transparent, bool raw, RgbaF color, CancellationToken cancel);
         [JSMethod("replaceHandle")]
-        ValueTask<IBabylonMesh> ReplaceHandle(byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool transparent, bool raw, RgbaF color);
+        ValueTask<IBabylonMesh> ReplaceHandle(byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool transparent, bool raw, RgbaF color, CancellationToken cancel);
         [JSMethod("setPositionGizmoMode")]
         ValueTask SetPositionGizmoMode();
         [JSMethod("setRotationGizmoMode")]
@@ -82,22 +82,22 @@ namespace SLS4All.Compact.Scripts
         private static Vector3 FixVector(Vector3 vec)
             => new Vector3(vec.X, vec.Z, vec.Y);
 
-        public static ValueTask<IBabylonMesh> AddMesh(this IBabylonNester nester, string name, Mesh mesh, bool faceted, bool instanced, bool showBoundingBox, RgbaF? gridColor, float? edgeRendering)
+        public static ValueTask<IBabylonMesh> AddMesh(this IBabylonNester nester, string name, Mesh mesh, bool faceted, bool instanced, bool showBoundingBox, RgbaF? gridColor, float? edgeRendering, CancellationToken cancel)
             => AddMesh(mesh, faceted, (byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool raw) =>
-                nester.AddMesh(name, vertices, uvs, normals, indicies, raw, instanced, showBoundingBox, gridColor, edgeRendering));
+                nester.AddMesh(name, vertices, uvs, normals, indicies, raw, instanced, showBoundingBox, gridColor, edgeRendering, cancel));
 
-        public static async ValueTask ReplaceChamber(this IBabylonNester nester, Mesh mesh, Mesh? handle, bool transparent, bool faceted, RgbaF color)
+        public static async ValueTask ReplaceChamber(this IBabylonNester nester, Mesh mesh, Mesh? handle, bool transparent, bool faceted, RgbaF color, CancellationToken cancel)
         {
             await AddMesh(mesh, faceted, (byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool raw) =>
-                nester.ReplaceChamber(vertices, uvs, normals, indicies, transparent, raw, color));
+                nester.ReplaceChamber(vertices, uvs, normals, indicies, transparent, raw, color, cancel));
             if (handle != null)
             {
                 await AddMesh(handle, faceted, (byte[] vertices, byte[]? uvs, byte[]? normals, byte[] indicies, bool raw) =>
-                    nester.ReplaceHandle(vertices, uvs, normals, indicies, transparent, raw, color));
+                    nester.ReplaceHandle(vertices, uvs, normals, indicies, transparent, raw, color, cancel));
             }
         }
 
-        private static ValueTask<IBabylonMesh> AddMesh(Mesh mesh, bool faceted, Func<byte[], byte[]?, byte[]?, byte[], bool, ValueTask<IBabylonMesh>> addMesh)
+        public static ValueTask<IBabylonMesh> AddMesh(Mesh mesh, bool faceted, Func<byte[], byte[]?, byte[]?, byte[], bool, ValueTask<IBabylonMesh>> addMesh)
         {
             // NOTE: transfer mesh arrays using byte[], since blazor can send those more efficientely (not as JSON)
             if (faceted || mesh.TriangleCount == 0)

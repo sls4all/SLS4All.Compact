@@ -10,6 +10,7 @@
         style="@StyleNames" 
         @attributes="@Attributes"
         ExternalCssScope="@ExternalCssScope"
+        Opened="OnOpened"
         Closed="OnClosed">
         @if (ChildContent != null)
         {
@@ -27,6 +28,9 @@
 
     [Parameter]
     public RenderFragment<ModalWrapper>? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback Opened { get; set; }
 
     [Parameter]
     public EventCallback Closed { get; set; }
@@ -69,6 +73,11 @@
             _renderModal = false;
             StateHasChanged();
         }
+    }
+
+    private async Task OnOpened()
+    {
+        await Opened.InvokeAsync();
     }
 
     private async Task OnClosed()

@@ -35,10 +35,6 @@ var SLS4All;
                         $(element).toast("show");
                     }
                     static showModal(element, owner, focus) {
-                        $(element).modal({
-                            focus: focus,
-                            backdrop: false
-                        });
                         if (owner) {
                             $(element).on('shown.bs.modal', function () {
                                 return __awaiter(this, void 0, void 0, function* () {
@@ -57,6 +53,10 @@ var SLS4All;
                                 });
                             });
                         }
+                        $(element).modal({
+                            focus: focus,
+                            backdrop: false
+                        });
                     }
                     static setImageSrcById(id, src) {
                         return __awaiter(this, void 0, void 0, function* () {

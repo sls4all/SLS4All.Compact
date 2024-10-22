@@ -148,6 +148,7 @@ namespace SLS4All.Compact
             // storage
             services.Configure<FileSystemPrintProfileStorageOptions>(Configuration.GetSection("FileSystemPrintProfileStorage"));
             services.AddAsImplementationAndInterfaces<FileSystemPrintProfileStorage>(ServiceLifetime.Singleton);
+            services.Configure<OptionsPrinterSettingsStorageOptions>(Configuration.GetSection("OptionsPrinterSettingsStorage"));
             services.AddAsImplementationAndInterfaces<OptionsPrinterSettingsStorage>(ServiceLifetime.Singleton);
 
             // application
@@ -163,6 +164,7 @@ namespace SLS4All.Compact
             services.AddAsImplementationAndInterfaces<Pages.MovementPage.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Components.TemperatureControl.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Components.ThermoCameraView.ValuesContainer>(ServiceLifetime.Scoped);
+            services.AddAsImplementationAndInterfaces<Pages.Wizards.GalvoCalibrationWizard.ValuesContainer>(ServiceLifetime.Scoped);
             services.Configure<Pages.ThermoCameraCompare.ThermoCameraCompareOptions>(Configuration.GetSection("ThermoCameraCompare"));
 
             services.Configure<ExhaustiveNesterOptions>(Configuration.GetSection("ExhaustiveNester"));

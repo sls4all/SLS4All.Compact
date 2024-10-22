@@ -44,6 +44,12 @@ SoftHeater = "SoftAnalysis"
 #	Implementation = "SLS4All.Compact.TestPlugin.PluginService, SLS4All.Compact.TestPlugin"
 #	Registration = "AsImplementationAndInterfaces"
 #	Lifetime = "Singleton"
+#
+## Redirects original Home page to a different page in a plugin. All access to the Home page will be redirected 
+## to the new replacement page.
+#[PageRedirector.Redirects.my-index]
+#Original = "SLS4All.Compact.Pages.IndexPage, SLS4All.Compact.AppCore"
+#Replacement = "SLS4All.Compact.TestPlugin.Pages.NewIndexPage, SLS4All.Compact.TestPlugin"
 
 [Logging.LogLevel]
 "Default" = "Information"
@@ -89,76 +95,44 @@ SpeedFactor = 1.0
 HistoryDepth = "1000"
 
 [InovaBedProjection]
-XOffsetRelative = -0.00042625368
-YOffsetRelative = -0.0055346275
+XOffsetRelative = 0.004880413
+YOffsetRelative = -0.0008061568
 XYAngle = 0
-LaserYaw = 0.010719172
-LaserPitch = 0.17444047
+LaserYaw = 0.015918639
+LaserPitch = -0.18482408
 LaserXOffset = -88
-LaserYOffset = -0.48745188
-LaserZOffset = -0.41944468
-M = 7.367788
-I = 7.367788
-H = 250.73325
+LaserYOffset = -1.3465476
+LaserZOffset = 0.057311267
+M = 7.2616277
+I = 7.2616277
+H = 248.03192
 LidAngle = 0
 MinH = 100
 MaxH = 400
-MirrorAOffset = -0.018136093
-MirrorBOffset = -0.018136093
+MirrorAOffset = 0.010075264
+MirrorBOffset = 0.010075264
 Width = 175
 Height = 175
 PositionTolerance = 0.001
 HeightTolerance = 0.001
-AlphaMinAngle = -10.197872478049248
-AlphaMaxAngle = 10.136052426882088
-BetaMinAngle = -10.774388470570557
-BetaMaxAngle = 10.630084188189358
-AlphaCenter = -0.09345776215195656
-BetaCenter = 0.02351364170317538
-AlphaOffset = 0.48584465973544866
-BetaOffset = 0.5037775267551297
+AlphaMinAngle = -10.232397780753672
+AlphaMaxAngle = 10.146938953083009
+BetaMinAngle = -10.849123753607273
+BetaMaxAngle = 10.727459943853319
+AlphaCenter = -0.03478102639201097
+BetaCenter = -0.0675278555136174
+AlphaOffset = 0.48322492791339755
+BetaOffset = 0.5057684578205226
 XScale = 1
-YScale = 1
-AlphaCurves.1-1 = [
-  -0.002828941613323452,
-  -0.002060089990232341,
-  -0.0006359149686742974,
-  0.0008207091749338259,
-  0.0021927221568196886,
-  0.00239894048520146,
-  0.001700959170529654,
-  -0.000130626880688565,
-  -0.0017344885023904007,
-  -0.0024188455027111706,
-  -0.0026122586173351055,
-  -0.0021721363586570184,
-  -0.0005743124586214886,
-  0.0021484759237987185,
-  0.005784215072165997
-]
-BetaCurves.1-1 = [
-  0.0017769332391324537,
-  0.0009341600812174852,
-  0.0006005960663988928,
-  -0.000015550305417035912,
-  -0.00027245313928969217,
-  -0.00045109191617154426,
-  -0.0003916046246692559,
-  -0.00048727396665114464,
-  -0.0002635445718736301,
-  0.00015680333722391433,
-  0.00010360620048915166,
-  -0.0000790091903246349,
-  -0.00017181355684680444,
-  -0.0004313780752735258,
-  0.0038103175507013453
-]
+YScale = 1.000938379730998
+AlphaCurve = [-0.003145229898481816,-0.001069643308314167,-0.000497089291083714,0.0012479534431204715,0.002537672987582161,0.002609128256513699,0.0018016679680942053,0.00030929338901849725,-0.0009439127026855689,-0.0015729031561709842,-0.0017552138896121566,-0.0010799379838878254,0.0005067615906020246,0.0027316588415094035,0.006361103233204122]
+BetaCurve = [-0.004202788437623891,0.000643641316993444,0.0003523489992008007,-0.00025242893424137986,-0.0006345803055366606,-0.0009273101012807921,-0.00046399722082977234,-0.0002496379678634839,0.00013453650306485332,0.0007517015973217477,0.000626085045135191,0.00007375924526501808,-0.000268898577261941,-0.0008541481341231755,0.0005641757095469451]
 InvertX = false
 InvertY = true
-MirrorAAxisPitch = 0.41942453
-MirrorAAxisRoll = -0.13322115
-MirrorBAxisYaw = 0.13568124
-MirrorBAxisRoll = -0.3060091
+MirrorAAxisPitch = 0.2721545
+MirrorAAxisRoll = -0.38455138
+MirrorBAxisYaw = 0.021319453
+MirrorBAxisRoll = -0.40604746
 
 # Options for "IdealCircle" hotspot calculator when "UseIdealCircleHotspotCalculator = true"
 [BitmapSliceIdealCircleHotspotCalculator]
@@ -385,7 +359,6 @@ ControlPeriod = "0:0:1"
   Tolerance = 20
 
 [LayerClient] # [monitored]
-MinimumPowderBedDepth = 5 # [mm]
 ZMove = 750
 ZSpeed = 5_000
 ZAcceleration = 10_000
@@ -526,7 +499,7 @@ TargetReachedDuration = "0:0:5"
 # How many times can one half of calculated errors (for TargetReachedDuration) can exceed other half to consider target not reached (0.0-1.0)
 TargetReachedErrorFactor = 0.05
 # How many degrees over target the bed temperature must be to negate TargetReached
-TargetReachedOvershoot = 2.5
+TargetReachedOvershoot = 1.0
 # How much to penalize temperature that is over the surface target. Value of 1.0 means, that one degree OVER on single point weights as much
 # as one degree UNDER on all points
 ErrorOverFactor = 0.35
@@ -538,7 +511,7 @@ TargetCompensationRequested2 = 170
 TargetCompensationUsed2 = 170
 LaserCompensationHotmapSizeFactor = 6
 LaserCompensationDuration = "0:0:4"
-LaserCompensationPercentileAdd = 2.0
+LaserCompensationPercentileAdd = 1.0
 LaserCompensationMode = "ApplySimulation"
 UseOldLaserCompensationFactor = false
 LaserMaxTemperatureFactor = 1.0
@@ -620,6 +593,21 @@ EnabledFactor = 1.00
 EnableTemperature = 60
 Hysteresis = 5
 
+[OptionsPrinterSettingsStorage]
+
+	[OptionsPrinterSettingsStorage.TemperatureSettingsDefaults]
+	SurfaceOffset1 = -1
+	SurfaceTemperature1 = 20
+	SurfaceOffset2 = 12.5
+	SurfaceTemperature2 = 177
+	ThermoCameraOffsetX = 0
+	ThermoCameraOffsetY = 0
+
+	[OptionsPrinterSettingsStorage.PowerSettingsDefaults]
+	LaserWattage = 10000
+    MaxWattage = 1500
+    HalogenMaxPercent = 100
+
 [PrinterTimeManager]
 TimeScript.ExecutableLinux = "sls4all_settime.sh"
 TimeScript.ArgsLinux = "{{Epoch}}"
@@ -640,10 +628,10 @@ TimeScript.ArgsLinux = "{{Epoch}}"
 		Pattern = "300 100 300 100 300 1000 300 100 300 100 300 1000 300 100 300 100 300 100"
 
 [PrinterMaintenanceManager] # [monitored]
-HalogenMaintenancePeriod = "40:0:0"
-LaserMaintenancePeriod = "40:0:0"
-Z1MaintenanceDistance = 500
-Z2MaintenanceDistance = 500
+HalogenMaintenancePeriod = "40.0:0:0"
+LaserMaintenancePeriod = "400.0:0:0"
+Z1MaintenanceDistance = 200
+Z2MaintenanceDistance = 200
 RMaintenanceDistance = 50_000
 
 [WatchDogMonitor]
@@ -668,7 +656,7 @@ RefreshRate = 4.0
 Average = 1.0
 
 [OpticalSetupWizard] # [monitored]
-LaserMinimumVisibleWattageLow = 400
+LaserMinimumVisibleWattageLow = 600
 LaserMinimumVisibleWattageHigh = 900
 GalvoHolderLaserX = 950
 GalvoHolderLaserY = 500
@@ -688,6 +676,8 @@ Steps = 360
 DefaultSpeedA = 75000
 DefaultSpeedARelativeLaserWattage = 10_000
 LaserOnPrecent = 100
+ScalingRadius = 80
+ScalingStep = 5
 
 [Frontend] # [monitored]
 

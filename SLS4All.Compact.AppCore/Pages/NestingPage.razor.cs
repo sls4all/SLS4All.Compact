@@ -98,7 +98,7 @@ namespace SLS4All.Compact.Pages
                 var chamberMesh = Nesting.CreateChamberMesh(false, false);
                 var invScale = Vector2.One / MainLayout!.Scale;
                 _root = await JSRuntime.CreateBabylonNester(_canvas, Nesting.NestingDim.Size, invScale, _self);
-                await _root.ReplaceChamber(chamberMesh, null, false, true, color: MainLayout.BackgroundColor);
+                await _root.ReplaceChamber(chamberMesh, null, false, true, color: MainLayout.BackgroundColor, cancel: default);
                 await _root.SetGizmoLocalMode(_isGizmoLocalMode);
                 await _root.SetPositionGizmoMode();
                 Nesting.BackgroundTask.StateChanged.AddHandler(TryInvokeStateHasChangedAsync);
@@ -144,7 +144,8 @@ namespace SLS4All.Compact.Pages
                         true,
                         false,
                         null,
-                        null);
+                        null,
+                        cancel: default);
                 }
             }
             _meshes[item.Hash] = res;
@@ -289,7 +290,7 @@ namespace SLS4All.Compact.Pages
                         await _chamberVoxelMesh.DisposeAsync();
                     }
                     var chamberMesh = whole.Buffer.GenerateMesh(Nesting.ChamberStep, true);
-                    _chamberVoxelMesh = await _root.AddMesh("chamberVoxel", chamberMesh, true, false, true, null, null);
+                    _chamberVoxelMesh = await _root.AddMesh("chamberVoxel", chamberMesh, true, false, true, null, null, cancel: default);
                     await _chamberVoxelMesh.Position(new Vector3(chamberDim.SizeX * 0.5f + 20, 0, -chamberDim.SizeY * 0.5f));
                 });
                 _chamberVoxelMeshVersion = version;

@@ -348,7 +348,7 @@ namespace SLS4All.Compact.Pages
             _root = await JSRuntime.CreateBabylonNester(_canvas, Nesting.NestingDim.Size, invScale, _self);
         }
 
-        private async ValueTask<MeshInfo> CreateMeshInner(NestingMesh item, Action? beginWork = null)
+        private async ValueTask<MeshInfo> CreateMeshInner(NestingMesh item, Action? beginWork, CancellationToken cancel)
         {
             if (_meshes.TryGetValue(item.Hash, out var res) &&
                 res.LodMeshes.Length == item.SimplifiedMeshes.Length)
@@ -369,7 +369,8 @@ namespace SLS4All.Compact.Pages
                         true,
                         false,
                         null,
-                        null);
+                        null,
+                        cancel);
                 }
             }
             Debug.Assert(!_meshes.ContainsKey(item.Hash) || _meshes[item.Hash] == res);
@@ -416,7 +417,7 @@ namespace SLS4All.Compact.Pages
             await _root.ClearGizmoMode();
         }
 
-        private async ValueTask<bool> TrySyncConstrainedInstanceInner(JobObjectEntry? obj, JobObjectConstraintEntry? constraint, Action? beginWork)
+        private async ValueTask<bool> TrySyncConstrainedInstanceInner(JobObjectEntry? obj, JobObjectConstraintEntry? constraint, Action? beginWork, CancellationToken cancel)
         {
             var job = _job;
             if (obj == null || constraint == null || job == null)
@@ -433,7 +434,7 @@ namespace SLS4All.Compact.Pages
                  _constrainedInstance.Obj == obj &&
                  _constrainedInstance.Transform == transform))
             {
-                var mesh = await CreateMeshInner(nestingMesh.Value.mesh);
+                var mesh = await CreateMeshInner(nestingMesh.Value.mesh, beginWork: null, cancel: cancel);
 
                 if (_constrainedInstance == null ||
                     (_constrainedInstance.MeshInfo != mesh ||
@@ -505,7 +506,7 @@ namespace SLS4All.Compact.Pages
                 cancel.ThrowIfCancellationRequested();
                 if (!_instances.TryGetValue(item.Index, out var instance))
                 {
-                    var mesh = await CreateMeshInner(item.Mesh, beginWork);
+                    var mesh = await CreateMeshInner(item.Mesh, beginWork, cancel);
                     //cancel.ThrowIfCancellationRequested();
                     //beginWork?.Invoke();
                     //instance = await _root.CreateInstance(
@@ -552,7 +553,7 @@ namespace SLS4All.Compact.Pages
             }
         }
 
-        private async ValueTask SyncChamberMeshInner(Action? beginWork = null)
+        private async ValueTask SyncChamberMeshInner(Action? beginWork, CancellationToken cancel)
         {
             var chamberConstrainedInstance = ShouldShowConstrainedInstance;
             if (_chamberConstrainedInstance == chamberConstrainedInstance)
@@ -563,13 +564,13 @@ namespace SLS4All.Compact.Pages
             {
                 var chamberMesh = Nesting.CreateChamberMesh(chamberConstrainedInstance, noRadiuses: true);
                 var chamberHandle = CreateChamberHandle(chamberMesh);
-                await _root.ReplaceChamber(chamberMesh, chamberHandle, transparent: true, faceted: true, color: MainLayout!.BackgroundColor);
+                await _root.ReplaceChamber(chamberMesh, chamberHandle, transparent: true, faceted: true, color: MainLayout!.BackgroundColor, cancel: cancel);
             }
             else
             {
                 var chamberMesh = Nesting.CreateChamberMesh(chamberConstrainedInstance, noRadiuses: false);
                 var chamberHandle = CreateChamberHandle(chamberMesh);
-                await _root.ReplaceChamber(chamberMesh, chamberHandle, transparent: false, faceted: true, color: MainLayout!.BackgroundColor);
+                await _root.ReplaceChamber(chamberMesh, chamberHandle, transparent: false, faceted: true, color: MainLayout!.BackgroundColor, cancel: cancel);
             }
         }
 
@@ -730,7 +731,7 @@ namespace SLS4All.Compact.Pages
 
                         // sync chamber mesh
                         cancel.ThrowIfCancellationRequested();
-                        await SyncChamberMeshInner(BeginWork);
+                        await SyncChamberMeshInner(BeginWork, cancel);
 
                         if (shouldShowConstrainedInstance)
                         {
@@ -748,7 +749,8 @@ namespace SLS4All.Compact.Pages
                             if (!await TrySyncConstrainedInstanceInner(
                                 _selectedObject!,
                                 _selectedConstraint!,
-                                BeginWork))
+                                BeginWork,
+                                cancel))
                             {
                                 await RemoveConstrainedInstanceInner(BeginWork);
                             }
@@ -762,7 +764,7 @@ namespace SLS4All.Compact.Pages
                             foreach (var item in meshes.Values)
                             {
                                 cancel.ThrowIfCancellationRequested();
-                                await CreateMeshInner(item.mesh, BeginWork);
+                                await CreateMeshInner(item.mesh, BeginWork, cancel);
                             }
                             await RemoveConstrainedInstanceInner(BeginWork);
                             // set instances
@@ -827,7 +829,7 @@ namespace SLS4All.Compact.Pages
                         }
 
                         cancel.ThrowIfCancellationRequested();
-                        await UpdateChamberVoxelMeshInner();
+                        await UpdateChamberVoxelMeshInner(cancel);
                         await _root.StartRenderLoop();
                     }
                 }
@@ -972,7 +974,7 @@ namespace SLS4All.Compact.Pages
             return res.ToArray();
         }
 
-        private async ValueTask UpdateChamberVoxelMeshInner()
+        private async ValueTask UpdateChamberVoxelMeshInner(CancellationToken cancel)
         {
             if (!FrontendOptions.CurrentValue.ShowAdvancedNestingFeatures)
                 return;
@@ -999,7 +1001,7 @@ namespace SLS4All.Compact.Pages
                         }
                         var chamberMesh = whole.Buffer.GenerateMesh(Nesting.ChamberStep, true);
                         var chamberMeshDim = whole.Dim;
-                        _chamberVoxelMesh = await _root.AddMesh("chamberVoxel", chamberMesh, true, false, true, null, null);
+                        _chamberVoxelMesh = await _root.AddMesh("chamberVoxel", chamberMesh, true, false, true, null, null, cancel);
                         await _chamberVoxelMesh.Position(new Vector3(chamberMeshDim.SizeX * 0.5f + 20, 0, -chamberMeshDim.SizeY * 0.5f));
                     });
                     _chamberVoxelMeshVersion = version;
@@ -1028,7 +1030,8 @@ namespace SLS4All.Compact.Pages
                 return default;
             }
             var context = ValidationContextFactory.CreateContext();
-            var powerSettings = SettingsStorage.GetPowerSettings();
+            var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
+            powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
             var powerSettingsValidation = await powerSettings.Validate(context);
             if (!powerSettingsValidation!.IsValid)
             {

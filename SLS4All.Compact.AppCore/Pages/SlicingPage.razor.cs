@@ -142,7 +142,8 @@ namespace SLS4All.Compact.Pages
         private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
         {
             var context = ValidationContextFactory.CreateContext();
-            var powerSettings = SettingsStorage.GetPowerSettings();
+            var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
+            powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
             var powerSettingsValidation = await powerSettings.Validate(context);
             if (!powerSettingsValidation!.IsValid)
             {
@@ -193,7 +194,7 @@ namespace SLS4All.Compact.Pages
                 LaserFirstOutlineEnergyDensity = Values.LaserFirstOutlineEnergyDensity,
                 LaserOtherOutlineEnergyDensity = Values.LaserOtherOutlineEnergyDensity,
                 LaserFillEnergyDensity = Values.LaserFillEnergyDensity,
-                LaserWattage = powerSettings.LaserWattage,
+                LaserWattage = powerSettings.LaserWattage!.Value,
                 SinteredVolumeFactor = Values.SinteredVolumeFactor,
                 DisableLayerAdditiveMovement = Values.DisableLayerAdditiveMovement != 0,
                 OutlinePowerPrecision = Values.OutlinePowerPrecision,
