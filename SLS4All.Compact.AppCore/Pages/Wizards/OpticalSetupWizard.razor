@@ -29,7 +29,10 @@
 @inject IOptionsMonitor<OpticalSetupWizardOptions> Options
 
 @{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
     base.BuildRenderTree(__builder);
+
     var powerState = PowerClient.CurrentState;
     var laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
 

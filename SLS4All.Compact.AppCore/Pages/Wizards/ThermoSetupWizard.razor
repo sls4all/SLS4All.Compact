@@ -28,6 +28,8 @@
 @inject IOptionsMonitor<ThermoSetupWizardOptions> Options
 
 @{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
     base.BuildRenderTree(__builder);
 
     RenderFragment videoView = @<text>

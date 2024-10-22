@@ -42,7 +42,10 @@
 @inject GalvoCalibrationWizard.ValuesContainer Values
 
 @{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
     base.BuildRenderTree(__builder);
+
     var isSafeButtonOn = InputClient.CurrentState.TryGetEntry(InputClient.SafeButtonId, out var state) && state.Value;
 }
 

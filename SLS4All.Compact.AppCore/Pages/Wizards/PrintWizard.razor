@@ -36,7 +36,10 @@
 @inject IPrinterClient PrinterClient
 
 @{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
     base.BuildRenderTree(__builder);
+
     var isSafeButtonOn = InputClient.CurrentState.TryGetEntry(InputClient.SafeButtonId, out var state) && state.Value;
     var needsLaser = _params?.Job?.NeedsLaser == true;
 }

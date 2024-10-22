@@ -24,21 +24,6 @@
 <CancelModal @ref="_cancelModal" />
 <CancelModal @ref="_progressModal" ProgressCurrent="_done" ProgressTotal="_total" />
 
-@if (IsPrinting)
-{
-    <div class="printing-notification">
-        <p>
-            <span class="badge badge-dark text-wrap">
-                <i class="bi bi-play" /> Printing is in progress, wizards are unavailable.
-            </span>
-        </p>
-        <p>
-            <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
-        </p>
-    </div>
-    return;
-}
-
 @code {
     private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
     private Timer? _timer;
@@ -100,5 +85,27 @@
     {
         _timer?.Dispose();
         await base.DisposeAsync();
+    }
+
+    protected virtual bool CanContinueIfNotPrinting(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder __builder)
+    {
+        if (IsPrinting)
+        {
+            <div class="printing-notification">
+                <p>
+                    <span class="badge badge-dark text-wrap">
+                        <i class="bi bi-play" /> Printing is in progress, wizards are unavailable.
+                    </span>
+                </p>
+                <p>
+                    <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+                </p>
+            </div>
+            return false;
+        }
+        else
+        {
+            return true;
+        }
     }
 }

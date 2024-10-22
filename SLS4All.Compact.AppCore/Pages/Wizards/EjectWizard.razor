@@ -24,6 +24,8 @@
 @inject IPrintSessionStorage PrintSessionStorage
 
 @{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
     base.BuildRenderTree(__builder);
 }
 

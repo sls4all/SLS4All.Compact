@@ -23,7 +23,10 @@
 @inject IChamberHeaterChecker ChamberHeaterChecker
 
 @{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
     base.BuildRenderTree(__builder);
+
 }
 
 <PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
