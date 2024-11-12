@@ -25,6 +25,6 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
 	  <ProjectReference Include="..\SLS4All.Compact.McuClient.Core\SLS4All.Compact.McuClient.Core.csproj" />
-	  <PackageReference Include="SLS4All.Compact.Processing" Version="1.151.1.492"/>
+	  <PackageReference Include="SLS4All.Compact.Processing" Version="1.151.2.494"/>
 	</ItemGroup>
 </Project>
