@@ -162,7 +162,13 @@ namespace SLS4All.Compact.McuClient.Pins
             return Clock.GetClockDurationDouble(IntervalPrecisionMul * MicrostepDistance / velocity);
         }
 
-        public (long PrecisionInterval, long Count, long Ticks, double PrecisionRemainder) GetSteps(double velocity, double startPosition, double endPosition, double precisionRemainder)
+        public (long Count, double FinalPosition) GetSteps(double position)
+        {
+            var count = (long)Math.Round(position / MicrostepDistance);
+            return (count, count * MicrostepDistance);
+        }
+
+        public (long PrecisionInterval, long Count, long Ticks, double PrecisionRemainder, double FinalPosition) GetSteps(double velocity, double startPosition, double endPosition, double precisionRemainder)
         {
             if (velocity < 0)
                 throw new ArgumentOutOfRangeException(nameof(velocity), $"{nameof(velocity)} cannot be negative");
@@ -174,7 +180,7 @@ namespace SLS4All.Compact.McuClient.Pins
             var count = Math.Abs(endCount - startCount);
             if (count == 0)
             {
-                return (0, 0, 0, precisionRemainder);
+                return (0, 0, 0, precisionRemainder, startPosition);
             }
             else
             {
@@ -183,7 +189,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 var pinterval = (long)Math.Round(pintervalf);
                 var pticks = pinterval * count;
                 if (pticks < minPInterval)
-                    return (0, 0, 0, pintervalf * count);
+                    return (0, 0, 0, pintervalf * count, startPosition);
                 if (pinterval < minPInterval)
                 {
                     pinterval = minPInterval;
@@ -191,7 +197,8 @@ namespace SLS4All.Compact.McuClient.Pins
                     pticks = pinterval * count;
                 }
                 var newPRemainder = pintervalf * count - pticks;
-                return (pinterval, count, pticks, newPRemainder);
+                var finalPosition = endCount * MicrostepDistance;
+                return (pinterval, count, pticks, newPRemainder, finalPosition);
             }
         }
 

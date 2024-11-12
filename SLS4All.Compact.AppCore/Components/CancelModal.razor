@@ -43,7 +43,11 @@
         @if (_cancelText != null || CancelText != null)
         {
             <div class="modal-footer">
-                <a @onclick="() => modal.Close()" class="btn btn-danger">
+                <a @onclick="() => _cancelSource?.Cancel()" class="btn btn-danger @(_cancelSource?.IsCancellationRequested == true ? "disabled" : "")">
+                    @if (_cancelSource?.IsCancellationRequested == true)
+                    {
+                        <text><i class="bi bi-hourglass-split"></i>&nbsp;</text>
+                    }
                     @if (_cancelText != null)
                     {
                         @_cancelText

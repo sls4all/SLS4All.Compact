@@ -1065,6 +1065,7 @@
         foreach (var service in IPrintingService.Services)
             service.Clear();
         PrintingParamsProvider.PrintingParams = null;
+
         await JSRuntime.CollectGarbage(cancel);
     }
 

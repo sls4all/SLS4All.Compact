@@ -30,7 +30,6 @@ namespace SLS4All.Compact.ComponentModel
 
     public sealed class AppThemeManager
     {
-        private readonly IOptionsMonitor<AppThemeManagerSavedOptions> _savedOptions;
         private readonly IOptionsWriter<AppThemeManagerSavedOptions> _savedOptionsWriter;
         private readonly AsyncLock _lock = new();
 
@@ -40,7 +39,7 @@ namespace SLS4All.Compact.ComponentModel
         {
             get
             {
-                var themeId = _savedOptions.CurrentValue.ThemeId;
+                var themeId = _savedOptionsWriter.CurrentValue.ThemeId;
                 if (!string.IsNullOrEmpty(themeId))
                     return themeId;
                 else
@@ -50,10 +49,8 @@ namespace SLS4All.Compact.ComponentModel
         public AsyncEvent ThemeChanged { get; } = new();
 
         public AppThemeManager(
-            IOptionsMonitor<AppThemeManagerSavedOptions> savedOptions,
             IOptionsWriter<AppThemeManagerSavedOptions> savedOptionsWriter)
         {
-            _savedOptions = savedOptions;
             _savedOptionsWriter = savedOptionsWriter;
         }
 
@@ -61,7 +58,7 @@ namespace SLS4All.Compact.ComponentModel
         {
             using (await _lock.LockAsync(cancel))
             {
-                var value = _savedOptions.CurrentValue.Clone();
+                var value = _savedOptionsWriter.CurrentValue.Clone();
                 if (value.ThemeId != id)
                 {
                     value.ThemeId = id;

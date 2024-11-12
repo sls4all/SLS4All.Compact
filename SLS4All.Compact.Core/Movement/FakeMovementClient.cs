@@ -51,6 +51,7 @@ namespace SLS4All.Compact.Movement
         private const double _maxReaasonableVelocity = 1_000_000_000;
         private readonly ILogger _logger;
         private readonly IOptionsMonitor<FakeMovementClientOptions> _options;
+        private readonly IPowerClient _powerClient;
         private SystemTimestamp _timestamp;
         private double _posX, _posY, _posR, _posZ1, _posZ2;
         private readonly object _lock = new();
@@ -59,11 +60,13 @@ namespace SLS4All.Compact.Movement
 
         public FakeMovementClient(
             ILogger<FakeMovementClient> logger,
-            IOptionsMonitor<FakeMovementClientOptions> options)
+            IOptionsMonitor<FakeMovementClientOptions> options,
+            IPowerClient powerClient)
             : base(logger, options)
         {
             _logger = logger;
             _options = options;
+            _powerClient = powerClient;
 
             _homingLock = new();
             _trapezoid = new();
@@ -252,11 +255,17 @@ namespace SLS4All.Compact.Movement
         public override ValueTask SetLaser(double value, bool noCompensation = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
+            var options = _options.CurrentValue;
             lock (_lock)
             {
                 ResetTimestampInner();
             }
-            return ValueTask.CompletedTask;
+            // bit of a hack here, but we need to pass the updates to the UI. Timestamps will be all wrong.
+            // we also use this timestamp to check whether last value writtern to powerClient has been by this class
+            if (_powerClient is PowerClientBase powerClientBase)
+                return powerClientBase.UpdatePowerDictWithNotify(_powerClient.LaserId, value, SystemTimestamp.Now, cancel);
+            else
+                return ValueTask.CompletedTask;
         }
 
         public override ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)

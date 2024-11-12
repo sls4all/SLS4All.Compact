@@ -51,6 +51,7 @@ using SLS4All.Compact.Validation;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using SLS4All.Compact.Pages.Wizards;
+using Microsoft.AspNetCore.HttpOverrides;
 
 namespace SLS4All.Compact
 {
@@ -138,6 +139,10 @@ namespace SLS4All.Compact
             LoadPluginAssemblies(applicationOptions);
             LoadPluginReplacements(applicationOptions);
 
+            services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                options.ForwardedHeaders = ForwardedHeaders.All;
+            });
             services.AddMediatR(builder =>
             {
                 builder.RegisterServicesFromAssembly(typeof(StartupBase).Assembly);
@@ -382,6 +387,7 @@ namespace SLS4All.Compact
             {
                 app.UseExceptionHandler("/Error");
             }
+            app.UseForwardedHeaders();
 
             // https://github.com/dotnet/aspnetcore/issues/27966
             app.UseStaticFiles(new StaticFileOptions

@@ -7,6 +7,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nito.AsyncEx;
+using SLS4All.Compact.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -17,7 +18,7 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Configuration
 {
-    public sealed class UserProfileAppDataOptionsWriter<T> : IOptionsWriter<T>
+    public sealed class UserProfileAppDataOptionsWriter<T> : OptionsWriterBase<T>
     {
         private readonly ILogger<UserProfileAppDataOptionsWriter<T>> _logger;
         private readonly IOptions<UserProfileAppDataWriterOptions> _options;
@@ -40,6 +41,7 @@ namespace SLS4All.Compact.Configuration
             ILogger<UserProfileAppDataOptionsWriter<T>> logger,
             IOptions<UserProfileAppDataWriterOptions> options,
             IOptionsMonitor<T> writtenOptions)
+            : base(writtenOptions)
         {
             _logger = logger;
             _options = options;
@@ -47,7 +49,7 @@ namespace SLS4All.Compact.Configuration
             _lock = new();
         }
 
-        public async Task Write(T newValue, CancellationToken cancel)
+        public override async Task Write(T newValue, CancellationToken cancel)
         {
             var options = _options.Value;
             var filename = UserProfileAppDataWriter.GetPrivateOptionsFilename(options.BasePath, typeof(T));
@@ -105,6 +107,15 @@ namespace SLS4All.Compact.Configuration
                     }
                 }
             }
+        }
+
+        public override bool Equals(T x, T y)
+        {
+            if (ReferenceEquals(x, y))
+                return true;
+            var strx = JsonSerializer.Serialize(x, s_serializerOptions);
+            var stry = JsonSerializer.Serialize(y, s_serializerOptions);
+            return strx == stry;
         }
     }
 }

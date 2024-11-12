@@ -20,15 +20,13 @@ namespace SLS4All.Compact.Diagnostics
 
         public bool IsEmpty => Timestamp == 0;
         public static DateTime BaseDateTimeValue { get; set; }
-        public static long BaseTimestampValue { get; } 
         public static SystemTimestamp Now => new SystemTimestamp(Stopwatch.GetTimestamp());
         public double TotalSeconds => (double)Timestamp / Stopwatch.Frequency;
         public TimeSpan ElapsedFromNow => Stopwatch.GetElapsedTime(Timestamp);
 
         static SystemTimestamp()
         {
-            BaseDateTimeValue = DateTime.Now;
-            BaseTimestampValue = Stopwatch.GetTimestamp();
+            BaseDateTimeValue = DateTime.UtcNow - TimeSpan.FromSeconds(Stopwatch.GetTimestamp() / Stopwatch.Frequency);
         }
 
         public static long ToTicks(TimeSpan duration)

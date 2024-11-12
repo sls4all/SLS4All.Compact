@@ -60,6 +60,10 @@ namespace SLS4All.Compact.McuClient.Helpers
         /// Flush all 3 axis in parallel, improves flush duration at a cost of high CPU usage.
         /// </summary>
         public bool ParallelFlush { get; set; } = false;
+        /// <summary>
+        /// Completely disables compression (development only!)
+        /// </summary>
+        public bool DisableCompression { get; set; } = false;
     }
 
     public sealed class XYLMovementQueue
@@ -147,6 +151,21 @@ namespace SLS4All.Compact.McuClient.Helpers
                 }
             }
 
+            /// <summary>
+            /// Returns true if the source list is empty
+            /// </summary>
+            /// <remarks>
+            /// Must be accesed only in master lock.
+            /// </remarks>
+            public bool IsEmpty
+            {
+                get
+                {
+                    var span = Source.Span;
+                    return span.Length == 0;
+                }
+            }
+
             /// <remarks>
             /// Must be accesed only in master lock.
             /// </remarks>
@@ -199,6 +218,16 @@ namespace SLS4All.Compact.McuClient.Helpers
                 }
                 Source.Add() = item;
             }
+
+            public void GetFallbackTime(ref double fallbackTime)
+            {
+                if (FlushingData.Intermediate.Count > 0)
+                {
+                    var value = FlushingData.Intermediate[0].Time;
+                    if (value < fallbackTime)
+                        fallbackTime = value;
+                }
+            }
         }
 
         private static readonly object _trueBox = true;
@@ -234,6 +263,12 @@ namespace SLS4All.Compact.McuClient.Helpers
         /// </remarks>
         public bool IsPseudoEmpty
             => _stateX.IsPseudoEmpty && _stateY.IsPseudoEmpty && _stateL.IsPseudoEmpty;
+
+        /// <remarks>
+        /// Must be accesed only in master lock.
+        /// </remarks>
+        public bool IsEmpty
+            => _stateX.IsEmpty && _stateY.IsEmpty && _stateL.IsEmpty;
 
         public XYLMovementQueue(
             ILogger logger,
@@ -274,16 +309,17 @@ namespace SLS4All.Compact.McuClient.Helpers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddXY(in XYLMovementPoint valueX, in XYLMovementPoint valueY)
+        public void AddXY(double time, double x, double y)
         {
-            Debug.Assert(valueX.Time == valueY.Time);
-            _stateX.AddSource(valueX);
-            _stateY.AddSource(valueY);
+            _stateX.AddSource(new XYLMovementPoint(time, x));
+            _stateY.AddSource(new XYLMovementPoint(time, y));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddL(in XYLMovementPoint value)
-            => _stateL.AddSource(value);
+        public void AddL(double time, double pwm)
+        {
+            _stateL.AddSource(new XYLMovementPoint(time, pwm));
+        }
 
         public void AddReset(double time, double posX, double posY, double dwelled = 0)
         {
@@ -296,8 +332,8 @@ namespace SLS4All.Compact.McuClient.Helpers
             _stateL.AddReset(before, 0);
             if (dwelled != 0)
             {
-                AddXY(new XYLMovementPoint(time, posX), new XYLMovementPoint(time, posY));
-                AddL(new XYLMovementPoint(time, 0));
+                AddXY(time, posX, posY);
+                AddL(time, 0);
             }
         }
 
@@ -395,7 +431,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                 if (!lockTaken) // if we are currently flushing, the flush method will automatically reschedule/process any sources remainder
                     return;
                 var options = _options.CurrentValue;
-                ScheduleFlushInner(manager,false, false, options, context);
+                ScheduleFlushInner(manager, false, false, options, context);
             }
             finally
             {
@@ -466,6 +502,7 @@ namespace SLS4All.Compact.McuClient.Helpers
             if (posStart == posEnd)
             {
                 QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                state.FlushingData.Time = timeEnd;
             }
             else if (elapsed > 0)
             {
@@ -477,8 +514,9 @@ namespace SLS4All.Compact.McuClient.Helpers
                 }
                 else
                 {
+                    var positive = posEnd > posStart;
                     timestamp = stepper.QueueStep(
-                        posEnd > posStart,
+                        positive,
                         steps.PrecisionInterval,
                         steps.Count,
                         0,
@@ -488,11 +526,18 @@ namespace SLS4All.Compact.McuClient.Helpers
                         dryRun: dryRun);
 
                     state.FlushingData.PrecisionRemainder = steps.PrecisionRemainder;
-                    state.FlushingData.Value = posEnd;
+                    state.FlushingData.Value = steps.FinalPosition;
+                    state.FlushingData.Time = timeEnd;
                 }
             }
-
-            state.FlushingData.Time = timeEnd;
+            else
+            {
+#if DEBUG
+                var start = stepper.GetSteps(posStart);
+                var end = stepper.GetSteps(posEnd);
+                Debug.Assert(start.Count == end.Count);
+#endif
+            }
         }
 
         private void SetLaserFlushingInner(
@@ -533,11 +578,11 @@ namespace SLS4All.Compact.McuClient.Helpers
 
             ref var first = ref source[0];
             state.LastFlushStartTime = first.Time;
-            if (source.Length >= 2) // at least two points (including possible reset)
+            if (source.Length >= 2) // check if data is not too long, if at least two points (including possible reset)
             {
                 ref var last = ref source[^1];
                 var maxSeconds = options.CompressFlushPeriod.TotalSeconds;
-                if (last.Time - first.Time > maxSeconds) // data is too long and might cause issues
+                if (last.Time - first.Time > maxSeconds) // data is too long and might cause performance issues when compressing
                 {
                     // get a chunk of data that has at most CompressFlushPeriod of duration
                     for (int i = source.Length - 2; i >= 1; i--)
@@ -562,44 +607,29 @@ namespace SLS4All.Compact.McuClient.Helpers
 
         private void CompressXYLFlushingInner(
             IMcuStepper stepper,
-            IMcuStepper stepper2,
             XYLMovementQueueOptions options,
-            StepperState state,
-            StepperState state2)
+            StepperState state)
         {
             var intermediate = state.FlushingData.Intermediate.Span;
-            var intermediate2 = state2.FlushingData.Intermediate.Span;
             var compressed = state.FlushingData.Compressed;
-            var compressed2 = state2.FlushingData.Compressed;
 
             compressed.Clear();
-            compressed2.Clear();
-            Debug.Assert(intermediate.Length == intermediate2.Length);
             if (intermediate.Length == 0)
                 return;
 
             ref var first = ref intermediate[0];
-            ref var first2 = ref intermediate2[0];
             var firstIsReset = first.IsReset;
-#if DEBUG
-            var firstIsReset2 = first2.IsReset;
-            Debug.Assert(firstIsReset == firstIsReset2);
-            Debug.Assert(intermediate.Length == intermediate2.Length);
-#endif
             if (firstIsReset) // begins with reset (only valid reset position is at the start)
             {
                 compressed.Add() = first;
                 intermediate = intermediate.Slice(1);
-                if (compressed != compressed2)
-                {
-                    compressed2.Add() = first2;
-                    intermediate2 = intermediate2.Slice(1);
-                }
-                else
-                    intermediate2 = intermediate;
             }
 
-            if (intermediate.Length > 0)
+            if (options.DisableCompression)
+            {
+                compressed.AddRange(intermediate);
+            }
+            else if (intermediate.Length > 0)
             {
                 var movesPerSecond = state.Type switch
                 {
@@ -608,36 +638,21 @@ namespace SLS4All.Compact.McuClient.Helpers
                     _ => throw new InvalidOperationException($"Invalid stepper type {state.Type}"),
                 };
                 var elapsed = intermediate[^1].Time - intermediate[0].Time;
-#if DEBUG
-                var elapsed2 = intermediate2[^1].Time - intermediate2[0].Time;
-                Debug.Assert(elapsed == elapsed2);
-#endif
                 var maxMovesDouble =
                     movesPerSecond * elapsed / options.CompressionFactor +
                     state.FlushingData.MovesRemainder;
                 var maxMoves = (int)maxMovesDouble;
                 var movesRemainder = maxMovesDouble - maxMoves;
                 state.FlushingData.MovesRemainder = movesRemainder;
-                state2.FlushingData.MovesRemainder = movesRemainder;
 
                 if (state.Type != StepperType.L)
                 {
                     // make epsilon 99% of one step distance
                     var minEpsilon = _movementClient.StepXYDistance * 0.99;
-                    if (compressed == compressed2)
-                    {
-                        state.FlushingData.Compress.CompressMoves(
-                            intermediate, 
-                            compressed,
-                            maxMoves, minEpsilon);
-                    }
-                    else
-                    {
-                        state.FlushingData.Compress.CompressMoves(
-                            intermediate, intermediate2,
-                            compressed, compressed2,
-                            maxMoves, minEpsilon);
-                    }
+                    state.FlushingData.Compress.CompressMoves(
+                        intermediate,
+                        compressed,
+                        maxMoves, minEpsilon);
                 }
                 else
                 {
@@ -647,8 +662,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                 }
             }
 
-            Debug.Assert(compressed.Count == compressed2.Count);
-            if (compressed.Count == 0 || compressed2.Count == 0)
+            if (compressed.Count == 0)
                 throw new InvalidOperationException($"Compression error, there should be at least one item left for {stepper}");
         }
 
@@ -699,7 +713,7 @@ namespace SLS4All.Compact.McuClient.Helpers
             ref McuTimestamp timestamp,
             StepperState state,
             SystemTimestamp now,
-            double fallbackTimestamp,
+            double fallbackTime,
             TimeSpan minQueueAheadDuration)
         {
             var initialTimestamp = timestamp;
@@ -731,12 +745,17 @@ namespace SLS4All.Compact.McuClient.Helpers
                     // execute
                     ExecuteXYLInnerDryOrReal(stepper, ref timestamp, state, now, compressed, null, dryRun: false);
                 }
-                else if (fallbackTimestamp > state.FlushingData.Time) // no data, just try to move time in the stepper a bit
+                else if (fallbackTime > state.FlushingData.Time) // no data, just try to move time in the stepper a bit
                 {
-                    // dwell stepper
-                    var elapsed = fallbackTimestamp - state.FlushingData.Time;
-                    timestamp = stepper.QueueDwell(stepper.GetPrecisionIntervalFromSeconds(elapsed), timestamp, now: now);
-                    state.FlushingData.Time = fallbackTimestamp;
+                    var elapsed = fallbackTime - state.FlushingData.Time;
+                    QueueDwellFlushingInner(
+                        stepper,
+                        ref timestamp,
+                        state,
+                        elapsed,
+                        now,
+                        null,
+                        false);
                 }
                 else // nothing to do
                     return;
@@ -776,7 +795,7 @@ namespace SLS4All.Compact.McuClient.Helpers
             {
                 var options = _options.CurrentValue;
                 var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
-                (var stepperX, var stepperY, var stepperL, _) = _movementClient.GetXYL(manager, null);
+                (var stepperX, var stepperY, var stepperL, var mcu) = _movementClient.GetXYL(manager, null);
 
                 var parallelFlush = options.ParallelFlush;
 
@@ -785,9 +804,9 @@ namespace SLS4All.Compact.McuClient.Helpers
                     while (true)
                     {
                         // copy data to compress (in master lock)
-                        McuTimestamp timestampX;
-                        McuTimestamp timestampY;
-                        McuTimestamp timestampL;
+                        McuTimestamp timestampX, oldTimestampX;
+                        McuTimestamp timestampY, oldTimestampY;
+                        McuTimestamp timestampL, oldTimestampL;
 
                         var startTimestamp = SystemTimestamp.Now;
                         var intermediateTimestamp = startTimestamp;
@@ -808,9 +827,9 @@ namespace SLS4All.Compact.McuClient.Helpers
                                 _flushTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                             }
 
-                            timestampX = master[stepperX];
-                            timestampY = master[stepperY];
-                            timestampL = master[stepperL];
+                            oldTimestampX = timestampX = master[stepperX];
+                            oldTimestampY = timestampY = master[stepperY];
+                            oldTimestampL = timestampL = master[stepperL];
                             PrepareCompressXYLFlushingInner(_stateX, options);
                             PrepareCompressXYLFlushingInner(_stateY, options);
                             PrepareCompressXYLFlushingInner(_stateL, options);
@@ -818,9 +837,9 @@ namespace SLS4All.Compact.McuClient.Helpers
                         copyTimestamp = SystemTimestamp.Now;
 
                         // process if there is anything
-                        if (_stateX.FlushingData.Intermediate.Count > 0 ||
-                            _stateY.FlushingData.Intermediate.Count > 0 ||
-                            _stateL.FlushingData.Intermediate.Count > 0)
+                        //if (_stateX.FlushingData.Intermediate.Count > 0 ||
+                        //    _stateY.FlushingData.Intermediate.Count > 0 ||
+                        //    _stateL.FlushingData.Intermediate.Count > 0)
                         {
                             // ensure that `now` is not behind current stepper timestamps (may happen after XYL reset)
                             var now = SystemTimestamp.Now;
@@ -831,69 +850,74 @@ namespace SLS4All.Compact.McuClient.Helpers
                             CalcResetDelay(now, timestampY, ref resetDelay);
                             CalcResetDelay(now, timestampL, ref resetDelay);
 
-                            var fallbackTimestamp = double.MaxValue;
-                            if (_stateX.FlushingData.Intermediate.Count > 0 && _stateX.FlushingData.Intermediate[0].Time < fallbackTimestamp)
-                                fallbackTimestamp = _stateX.FlushingData.Intermediate[0].Time;
-                            if (_stateY.FlushingData.Intermediate.Count > 0 && _stateY.FlushingData.Intermediate[0].Time < fallbackTimestamp)
-                                fallbackTimestamp = _stateY.FlushingData.Intermediate[0].Time;
-                            if (_stateL.FlushingData.Intermediate.Count > 0 && _stateL.FlushingData.Intermediate[0].Time < fallbackTimestamp)
-                                fallbackTimestamp = _stateL.FlushingData.Intermediate[0].Time;
-                            Debug.Assert(fallbackTimestamp != double.MaxValue);
+                            var fallbackTime = double.MaxValue;
+                            _stateX.GetFallbackTime(ref fallbackTime);
+                            _stateY.GetFallbackTime(ref fallbackTime);
+                            _stateL.GetFallbackTime(ref fallbackTime);
+                            Debug.Assert(fallbackTime != double.MaxValue);
 
                             // execute in parallel
                             void FlushX()
                             {
                                 var ts = SystemTimestamp.Now;
-                                CompressXYLFlushingInner(stepperX, stepperX, options, _stateX, _stateX);
-                                ExecuteXYLFlushingInner(stepperX, ref timestampX, _stateX, now, fallbackTimestamp, resetDelay);
-                                xduration = SystemTimestamp.Now - ts;
+                                CompressXYLFlushingInner(stepperX, options, _stateX);
+                                ExecuteXYLFlushingInner(stepperX, ref timestampX, _stateX, now, fallbackTime, resetDelay);
+                                xduration = ts.ElapsedFromNow;
                             }
                             void FlushY()
                             {
                                 var ts = SystemTimestamp.Now;
-                                CompressXYLFlushingInner(stepperY, stepperY, options, _stateY, _stateY);
-                                ExecuteXYLFlushingInner(stepperY, ref timestampY, _stateY, now, fallbackTimestamp, resetDelay);
-                                yduration = SystemTimestamp.Now - ts;
+                                CompressXYLFlushingInner(stepperY, options, _stateY);
+                                ExecuteXYLFlushingInner(stepperY, ref timestampY, _stateY, now, fallbackTime, resetDelay);
+                                yduration = ts.ElapsedFromNow;
                             }
-                            /*void FlushXY()
-                            {
-                                var ts = SystemTimestamp.Now;
-                                CompressXYLInner(stepperX, stepperY, options, ref _stateX, ref _stateY);
-                                ExecuteXYLInner(stepperX, ref timestampX, ref _stateX, now, fallbackTimestamp, resetDelay);
-                                ExecuteXYLInner(stepperY, ref timestampY, ref _stateY, now, fallbackTimestamp, resetDelay);
-                                xduration = SystemTimestamp.Now - ts;
-                            }*/
                             void FlushL()
                             {
                                 var ts = SystemTimestamp.Now;
-                                CompressXYLFlushingInner(stepperL, stepperL, options, _stateL, _stateL);
-                                ExecuteXYLFlushingInner(stepperL, ref timestampL, _stateL, now, fallbackTimestamp, resetDelay);
-                                lduration = SystemTimestamp.Now - ts;
+                                CompressXYLFlushingInner(stepperL, options, _stateL);
+                                ExecuteXYLFlushingInner(stepperL, ref timestampL, _stateL, now, fallbackTime, resetDelay);
+                                lduration = ts.ElapsedFromNow;
                             }
 
                             if (parallelFlush)
                             {
                                 var parallelTasks = new Task[]
                                 {
-                                    Task.Factory.StartNew(FlushX, default, TaskCreationOptions.None, _flushScheduler2),
-                                    Task.Factory.StartNew(FlushY, default, TaskCreationOptions.None, _flushScheduler2),
-//                                  Task.Factory.StartNew(FlushXY, default, TaskCreationOptions.None, _flushScheduler2),
-                                    Task.Factory.StartNew(FlushL, default, TaskCreationOptions.None, _flushScheduler2),
+                                    Task.Factory.StartNew(() =>
+                                    {
+                                        Thread.MemoryBarrier();
+                                        FlushX();
+                                        Thread.MemoryBarrier();
+                                    }, default, TaskCreationOptions.None, _flushScheduler2),
+                                    Task.Factory.StartNew(() =>
+                                    {
+                                        Thread.MemoryBarrier();
+                                        FlushY();
+                                        Thread.MemoryBarrier();
+                                    }, default, TaskCreationOptions.None, _flushScheduler2),
+                                    Task.Factory.StartNew(() =>
+                                    {
+                                        Thread.MemoryBarrier();
+                                        FlushL();
+                                        Thread.MemoryBarrier();
+                                    }, default, TaskCreationOptions.None, _flushScheduler2),
                                 };
                                 Task.WaitAll(parallelTasks);
+                                Thread.MemoryBarrier();
                             }
                             else
                             {
                                 FlushX();
                                 FlushY();
-
-                                //FlushXY();
                                 FlushL();
                             }
 
                             // update timestamps, reschedule flush (important!)
                             using (var master = manager.LockMasterQueue())
                             {
+                                Debug.Assert(master[stepperX] == oldTimestampX);
+                                Debug.Assert(master[stepperY] == oldTimestampY);
+                                Debug.Assert(master[stepperL] == oldTimestampL);
                                 master[stepperX] = timestampX;
                                 master[stepperY] = timestampY;
                                 master[stepperL] = timestampL;
@@ -910,13 +934,13 @@ namespace SLS4All.Compact.McuClient.Helpers
                                 }
                             }
                         }
-                        else
-                        {
-                            Debug.Assert(!immediateRetry);
-                            stepperX.QueueFlush();
-                            stepperY.QueueFlush();
-                            stepperL.QueueFlush();
-                        }
+                        //else
+                        //{
+                        //    Debug.Assert(!immediateRetry);
+                        //    stepperX.QueueFlush();
+                        //    stepperY.QueueFlush();
+                        //    stepperL.QueueFlush();
+                        //}
 
                         var endTimestamp = SystemTimestamp.Now;
                         var elapsed = endTimestamp - startTimestamp;

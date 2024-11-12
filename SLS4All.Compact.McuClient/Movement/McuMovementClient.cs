@@ -79,7 +79,7 @@ namespace SLS4All.Compact.Movement
         private readonly AsyncLock _finishMovementLock;
         private double _lastLaserTimeOffset;
         private SystemTimestamp _lastLaserTime;
-        private bool? _lastLaserOn;
+        private double? _lastLaserOnFactor;
 
         public McuMovementClientOptions Options => _options.CurrentValue;
 
@@ -87,13 +87,13 @@ namespace SLS4All.Compact.Movement
         /// Gets whether laser is off and not overwritten in powerClient
         /// </summary>
         private bool IsLaserOnByThis
-            => _lastLaserOn == true && _powerClient.GetLastTimestamp(_powerClient.LaserId) == _lastLaserTime;
+            => _lastLaserOnFactor != 0 && _powerClient.GetLastTimestamp(_powerClient.LaserId) == _lastLaserTime;
 
         /// <summary>
         /// Gets whether laser is off and not overwritten in powerClient
         /// </summary>
         private bool IsLaserOffByThis
-            => _lastLaserOn == false && _powerClient.GetLastTimestamp(_powerClient.LaserId) == _lastLaserTime;
+            => _lastLaserOnFactor != 0 && _powerClient.GetLastTimestamp(_powerClient.LaserId) == _lastLaserTime;
 
         public McuMovementClient(
             ILogger<McuMovementClient> logger,
@@ -130,6 +130,8 @@ namespace SLS4All.Compact.Movement
                 throw new InvalidOperationException($"X/Y/L steppers {stepperL.SendAheadDuration} needs to be the same");
             if (stepperX.QueueAheadDuration != stepperY.QueueAheadDuration || stepperX.QueueAheadDuration != stepperL.QueueAheadDuration)
                 throw new InvalidOperationException($"X/Y/L steppers {stepperL.QueueAheadDuration} needs to be the same");
+            if (stepperX.UnderflowDuration != stepperY.UnderflowDuration || stepperX.UnderflowDuration != stepperL.UnderflowDuration)
+                throw new InvalidOperationException($"X/Y/L steppers {stepperL.UnderflowDuration} needs to be the same");
             var mcu = stepperX.Mcu;
             return (stepperX, stepperY, stepperL, mcu);
         }
@@ -229,16 +231,10 @@ namespace SLS4All.Compact.Movement
                     // get duration from all possible steppers to ensure all movement will be stopped after wait
                     var duration = TimeSpan.Zero;
                     var timestamp = SystemTimestamp.Now;
-                    bool queuesEmpty;
                     lock (_xylQueue.FlushLock) // ensure we are not currently flusing, timestamps would be changing
                     {
                         using (var master = manager.LockMasterQueue())
                         {
-                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, this, duration, timestamp, manager.StepperQueueHigh, out _);
-                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperX, duration, timestamp, TimeSpan.Zero, out _);
-                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperY, duration, timestamp, TimeSpan.Zero, out _);
-                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperL, duration, timestamp, TimeSpan.Zero, out _);
-
                             if (options.CollectGarbageOnFinishMovement &&
                                 (!_sinceFinishMovementCollect.IsRunning ||
                                  _sinceFinishMovementCollect.Elapsed >= options.CollectGarbageOnFinishMovementMinPeriod))
@@ -246,13 +242,28 @@ namespace SLS4All.Compact.Movement
                                 shouldCollectGarbage = true;
                             }
 
+                            if (master[this] == default &&
+                                master[stepperX] == default &&
+                                master[stepperY] == default &&
+                                master[stepperL] == default &&
+                                _xylQueue.IsEmpty)
+                            {
+                                // quick exit, done
+                                break;
+                            }
+
+                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, this, duration, timestamp, manager.StepperQueueHigh, out _);
+                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperX, duration, timestamp, TimeSpan.Zero, out _);
+                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperY, duration, timestamp, TimeSpan.Zero, out _);
+                            (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperL, duration, timestamp, TimeSpan.Zero, out _);
+
                             // NOTE: commented out, since we add FinishMovementDelay below anyway and try again
                             //// if a flush is scheduled, wait after it completes
                             //var flushAfter = _xylQueue.FlushAfterNeedsLocks;
                             //if (flushAfter != TimeSpan.MaxValue)
                             //    duration += flushAfter;
 
-                            queuesEmpty = _xylQueue.IsPseudoEmpty;
+                            var queuesEmpty = _xylQueue.IsPseudoEmpty;
 
                             if (loops > 0 && duration == TimeSpan.Zero && queuesEmpty)
                             {
@@ -447,6 +458,7 @@ namespace SLS4All.Compact.Movement
                 }
 
                 await UpdatePositionHighFrequency(true, cancel);
+                await FinishMovement(context, cancel); // flushes, waits
             }
         }
 
@@ -636,7 +648,7 @@ namespace SLS4All.Compact.Movement
                 }
 
                 _xylQueue.AddReset(offset, posX, posY, dwelled: dwelled);
-                _lastLaserOn = null;
+                _lastLaserOnFactor = null;
 
                 _lastLaserTimeOffset = offset;
                 _lastLaserTime = timestamp.ToSystem();
@@ -676,7 +688,7 @@ namespace SLS4All.Compact.Movement
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
             var options = _options.CurrentValue;
             var stepXYDistance = options.StepXYDistance;
-            (var stepperX, var stepperY, _, var mcu) = GetXYL(manager, options);
+            (var stepperX, var stepperY, var stepperL, var mcu) = GetXYL(manager, options);
 
             var maxVelocity = Math.Min(stepperX.MaxVelocity, stepperY.MaxVelocity);
             var criticalVelocity = Math.Min(stepperX.CriticalVelocity, stepperY.CriticalVelocity);
@@ -735,16 +747,17 @@ namespace SLS4All.Compact.Movement
                         master[this] = endTime;
                         master[_xylQueue] = endTime;
 
-                        // add steps to sources
-                        _xylQueue.AddXY(
-                            new XYLMovementPoint(startTimeOffset, startX),
-                            new XYLMovementPoint(startTimeOffset, startY));
-
-                        _xylQueue.AddXY(
-                            new XYLMovementPoint(endTimeOffset, endX),
-                            new XYLMovementPoint(endTimeOffset, endY));
-
+                        // add steps to sources (both, to keep them alive)
+                        _xylQueue.AddXY(startTimeOffset, startX, startY);
+                        _xylQueue.AddXY(endTimeOffset, endX, endY);
                     }
+
+                    // keep the laser queue alive
+                    // NOTE: just put a point in laser queue somewhere where it wont hurt, compression will remove them later
+                    var oneLaserCycle = stepperL.MinPwmCycleTime ?? 0; // NOTE: more that almostOneLaserCycsle
+                    var laserKeepTime = endTimeOffset - oneLaserCycle;
+                    if (laserKeepTime > _lastLaserTimeOffset && _lastLaserOnFactor != null)
+                        _xylQueue.AddL(laserKeepTime, _lastLaserOnFactor.Value);
                 }
 
                 // update as the last thing, reset needs to have the original value
@@ -777,23 +790,21 @@ namespace SLS4All.Compact.Movement
 
                 if (value != 0) // turning on
                 {
-                    _lastLaserOn = true;
-                    if (!noCompensation && options.CompensatePwmLatency && stepperL.MinPwmCycleTime != null) // move to the past a bit to combat latency
+                    _lastLaserOnFactor = value;
+                    var almostOneCycle = stepperL.MinPwmCycleTime * 0.999999;
+                    if (!noCompensation && options.CompensatePwmLatency && almostOneCycle != null) // move to the past a bit to combat latency
                     {
-                        var almostOneCycle = stepperL.MinPwmCycleTime.Value * 0.999999;
-                        _xylQueue.AddL(new XYLMovementPoint(
-                            Math.Max(endTimeOffset - almostOneCycle, _lastLaserTimeOffset),
-                            value));
+                        _xylQueue.AddL(Math.Max(endTimeOffset - almostOneCycle.Value, _lastLaserTimeOffset), value);
                     }
                     else
                     {
-                        _xylQueue.AddL(new XYLMovementPoint(endTimeOffset, value));
+                        _xylQueue.AddL(endTimeOffset, value);
                     }
                 }
                 else // turning off
                 {
-                    _lastLaserOn = false;
-                    _xylQueue.AddL(new XYLMovementPoint(endTimeOffset, value));
+                    _lastLaserOnFactor = 0;
+                    _xylQueue.AddL(endTimeOffset, value);
                 }
                 _lastLaserTimeOffset = endTimeOffset;
                 _lastLaserTime = endTime.ToSystem();

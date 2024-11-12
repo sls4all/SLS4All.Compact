@@ -16,8 +16,7 @@ namespace SLS4All.Compact.McuClient.Pins
     {
         None = 0,
         Force = 1,
-        NoDwell = 2,
-        ThrowIfResetNecessary = 4,
+        ThrowIfResetNecessary = 2,
     }
 
     public interface IMcuStepper
@@ -30,6 +29,7 @@ namespace SLS4All.Compact.McuClient.Pins
         double? MinPwmCycleTime { get; }
         TimeSpan SendAheadDuration { get; }
         TimeSpan QueueAheadDuration { get; }
+        TimeSpan UnderflowDuration { get; }
         double FullStepDistance { get; }
         double MicrostepDistance { get; }
         long GetPrecisionIntervalFromSeconds(double seconds);
@@ -63,7 +63,8 @@ namespace SLS4All.Compact.McuClient.Pins
         McuTimestamp QueueNextStepWaketimeVerify(McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false);
         void QueueFlush();
         Task<bool> QueryEndstop(CancellationToken cancel);
-        (long PrecisionInterval, long Count, long Ticks, double PrecisionRemainder) GetSteps(double velocity, double startPosition, double endPosition, double precisionRemainder);
+        (long Count, double FinalPosition) GetSteps(double position);
+        (long PrecisionInterval, long Count, long Ticks, double PrecisionRemainder, double FinalPosition) GetSteps(double velocity, double startPosition, double endPosition, double precisionRemainder);
         McuTimestamp DacReset(McuTimestamp timestamp, double maxDistance);
         McuTimestamp DacHome(McuTimestamp timestamp, double position, double maxDistance);
     }

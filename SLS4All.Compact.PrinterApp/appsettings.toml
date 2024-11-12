@@ -510,10 +510,9 @@ TargetCompensationUsed1 = 140
 TargetCompensationRequested2 = 170
 TargetCompensationUsed2 = 170
 LaserCompensationHotmapSizeFactor = 6
-LaserCompensationDuration = "0:0:4"
+LaserCompensationMaxDuration = "0:0:4"
 LaserCompensationPercentileAdd = 1.0
 LaserCompensationMode = "ApplySimulation"
-UseOldLaserCompensationFactor = false
 LaserMaxTemperatureFactor = 1.0
 # Time period for which to compute moving average from maximum values over surface
 MaxTemperaturePeriod = "0:0:1"
@@ -526,7 +525,7 @@ TemperatureUnderFactor = 3.0
 # one of None, UpdateTarget, UpdateMap, UpdateMapWithUndershootCorrection
 MaxTemperatureOvershootMode = "UpdateMapWithUndershootCorrection"
 CoolingIneffectivnessFactor = 0.33
-LaserHotMapCoolingIncludeHeating = true
+LaserHotMapCoolingIncludeHeating = false
 Light1WeightOffset = 0.00
 Light2WeightOffset = 0.00
 Light3WeightOffset = 0.00
@@ -536,6 +535,7 @@ UseInitialCoolAsSource = false
 FallbackLightCount = 4
 MinOnFactorDrainDuration = "0:0:0.5"
 EnableForcedAvgAll = false
+MaxSolveTimeFactor = 0.6
 
 # Expected heating latency to compensate. Increasing the value causes more stable lighting/heating, decreasing causes frequent large flashes and rapid changes of power (oscillation).
 # Too low value might cause the lamps wont even turn on if the temperature difference is small, that is the reason we have different values for temperature target ranges.

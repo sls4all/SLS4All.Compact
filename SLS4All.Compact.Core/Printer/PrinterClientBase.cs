@@ -66,7 +66,7 @@ namespace SLS4All.Compact.Printer
             _logger = logger;
             _options = options;
             _movementFactory = movementFactory;
-            _executeScheduler = new PriorityScheduler("PrinterClientExecute", ThreadPriority.AboveNormal, 2 /* script + publish */);
+            _executeScheduler = new PriorityScheduler("PrinterClientExecute", ThreadPriority.AboveNormal, 3 /* script + publish + execute */);
         }
 
 
@@ -122,17 +122,6 @@ namespace SLS4All.Compact.Printer
             {
                 try
                 {
-                    if (!options.DisableStreamPublishSynchronization)
-                    {
-                        // delay, to start publishing about the same time the items start executing
-                        using (var movement = _movementFactory.CreateDisposable())
-                        {
-                            var delay = movement.Instance.GetQueueAheadDuration(context);
-                            if (delay != TimeSpan.Zero)
-                                await Task.Delay(delay, cancel);
-                        }
-                    }
-
                     await foreach (var item in publishChannel.Reader.ReadAllAsync(cancel))
                     {
                         var startedAt = item.StartedAt;
@@ -164,6 +153,8 @@ namespace SLS4All.Compact.Printer
                 {
                     using (var movement = _movementFactory.CreateDisposable())
                     {
+                        // delay, to start publishing about the same time the items start executing
+                        var queueAheadDelay = movement.Instance.GetQueueAheadDuration(context);
                         var streamingBatchSize = Math.Max(options.StreamingBatchSize, 1);
                         var remainingInBatch = streamingBatchSize;
                         var publishBatchBuffer = new List<CodeCommand>();
@@ -187,7 +178,7 @@ namespace SLS4All.Compact.Printer
                                 remainingInBatch--;
 
                             if (publishBatchStart.IsEmpty)
-                                publishBatchStart = SystemTimestamp.Now;
+                                publishBatchStart = SystemTimestamp.Now + queueAheadDelay;
                             publishBatchBuffer.Add(cmd);
                             if (cmd.Value is DelegatedCodeFormatter formatter)
                                 await formatter.Execute(cmd, hidden, context, cancel);

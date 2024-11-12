@@ -199,7 +199,8 @@ namespace SLS4All.Compact
             switch (applicationOptions.PrinterClient)
             {
                 case PrinterClientType.Fake:
-                    services.AddAsImplementationAndInterfaces<NullPowerClient>(ServiceLifetime.Singleton);
+                    services.Configure<FakePowerClientOptions>(Configuration.GetSection("FakePowerClient"));
+                    services.AddAsImplementationAndInterfaces<FakePowerClient>(ServiceLifetime.Singleton);
                     services.AddAsImplementationAndInterfaces<NullInputClient>(ServiceLifetime.Singleton);
                     break;
                 case PrinterClientType.PipedMcuManagerProxy:

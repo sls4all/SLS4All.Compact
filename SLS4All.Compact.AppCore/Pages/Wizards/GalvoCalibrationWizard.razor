@@ -435,8 +435,8 @@
                                 helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
                                 closedScript = async (channel, cancel) =>
                                 {
-                                    await helper.DrawCalibrationPattern(channel, setup);
-                                    await helper.Close(channel, setup);
+                                    await helper.DrawCalibrationPattern(channel, setup, cancel);
+                                    await helper.Close(channel, setup, cancel);
                                 };
                                 break;
                             }
@@ -464,8 +464,8 @@
                                 helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
                                 closedScript = async (channel, cancel) =>
                                 {
-                                    await helper.DrawScalingPattern(channel, setup);
-                                    await helper.Close(channel, setup);
+                                    await helper.DrawScalingPattern(channel, setup, cancel);
+                                    await helper.Close(channel, setup, cancel);
                                 };
                                 break;
                             }
@@ -476,9 +476,25 @@
                         Plotter.Clear();
                         Logger.LogInformation($"Starting to print pattern");
                         watch = System.Diagnostics.Stopwatch.StartNew();
-                        await using (await SafetySession.BeginSafetySession(cancel))
+                        try
                         {
-                            await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                            await using (await SafetySession.BeginSafetySession(cancel))
+                            {
+                                await Movement.HomeXY(cancel: cancel);
+                                await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                                await Movement.FinishMovement(cancel: cancel);
+                            }
+                        }
+                        catch
+                        {
+                            // finish movement, in case user restarts (many commands are queued)
+                            try
+                            {
+                                await Movement.FinishMovement();
+                            }
+                            catch
+                            {
+                            }
                         }
                         watch.Stop();
                         Plotter.Clear();

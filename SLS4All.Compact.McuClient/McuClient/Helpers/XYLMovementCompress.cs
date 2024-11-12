@@ -155,94 +155,17 @@ namespace SLS4All.Compact.McuClient.Helpers
             {
                 final.AddRange(source);
             }
+
+            AddLast(source, final);
         }
 
-        public void CompressMoves(
-            Span<XYLMovementPoint> sourceX,
-            Span<XYLMovementPoint> sourceY,
-            PrimitiveList<XYLMovementPoint> finalX,
-            PrimitiveList<XYLMovementPoint> finalY,
-            int targetCount,
-            double minEpsilon)
+        private static void AddLast(Span<XYLMovementPoint> source, PrimitiveList<XYLMovementPoint> final)
         {
-            var originalCount = sourceX.Length;
-            Debug.Assert(sourceX.Length == sourceY.Length);
-            if (originalCount > 2) // NOTE: always try to reduce, even if count is not above targetCount due to minEpsilon processing
+            if (source.Length > 0)
             {
-                var todo = _todo;
-                todo.Clear();
-
-                _weights.Count = originalCount;
-                var weightsSq = _weights.Span;
-
-#if DEBUG
-                weightsSq.Fill(double.MinValue);
-#endif
-                weightsSq[0] = double.MaxValue;
-                weightsSq[^1] = double.MaxValue;
-                todo.PushBack() = new TodoEntry(0, sourceX.Length - 1);
-                var minEpsilonSq = minEpsilon * minEpsilon;
-
-                while (todo.Count != 0)
-                {
-                    var pair = todo.PopFront();
-
-                    Debug.Assert(pair.Second < originalCount);
-                    Debug.Assert(pair.First < pair.Second);
-                    Debug.Assert(weightsSq[pair.First] != double.MinValue);
-                    Debug.Assert(weightsSq[pair.Second] != double.MinValue);
-
-                    var maxDistanceSq = double.MinValue;
-                    var maxDistanceIndex = pair.Second;
-                    var line = new XYLMovementPoint.LineXYT(
-                        sourceX[pair.First], sourceY[pair.First],
-                        sourceX[pair.Second], sourceY[pair.Second]);
-                    for (int i = pair.First + 1; i < pair.Second; ++i)
-                    {
-                        ref var itemX = ref sourceX[i];
-                        ref var itemY = ref sourceY[i];
-                        Debug.Assert(!itemX.IsReset && !itemY.IsReset);
-                        Debug.Assert(itemX.Time == itemY.Time);
-
-                        var distanceSq = line.DistanceSq(itemX, itemY);
-                        if (distanceSq > maxDistanceSq)
-                        {
-                            maxDistanceIndex = i;
-                            maxDistanceSq = distanceSq;
-                        }
-                    }
-                    if (maxDistanceSq <= minEpsilonSq) // if the max distance is below epsilon, there is no need to subdivide more
-                    {
-                        weightsSq[(pair.First + 1)..pair.Second].Fill(double.MinValue);
-                    }
-                    else
-                    {
-                        weightsSq[maxDistanceIndex] = maxDistanceSq;
-                        if (maxDistanceIndex - pair.First > 1)
-                            todo.PushBack() = new TodoEntry(pair.First, maxDistanceIndex);
-                        if (pair.Second - maxDistanceIndex > 1)
-                            todo.PushBack() = new TodoEntry(maxDistanceIndex, pair.Second);
-                    }
-                }
-                var maxWeightSq = CalcMaxWeight(minEpsilonSq, targetCount);
-
-                // prune points
-                for (int i = 0; i < originalCount; i++)
-                {
-                    var weightSq = weightsSq[i];
-                    if ((weightSq >= maxWeightSq && // selected weight
-                         weightSq > minEpsilonSq) || // automaticaly reduce if weight is very small even if not asked
-                        (i == 0 || i + 1 == originalCount)) // always add first and last point
-                    {
-                        finalX.Add() = sourceX[i];
-                        finalY.Add() = sourceY[i];
-                    }
-                }
-            }
-            else
-            {
-                finalX.AddRange(sourceX);
-                finalY.AddRange(sourceY);
+                ref var lastSource = ref source[^1];
+                if (final[^1] != lastSource) // add even if Value is the same, only if pair equals skip (to keep the queue alive)
+                    final.Add() = lastSource;
             }
         }
 
@@ -255,7 +178,7 @@ namespace SLS4All.Compact.McuClient.Helpers
         {
             if (source.Length > 2) // NOTE: always try to reduce, even if count is not above targetCount due to minTimeEpsilon processing
             {
-                // before everything, automaticaly remove states that less than minimum epsilons, or on/off states are intersecting due to latency compensation
+                // before everything, automaticaly remove states that are less than minimum epsilons, or on/off states are intersecting due to latency compensation
                 var intermediateList = _intermediate;
                 intermediateList.Clear();
                 for (int i = 0; i < source.Length; i++)
@@ -400,9 +323,6 @@ namespace SLS4All.Compact.McuClient.Helpers
                             final.Add() = intermediate[i];
                         }
                     }
-                    ref var lastInter = ref intermediate[^1];
-                    if (final[^1].Value != lastInter.Value)
-                        final.Add() = lastInter;
                 }
                 else
                 {
@@ -413,6 +333,8 @@ namespace SLS4All.Compact.McuClient.Helpers
             {
                 final.AddRange(source);
             }
+
+            AddLast(source, final);
         }
     }
 }

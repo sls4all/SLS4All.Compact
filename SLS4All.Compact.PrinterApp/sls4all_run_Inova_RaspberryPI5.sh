@@ -80,6 +80,14 @@ xset -dpms 2> /dev/null
 # We have plenty other reasons swapping is very bad for the printing. We simply have to have enough RAM.
 sudo swapoff -a
 
+# ensure full FS check every reboot. This ensures the printer will work reliably.
+grep fsck.mode= /boot/firmware/cmdline.txt >/dev/null
+retVal=$?
+if [ $retVal -eq 1 ]; then # mode missing, add
+    sudo sed -i 's|fsck.repair=|fsck.mode=force fsck.repair=|g' /boot/firmware/cmdline.txt
+fi
+
+# run
 while :; do
     # check if there is newly staged version
     if [ -d $STAGING_DIR ]; then
@@ -122,6 +130,8 @@ while :; do
         fi
     else
         show_splash "$SPLASH_DIR/sls4all_loading.gif"
+        echo "Syncing file system"
+        sudo sync
     fi
 
     if [ "$NO_BROWSER" == false ]; then

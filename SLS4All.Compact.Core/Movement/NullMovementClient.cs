@@ -52,9 +52,6 @@ namespace SLS4All.Compact.Movement
         public Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public ValueTask FinishMovementCode(ChannelWriter<CodeCommand> channel, CancellationToken cancel = default)
-            => ValueTask.CompletedTask;
-
         public ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false,IPrinterClientCommandContext ? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 

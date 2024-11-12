@@ -78,7 +78,18 @@ namespace SLS4All.Compact
 
             using (var host = CreateHostBuilder<Startup>(args).Build())
             {
-                await host.RunAsync();
+                var logger = host.Services.GetRequiredService<ILogger<Program>>();
+                try
+                {
+                    logger.LogInformation($"Host is starting to run at {DateTime.UtcNow} UTC");
+                    await host.RunAsync();
+                    logger.LogInformation($"Host has finished running at {DateTime.UtcNow} UTC");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogCritical(ex, $"Unhandled exception in host run, application is crashing at {DateTime.UtcNow} UTC");
+                    throw;
+                }
             }
         }
 

@@ -67,6 +67,11 @@ LaserOffMinDurationSteps = 30
     CompressionFactor = 1.0
     ParallelFlush = true # lot of commands per second will be faster processed in parallel
 
+[McuStepperGlobal]
+QueueAheadDuration = "0:0:1.0"
+SendAheadDuration = "0:0:0.15"
+UnderflowDuration = "0:0:0.10"
+
 [McuPowerClient]
 LaserId = "laser"
 
@@ -85,11 +90,6 @@ IsEnabled = true
 Executable = "Firmware/linux_mcuapp_RaspberryPi5.sh"
 Args = ""
 LogOutput = false
-
-[McuStepperGlobal]
-QueueAheadDuration = "0:0:1.0"
-SendAheadDuration = "0:0:0.15"
-UnderflowDuration = "0:0:0.1"
 
 [McuManager]
 KeepaliveEnablePins = [ "io-en" ]

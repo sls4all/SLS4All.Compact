@@ -105,7 +105,7 @@ namespace SLS4All
             }
         }
 
-        public static void LogInformation(
+        public static void LogWarning(
             this ILogger logger,
             Exception? ex,
             [InterpolatedStringHandlerArgument("logger")] ref StructuredLoggingInterpolatedStringHandler<StructuredLoggingInterpolatedStringHandlerLogLevelWarning> handler)
@@ -128,7 +128,7 @@ namespace SLS4All
             }
         }
 
-        public static void LogInformation(
+        public static void LogCritical(
             this ILogger logger,
             Exception? ex,
             [InterpolatedStringHandlerArgument("logger")] ref StructuredLoggingInterpolatedStringHandler<StructuredLoggingInterpolatedStringHandlerLogLevelCritical> handler)

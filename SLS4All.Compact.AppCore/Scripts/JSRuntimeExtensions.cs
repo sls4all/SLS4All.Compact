@@ -32,9 +32,9 @@ namespace SLS4All.Compact.Scripts
         {
             try
             {
-                await runtime.InvokeVoidAsync("AppHelpersInvoke", cancel, "collectGarbage");
+                await runtime.InvokeVoidAsync("AppHelpersInvoke", cancel, "collectGarbage").AsTask().WaitAsync(TimeSpan.FromSeconds(1), cancel).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is InvalidOperationException or JSDisconnectedException)
+            catch (Exception ex) when (ex is InvalidOperationException or JSDisconnectedException or TimeoutException)
             {
                 // swallow
             }

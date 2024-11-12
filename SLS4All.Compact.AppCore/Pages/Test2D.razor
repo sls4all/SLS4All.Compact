@@ -93,29 +93,35 @@
                         <td colspan="2" class="property-buttons">
                             @if (Values.GroupName == nameof(PrintHelper2D.DrawCircle))
                             {
-                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCircle(channel, setup))">Do the circle!</a>
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCircle(channel, setup, cancel))">Do the circle!</a>
                             }
                             @if (Values.GroupName == nameof(PrintHelper2D.DrawRectangle))
                             {
-                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawRectangle(channel, setup))">Do the rectangle!</a>
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawRectangle(channel, setup, cancel))">Do the rectangle!</a>
                             }
                             @if (Values.GroupName == nameof(PrintHelper2D.DrawHeart))
                             {
-                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawHeart(channel, setup))">Do the love!</a>
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawHeart(channel, setup, cancel))">Do the love!</a>
                             }
                             @if (Values.GroupName == nameof(PrintHelper2D.DrawCirclesSquaresTest))
                             {
-                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCirclesSquaresTest(channel, setup))">Circles-squares test</a>
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCirclesSquaresTest(channel, setup, cancel))">Circles-squares test</a>
                             }
                             @if (Values.GroupName == nameof(PrintHelper2D.DrawCalibrationDots))
                             {
-                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCalibrationDots(channel, setup))">Calibration dots</a>
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCalibrationDots(channel, setup, cancel))">Calibration dots</a>
                             }
                             @if (Values.GroupName == nameof(PrintHelper2D.DrawCalibrationPattern))
                             {
-                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCalibrationPattern(channel, setup))">Calibration pattern</a>
+                                <a class="btn btn-primary" @onclick="() => BackgroundTask((helper, setup) => (channel, cancel) => helper.DrawCalibrationPattern(channel, setup, cancel))">Calibration pattern</a>
                             }
-                            <a class="btn btn-danger" @onclick="Cancel">Cancel</a>
+                            <a class="btn btn-danger @(_cancelSource?.IsCancellationRequested == true ? "disabled" : "")" @onclick="() => _cancelSource?.Cancel()">
+                                @if (_cancelSource?.IsCancellationRequested == true)
+                                {
+                                    <text><i class="bi bi-hourglass-split"></i>&nbsp;</text>
+                                }
+                                Cancel
+                            </a>
                         </td>
                     </tr>
                 </tbody>
@@ -336,18 +342,12 @@
 
     private string? _info = null;
     private string? _stats = null;
-    private CancellationTokenSource _cancelSource = new();
+    private CancellationTokenSource? _cancelSource;
     private int _backroundCount;
 
     protected override void OnInitialized()
     {
         base.OnInitialized();
-    }
-
-    private void Cancel()
-    {
-        _cancelSource.Cancel();
-        _cancelSource = new();
     }
 
     private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
@@ -372,6 +372,7 @@
 
     private Task BackgroundTask(Func<PrintHelper2D, PrintHelper2D.Setup, PrinterStream> execute)
     {
+        _cancelSource = new();
         var cancel = _cancelSource.Token;
         async Task Inner()
         {
@@ -416,30 +417,46 @@
                     XCorrectionFactor = (double)Values.XCorrectionPercent / 100,
                     YCorrectionFactor = (double)Values.YCorrectionPercent / 100,
                     LaserOnEnergyDensity = Values.LaserOnEnergyDensity != 0 ? (double)Values.LaserOnEnergyDensity : null,
-                    LaserWattage = (double)printerSettings.LaserWattage,
+                    LaserWattage = (double)printerSettings.LaserWattage!.Value,
                 };
                 helper = new PrintHelper2D(Movement, Projection, HotspotCalculator, Logger);
 
-                StateHasChanged();
-                await Task.Yield();
-
-                var script = execute(helper, setup);
                 PrinterStream closedScript = async (channel, cancel) =>
                 {
+                    var script = execute(helper, setup);
                     await script(channel, cancel);
-                    await helper.Close(channel, setup);
+                    await helper.Close(channel, setup, cancel);
                 };
 
                 watch = System.Diagnostics.Stopwatch.StartNew();
-                if (Values.IsDryRun)
-                    await closedScript.Execute(cancel);
-                else
+                await Task.Run(async () =>
                 {
-                    await using (await SafetySession.BeginSafetySession(cancel))
+                    if (Values.IsDryRun)
+                        await closedScript.Execute(cancel);
+                    else
                     {
-                        await Printer.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                        try
+                        {
+                            await using (await SafetySession.BeginSafetySession(cancel))
+                            {
+                                await Movement.HomeXY(cancel: cancel);
+                                await Printer.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                                await Movement.FinishMovement(cancel: cancel);
+                            }
+                        }
+                        catch
+                        {
+                            // finish movement, in case user restarts (many commands are queued)
+                            try
+                            {
+                                await Movement.FinishMovement();
+                            }
+                            catch
+                            {
+                            }
+                        }
                     }
-                }
+                });
                 _stats = $"Time = {watch.Elapsed}, A = {helper.MinAngle.a} ~ {helper.MaxAngle.a}, B = {helper.MinAngle.b} ~ {helper.MaxAngle.b}, L = {helper.Length.min} ~ {helper.Length.max}, SpeedA = {helper.MinMaxSpeedA.min} ~ {helper.MinMaxSpeedA.max}, SpeedXY = {helper.MinMaxSpeedXY.min} ~ {helper.MinMaxSpeedXY.max}, Area = {helper.MinMaxArea.min} ~ {helper.MinMaxArea.max}, FillAccel = {helper.FillSpacingAcceleration}";
             }
             catch (Exception ex)
@@ -458,6 +475,7 @@
             finally
             {
                 _backroundCount--;
+                _cancelSource = new();
             }
             StateHasChanged();
         }

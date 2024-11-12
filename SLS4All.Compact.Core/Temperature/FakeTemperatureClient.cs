@@ -274,6 +274,7 @@ namespace SLS4All.Compact.Temperature
                     var state = GetState();
                     _lowFrequencyState = state;
                     await _mediator.Publish(state, cancel);
+                    await StateChangedHighFrequency.Invoke(state, cancel);
                     await StateChangedLowFrequency.Invoke(state, cancel);
                 }
                 catch (Exception ex)

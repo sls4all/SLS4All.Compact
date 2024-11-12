@@ -431,7 +431,7 @@ namespace SLS4All.Compact.McuClient
                 };
             if (Interlocked.CompareExchange(ref _managerShutdownReason, message, null) != null)
                 return;
-            _logger.LogInformation($"Manager shutdown called: {message}. Stack trace: {new StackTrace(true)}");
+            _logger.LogInformation(message.Exception, $"Manager shutdown called: {message}. MCU = {message.Mcu}. Stack trace: {new StackTrace(true)}");
             Task.Run(async () =>
             {
                 try

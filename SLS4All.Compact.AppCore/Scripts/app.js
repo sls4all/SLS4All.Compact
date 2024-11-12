@@ -72,30 +72,35 @@ var SLS4All;
                             var elementAny = element;
                             if (!elementAny.dataSrcLoadedHasHandler) {
                                 element.addEventListener("load", function () {
-                                    elementAny.dataSrcLoaded = elementAny.dataSrcLoading;
-                                    if (elementAny.dataSrcToLoad) {
-                                        elementAny.dataSrcLoading = elementAny.dataSrcToLoad;
-                                        element.src = elementAny.dataSrcToLoad;
+                                    elementAny.dataSrcLoaded = element.src;
+                                    var dataSrcToLoad = elementAny.dataSrcToLoad;
+                                    if (dataSrcToLoad && dataSrcToLoad != element.src) {
                                         elementAny.dataSrcToLoad = null;
+                                        element.src = dataSrcToLoad;
                                     }
                                 });
                                 element.addEventListener("error", function () {
                                     elementAny.dataSrcLoaded = null;
-                                    if (elementAny.dataSrcToLoad) {
-                                        elementAny.dataSrcLoading = elementAny.dataSrcToLoad;
-                                        element.src = elementAny.dataSrcToLoad;
+                                    var dataSrcToLoad = elementAny.dataSrcToLoad;
+                                    if (dataSrcToLoad && dataSrcToLoad != element.src) {
+                                        elementAny.dataSrcLoading = dataSrcToLoad;
                                         elementAny.dataSrcToLoad = null;
                                     }
                                 });
                                 elementAny.dataSrcLoadedHasHandler = true;
                             }
                             if (element) {
-                                if (!elementAny.dataSrcLoaded || elementAny.dataSrcLoaded == elementAny.dataSrcLoading) {
-                                    elementAny.dataSrcLoading = src;
-                                    element.src = src;
+                                var srcAbs = new URL(src, document.baseURI).href;
+                                if (element.src != srcAbs && elementAny.dataSrcToLoad != srcAbs) {
+                                    if (!elementAny.dataSrcLoaded || elementAny.dataSrcLoaded == element.src) {
+                                        elementAny.dataSrcLoaded = element.src;
+                                        elementAny.dataSrcToLoad = null;
+                                        element.src = srcAbs;
+                                    }
+                                    else {
+                                        elementAny.dataSrcToLoad = srcAbs;
+                                    }
                                 }
-                                else if (elementAny.dataSrcLoading != src)
-                                    elementAny.dataSrcToLoad = src;
                             }
                         });
                     }

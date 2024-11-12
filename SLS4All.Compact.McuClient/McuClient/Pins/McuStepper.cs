@@ -32,6 +32,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using SLS4All.Compact.Printer;
 
 namespace SLS4All.Compact.McuClient.Pins
 {
@@ -52,7 +53,8 @@ namespace SLS4All.Compact.McuClient.Pins
         /// </summary>
         public TimeSpan SendAheadDuration { get; set; } = TimeSpan.FromSeconds(0.15);
         /// <summary>
-        /// Time between now and command execution to deem it necessary to reset the stepper queue. Should be less than <see cref="SendAheadDuration"/>
+        /// Time between now and command execution to deem it necessary to reset the stepper queue. 
+        /// Should be less than <see cref="SendAheadDuration"/>
         /// </summary>
         public TimeSpan UnderflowDuration { get; set; } = TimeSpan.FromSeconds(0.10);
         /// <summary>
@@ -422,9 +424,11 @@ namespace SLS4All.Compact.McuClient.Pins
                 cancel);
         }
 
-        private void SetLastClock(in McuTimestamp timestamp)
+        private void SetLastClockInner(in McuTimestamp timestamp)
         {
             Debug.Assert(!timestamp.IsEmpty && timestamp.Precision == _intervalPrecision);
+            Debug.Assert(timestamp.ClockPrecise >= _lastClock.ClockPrecise);
+            Debug.Assert(Monitor.IsEntered(_queueStepLock));
             _lastClock = timestamp;
         }
 
@@ -434,6 +438,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 1 => MaxStepMovesInV1Cmd,
                 2 => MaxStepMovesInV2Cmd,
                 3 => MaxStepMovesInV3Cmd,
+                4 => MaxStepMovesInV4Cmd,
                 _ => throw new ArgumentOutOfRangeException(nameof(ver)),
             };
 
@@ -442,6 +447,17 @@ namespace SLS4All.Compact.McuClient.Pins
             var steps = _cmdSteps.Span;
             Debug.Assert(steps.Length > 0);
             var buffer = _cmdStepBuffer;
+            int maxItems;
+
+            //// universal but unoptimised approach (commented out, testing only)
+            //ver = 1;
+            //maxItems = GetMaxStepMoves(ver);
+            //consumedItems = Math.Min(steps.Length, maxItems);
+            //isFull = consumedItems == maxItems;
+            //buffer.Count = Unsafe.SizeOf<StepMoveV1>() * consumedItems;
+            //MemoryMarshal.AsBytes(steps.Slice(0, consumedItems)).CopyTo(buffer.Span);
+            //_queueStepsV1Cmd[1] = buffer.Segment;
+            //return _queueStepsV1Cmd;
 
             if (_pwmPin != null) // try pwm specific approach first
             {
@@ -449,21 +465,39 @@ namespace SLS4All.Compact.McuClient.Pins
 
                 buffer.Count = Unsafe.SizeOf<StepMoveV4>() * MaxStepMovesInV4Cmd;
                 var v4 = MemoryMarshal.Cast<byte, StepMoveV4>(buffer.Span);
-                var preDwellInputCount = 0;
                 var inputCount = 0;
                 var outputCount = 0;
                 var delay = 0L;
                 var lastPower = int.MinValue;
-                for (; inputCount < steps.Length; inputCount++)
+                var maxInterval = Math.Min(_maxInterval32, StepMoveV4.MaxInterval);
+                for (var i = 0; i < steps.Length; i++)
                 {
-                    ref var item = ref steps[inputCount];
+                    ref var item = ref steps[i];
                     var type = item.Type;
                     if (type == StepMoveType.Dwell)
                     {
-                        if (delay != 0) // NOTE: cannot process two consencutive delays due to precisionInterval vs tick timing
-                            break;
-                        delay += item.Interval;
-                        if (delay > Math.Min(_maxInterval32, StepMoveV4.MaxInterval))
+                        var newDelay = delay + item.Interval;
+                        Debug.Assert(delay <= maxInterval);
+                        if (lastPower != int.MinValue &&
+                            newDelay > maxInterval)
+                        {
+                            if (delay > 0)
+                                v4[outputCount++] = new StepMoveV4((uint)delay, (ushort)lastPower);
+                            delay = item.Interval;
+                            inputCount = i;
+                        }
+                        else if (lastPower != int.MinValue &&
+                            newDelay < maxInterval &&
+                            i + 1 == steps.Length)
+                        {
+                            if (newDelay > 0)
+                                v4[outputCount++] = new StepMoveV4((uint)newDelay, (ushort)lastPower);
+                            delay = 0;
+                            inputCount = i + 1;
+                        }
+                        else
+                            delay = newDelay;
+                        if (delay > maxInterval)
                             break;
                     }
                     else if (type == StepMoveType.Pwm)
@@ -471,50 +505,27 @@ namespace SLS4All.Compact.McuClient.Pins
                         v4[outputCount++] = new StepMoveV4((uint)delay, item.Power);
                         lastPower = item.Power;
                         delay = 0;
-                        preDwellInputCount = inputCount + 1;
+                        inputCount = i + 1;
                         if (outputCount == MaxStepMovesInV4Cmd)
-                        {
-                            inputCount++;
                             break;
-                        }
                     }
                     else
                         throw new InvalidOperationException($"PWM stepper does not support move type: {type}");
                 }
 
-                if (delay <= Math.Min(_maxInterval32, StepMoveV4.MaxInterval))
+                if (inputCount > 0 && outputCount > 0)
                 {
-                    if (delay > 0)
-                    {
-                        if (lastPower == int.MinValue || outputCount >= MaxStepMovesInV4Cmd)
-                        {
-                            inputCount = preDwellInputCount;
-                        }
-                        else
-                        {
-                            v4[outputCount++] = new StepMoveV4((uint)delay, (ushort)lastPower);
-                        }
-                    }
-
-                    if (inputCount > 0 && outputCount > 0)
-                    {
-                        consumedItems = inputCount;
-                        isFull = outputCount == MaxStepMovesInV4Cmd;
-                        buffer.Count = Unsafe.SizeOf<StepMoveV4>() * outputCount;
-                        _queueStepsV4Cmd[1] = buffer.Segment;
-                        return _queueStepsV4Cmd;
-                    }
+                    consumedItems = inputCount;
+                    isFull = outputCount == MaxStepMovesInV4Cmd;
+                    buffer.Count = Unsafe.SizeOf<StepMoveV4>() * outputCount;
+                    _queueStepsV4Cmd[1] = buffer.Segment;
+                    return _queueStepsV4Cmd;
                 }
             }
 
-            // universal approach (commented out, testing only)
-            //ver = 1;
-            //maxItems = GetMaxStepMoves(ver);
-            //consumedItems = Math.Min(steps.Length, maxItems);
-
             // determine best command version
             ver = 3; // best choice, will downgrade if neccessary
-            var maxItems = GetMaxStepMoves(ver);
+            maxItems = GetMaxStepMoves(ver);
             consumedItems = Math.Min(steps.Length, maxItems);
             for (int i = 0; i < consumedItems; i++)
             {
@@ -576,7 +587,7 @@ namespace SLS4All.Compact.McuClient.Pins
             }
         }
 
-        private void FlushSteps(in McuOccasion occasion)
+        private void FlushStepsInner(in McuOccasion occasion)
         {
             var usedStepCommandsIds = _homingStepCommandIds;
             while (true)
@@ -636,7 +647,7 @@ namespace SLS4All.Compact.McuClient.Pins
             if (_dumpWriter != null)
                 _dumpWriter.Write(MemoryMarshal.AsBytes(new ReadOnlySpan<StepMoveV1>(in move)));
             _cmdSteps.Add() = move;
-            FlushSteps(occasion);
+            FlushStepsInner(occasion);
         }
 
         private void EnsureEnabledInner(McuTimestamp timestamp, bool enabled = true)
@@ -661,6 +672,7 @@ namespace SLS4All.Compact.McuClient.Pins
 
         private McuTimestamp ResetInner(McuTimestamp timestamp, McuStepperResetFlags flags, out bool hasReset, McuMinClockFunc? minClock, SystemTimestamp now, bool dryRun, double advance, TimeSpan minQueueAheadDuration)
         {
+            Debug.Assert(Monitor.IsEntered(_queueStepLock));
             if (advance < 0)
                 throw new ArgumentOutOfRangeException(nameof(advance));
             if (now.IsEmpty)
@@ -676,25 +688,21 @@ namespace SLS4All.Compact.McuClient.Pins
 
             if (!flags.HasFlag(McuStepperResetFlags.Force) && !_lastClock.IsEmpty && !timestamp.IsEmpty && _lastClock.ToSystem() >= now + _underflowDuration)
             {
-                Debug.Assert(_lastClock <= timestamp);
-                if (!flags.HasFlag(McuStepperResetFlags.NoDwell))
+                if (_lastClock > timestamp)
+                    throw new InvalidOperationException($"Stepper {this} clock has jumped to the past. LastClock={_lastClock}, timestamp={timestamp}, now={McuTimestamp.FromSystem(_mcu, now).Clock}, flags={flags})");
+                timestamp += advance;
+                if (_lastClock < timestamp)
                 {
-                    timestamp += advance;
-                    if (_lastClock < timestamp)
-                    {
-                        timestamp = QueueDwell(
-                            timestamp.GetClockWithPrecision(_intervalPrecision) - _lastClock.GetClockWithPrecision(_intervalPrecision),
-                            _lastClock,
-                            minClock: minClock,
-                            dryRun: dryRun);
-                    }
+                    timestamp = QueueDwell(
+                        timestamp.GetClockWithPrecision(_intervalPrecision) - _lastClock.GetClockWithPrecision(_intervalPrecision),
+                        _lastClock,
+                        minClock: minClock,
+                        dryRun: dryRun);
                 }
                 hasReset = false;
             }
             else
             {
-                Debug.Assert(minClock == null);
-
                 var requestedTimestamp = timestamp;
 
                 if (flags.HasFlag(McuStepperResetFlags.ThrowIfResetNecessary))
@@ -730,11 +738,14 @@ namespace SLS4All.Compact.McuClient.Pins
                 }
 
                 // send
+                if (minClock != null)
+                    throw new InvalidOperationException($"Cannot use minClock while resetting stepper {this}");
+
                 QueueFlushInner();
                 _resetCmd.Cmd[_resetCmd.Clock] = (uint)timestamp.ClockPrecise;
                 _resetCmd.Cmd[_resetCmd.ClockHi] = (uint)(timestamp.ClockPrecise >> 32);
                 _mcu.Send(_resetCmd.Cmd, McuCommandPriority.Printing, new McuOccasion((timestamp - _sendAheadDuration).Clock, timestamp.Clock));
-                SetLastClock(timestamp);
+                SetLastClockInner(timestamp);
                 hasReset = true;
             }
 
@@ -882,7 +893,7 @@ namespace SLS4All.Compact.McuClient.Pins
                     }
                 }
 
-                SetLastClock(timestamp);
+                SetLastClockInner(timestamp);
                 return timestamp;
             }
         }
@@ -925,7 +936,7 @@ namespace SLS4All.Compact.McuClient.Pins
                     }
                 }
 
-                SetLastClock(timestamp);
+                SetLastClockInner(timestamp);
                 return timestamp;
             }
         }
@@ -944,9 +955,9 @@ namespace SLS4All.Compact.McuClient.Pins
 
                 var occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
                 if (!dryRun)
-                    SendStepInner(StepMoveV1.Pwm(checked((ushort)Math.Clamp(0, MathF.Round(value * pwm.PwmMax), pwm.PwmMax))), occasion);
+                    SendStepInner(StepMoveV1.Pwm(checked((ushort)Math.Clamp(MathF.Round(value * pwm.PwmMax), 0, pwm.PwmMax))), occasion);
 
-                SetLastClock(timestamp);
+                SetLastClockInner(timestamp);
                 return timestamp;
             }
         }
@@ -967,7 +978,7 @@ namespace SLS4All.Compact.McuClient.Pins
                     _mcu.Send(_verifyNextStepWaketimeCmd.Cmd, McuCommandPriority.Printing, occasion);
                 }
 
-                SetLastClock(timestamp);
+                SetLastClockInner(timestamp);
                 return timestamp;
             }
         }

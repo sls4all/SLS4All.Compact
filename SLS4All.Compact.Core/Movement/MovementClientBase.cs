@@ -61,7 +61,6 @@ namespace SLS4All.Compact.Movement
         private readonly DelegatedCodeFormatter _moveRFormatter;
         private readonly DelegatedCodeFormatter _moveZ1Formatter;
         private readonly DelegatedCodeFormatter _moveZ2Formatter;
-        private readonly DelegatedCodeFormatter _finishMovementFormatter;
         private readonly DelegatedCodeFormatter _setLaserFormatter;
 
         public double MaxXY => _options.CurrentValue.MaxXY;
@@ -95,9 +94,6 @@ namespace SLS4All.Compact.Movement
             _moveZ2Formatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
                 MoveAux(MovementAxis.Z2, new MoveAuxItem(cmd.Arg1, cmd.Arg2 != 0, cmd.Arg3 != float.MinValue ? cmd.Arg3 : null, cmd.Arg4 != float.MinValue ? cmd.Arg4 : null), hidden: hidden, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"MOVE_Z2 Z2={cmd.Arg1} RELATIVE={cmd.Arg2} SPEED={cmd.Arg3Nullable} ACCEL={cmd.Arg4Nullable}"));
-            _finishMovementFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
-                FinishMovement(context: context, cancel: cancel),
-                cmd => string.Create(CultureInfo.InvariantCulture, $"FINISH_MOVEMENT"));
             _setLaserFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
                 SetLaser(cmd.Arg1, cmd.Arg2 != 0, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"SET_LASER VALUE={cmd.Arg1} NO_COMP={cmd.Arg2}"),
@@ -146,9 +142,6 @@ namespace SLS4All.Compact.Movement
             => channel.WriteAsync(_dwellFormatter.Create((float)delay.TotalSeconds), cancel);
 
         public abstract Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-
-        public ValueTask FinishMovementCode(ChannelWriter<CodeCommand> channel, CancellationToken cancel = default)
-            => channel.WriteAsync(_finishMovementFormatter.Create(), cancel);
 
         public abstract ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 

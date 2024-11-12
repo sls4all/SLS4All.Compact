@@ -55,7 +55,6 @@ namespace SLS4All.Compact.Movement
 
         ValueTask MoveXYCode(ChannelWriter<CodeCommand> channel, double x, double y, bool relative, double? speed = null, CancellationToken cancel = default);
         ValueTask MoveAuxCode(ChannelWriter<CodeCommand> channel, MovementAxis axis, double value, bool relative, double? speed = null, double? acceleration = null, CancellationToken cancel = default);
-        ValueTask FinishMovementCode(ChannelWriter<CodeCommand> channel, CancellationToken cancel = default);
         ValueTask DwellCode(ChannelWriter<CodeCommand> channel, TimeSpan delay, CancellationToken cancel = default);
         ValueTask SetLaserCode(ChannelWriter<CodeCommand> channel, double value, bool noCompensation = false,CancellationToken cancel = default);
 
