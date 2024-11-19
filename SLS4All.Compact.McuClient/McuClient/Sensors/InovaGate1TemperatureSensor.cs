@@ -43,7 +43,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly ReferenceCounter _validationSupressor;
         private readonly McuSpi _spi;
         private readonly TaskQueue _readEventQueue;
-        private readonly object _shutdownReadSync = new();
+        private readonly Lock _shutdownReadSync = new();
         private readonly PrimitiveDeque<(float Temperature, SystemTimestamp Timestamp)> _averageQueue;
         private McuSendResult? _shutdownReadSend;
         private Timer? _shutdownReadTimer;

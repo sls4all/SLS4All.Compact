@@ -49,7 +49,7 @@ namespace SLS4All.Compact.McuClient
             private readonly McuCommand _response;
             private readonly McuResponseHandler _handler;
 
-            internal RegisterResponseHandlerDisposable(McuBase mcu, McuCommand response, McuResponseHandler handler)
+            public RegisterResponseHandlerDisposable(McuBase mcu, McuCommand response, McuResponseHandler handler)
             {
                 _mcu = mcu;
                 _response = response;
@@ -76,7 +76,7 @@ namespace SLS4All.Compact.McuClient
         private readonly ConcurrentDictionary<McuBusKey, AsyncLock> _busLocks;
         private readonly TaskCompletionSource _lostCommunicationTaskSource;
 
-        private readonly object _shutdownLock = new();
+        private readonly Lock _shutdownLock = new();
         private volatile string? _shutdownReason;
         private volatile bool _hasLostCommunication;
         protected volatile bool _isUpdatingFirmware;

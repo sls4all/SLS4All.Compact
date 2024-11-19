@@ -10,7 +10,7 @@
         var imageStyle = !string.IsNullOrWhiteSpace(color) ? "filter: " + new RgbaF(color).GetCssColorizeFilter() : "";
         <div class="row justify-content-center" @attributes="@JustAttributesWithCssScope">
             <div class="col-auto" @attributes="@JustAttributesWithCssScope">
-                <SmartImage Source="@image" draggable="false" style="@($"{imageStyle}; {ImageStyle}")" class="@($"img-fluid {ImageClass}")" @attributes="@JustAttributesWithCssScope" />
+                <img src="@image" draggable="false" style="@($"{imageStyle}; {ImageStyle}")" class="@($"img-fluid {ImageClass}")" @attributes="@JustAttributesWithCssScope" />
             </div>
         </div>
     }

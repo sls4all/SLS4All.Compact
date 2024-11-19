@@ -4,9 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Lexical.FileSystem;
-using Lexical.FileSystem.Decoration;
-using Lexical.FileSystem.Operation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nito.AsyncEx;
@@ -162,7 +159,7 @@ namespace SLS4All.Compact.McuClient.Pins
         private readonly TimeSpan _sendAheadDuration;
         private readonly TimeSpan _underflowDuration;
 
-        private readonly object _queueStepLock = new object();
+        private readonly Lock _queueStepLock = new();
         private McuTimestamp _lastClock;
         private bool _enabled;
 
@@ -428,7 +425,7 @@ namespace SLS4All.Compact.McuClient.Pins
         {
             Debug.Assert(!timestamp.IsEmpty && timestamp.Precision == _intervalPrecision);
             Debug.Assert(timestamp.ClockPrecise >= _lastClock.ClockPrecise);
-            Debug.Assert(Monitor.IsEntered(_queueStepLock));
+            Debug.Assert(_queueStepLock.IsHeldByCurrentThread);
             _lastClock = timestamp;
         }
 
@@ -476,10 +473,10 @@ namespace SLS4All.Compact.McuClient.Pins
                     var type = item.Type;
                     if (type == StepMoveType.Dwell)
                     {
-                        var newDelay = delay + item.Interval;
+                        var candidateDelay = delay + item.Interval;
                         Debug.Assert(delay <= maxInterval);
                         if (lastPower != int.MinValue &&
-                            newDelay > maxInterval)
+                            candidateDelay > maxInterval)
                         {
                             if (delay > 0)
                                 v4[outputCount++] = new StepMoveV4((uint)delay, (ushort)lastPower);
@@ -487,18 +484,16 @@ namespace SLS4All.Compact.McuClient.Pins
                             inputCount = i;
                         }
                         else if (lastPower != int.MinValue &&
-                            newDelay < maxInterval &&
+                            candidateDelay < maxInterval &&
                             i + 1 == steps.Length)
                         {
-                            if (newDelay > 0)
-                                v4[outputCount++] = new StepMoveV4((uint)newDelay, (ushort)lastPower);
+                            if (candidateDelay > 0)
+                                v4[outputCount++] = new StepMoveV4((uint)candidateDelay, (ushort)lastPower);
                             delay = 0;
                             inputCount = i + 1;
                         }
                         else
-                            delay = newDelay;
-                        if (delay > maxInterval)
-                            break;
+                            delay = candidateDelay;
                     }
                     else if (type == StepMoveType.Pwm)
                     {
@@ -506,11 +501,12 @@ namespace SLS4All.Compact.McuClient.Pins
                         lastPower = item.Power;
                         delay = 0;
                         inputCount = i + 1;
-                        if (outputCount == MaxStepMovesInV4Cmd)
-                            break;
+
                     }
                     else
                         throw new InvalidOperationException($"PWM stepper does not support move type: {type}");
+                    if (delay > maxInterval || outputCount == MaxStepMovesInV4Cmd)
+                        break;
                 }
 
                 if (inputCount > 0 && outputCount > 0)
@@ -672,7 +668,7 @@ namespace SLS4All.Compact.McuClient.Pins
 
         private McuTimestamp ResetInner(McuTimestamp timestamp, McuStepperResetFlags flags, out bool hasReset, McuMinClockFunc? minClock, SystemTimestamp now, bool dryRun, double advance, TimeSpan minQueueAheadDuration)
         {
-            Debug.Assert(Monitor.IsEntered(_queueStepLock));
+            Debug.Assert(_queueStepLock.IsHeldByCurrentThread);
             if (advance < 0)
                 throw new ArgumentOutOfRangeException(nameof(advance));
             if (now.IsEmpty)

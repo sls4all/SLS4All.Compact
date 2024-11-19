@@ -391,7 +391,11 @@
         var options = Options.CurrentValue;
         await CancelModal.Execute(async cancel =>
             {
-                await LayerClient.HomeBedsAndRecoater(0, cancel: cancel);
+                var setup = new HomeBedsAndRecoaterSetup
+                {
+                    PowderChamberDepth = 0,
+                }; 
+                await LayerClient.HomeBedsAndRecoater(setup, cancel: cancel);
                 await MovementClient.MoveAux(MovementAxis.Z2, new MoveAuxItem
                     {
                         Relative = false,
@@ -467,7 +471,7 @@
                     try
                     {
                         StateHasChanged();
-                        _laserSafetySession = await SafetySession.BeginSafetySession(default);
+                        _laserSafetySession = await SafetySession.BeginSafetySession(true, default);
                         await MovementClient.SetLaser(laserFactor);
                         await Task.Delay(MovementClient.GetQueueAheadDuration());
                         for (int i = 0; i < 50; i++)

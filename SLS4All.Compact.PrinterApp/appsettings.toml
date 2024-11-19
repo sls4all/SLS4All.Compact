@@ -68,6 +68,9 @@ MaxRollingFiles = 64
 [Kestrel.Endpoints.Http]
 Url = "http://0.0.0.0:5000"
 
+[ForwardedHeaders]
+ForwardedHeaders = "All"
+
 [AppDataWriter]
 BasePath = "SLS4All"
 
@@ -180,6 +183,8 @@ Randomize = true
 [ImageCodePlotter]
 IncreasePixelSize = true
 ExecuteAsync = true
+DimDivide = 3
+DimClear = false
 
 [FileSystemPrintProfileStorage]
 
@@ -664,6 +669,10 @@ Z2FocusDepth = 3500
 
 [ThermoSetupWizard] # [monitored]
 TargetPrintBedTemperature = 50
+
+[PlotterImageGenerator] # [monitored]
+Period = "0:0:0.33"
+HotspotAge = "0:0:0.5"
 
 [GalvoCalibrationWizard] # [monitored]
 Z2MoveDepth = 3500

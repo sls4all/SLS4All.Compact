@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.IO;
@@ -40,7 +39,7 @@ namespace SLS4All.Compact.Slicing
 
         public int Height => 0;
 
-        public void Clear()
+        public void Clear(bool beginPrint)
         {
         }
 
@@ -58,7 +57,7 @@ namespace SLS4All.Compact.Slicing
         {
         }
 
-        public MimeData CreateImage(TimeSpan newerThan = default, string caption = "", int? layerIndex = null, bool drawHotspot = false, int? maxSize = null)
+        public MimeData CreateImage(TimeSpan hotspotAge = default, SystemTimestamp? hotspotTo = default, string caption = "", int? layerIndex = null, int? maxSize = null, bool noCache = false)
             => MimeData.BlackPng;
     }
 }

@@ -90,7 +90,7 @@ namespace SLS4All.Compact.Threading
     public class BackgroundTask<TStatus> : IStatusUpdater<TStatus>
         where TStatus : class
     {
-        private readonly object _syncRoot = new();
+        private readonly Lock _syncRoot = new();
         private readonly List<(Delegate factory, Delegate? destroy, object? type)> _collapseTasks = new();
         private readonly Func<CancellationToken, ValueTask> _stateChangedInvoke;
         private readonly bool _isInternal;

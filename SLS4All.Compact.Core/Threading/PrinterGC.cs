@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -19,6 +20,28 @@ namespace SLS4All.Compact.Threading
 {
     public static class PrinterGC
     {
+        [DllImport("libc", SetLastError = true, EntryPoint = "mlockall")]
+        private static extern int mlockall(int flags);
+
+        /// <summary>
+        /// lock all current mappings 
+        /// </summary>
+        private const int MCL_CURRENT = 1;
+        /// <summary>
+        /// lock all future mapping
+        /// </summary>
+        private const int MCL_FUTURE = 2;
+
+        public static bool TryDisableProcessPaging()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return mlockall(MCL_FUTURE | MCL_CURRENT) == 0;
+            }
+            else
+                return true;
+        }
+
         public static void CollectGarbageBlockingAggressive()
         {
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;

@@ -2,21 +2,23 @@
 	<Import Project="..\SharedProperties.props" />
 
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<UserSecretsId>34e7c0c4-355d-41cc-85b0-7355fb43c9dd</UserSecretsId>
 		<ServerGarbageCollection>true</ServerGarbageCollection>
 		<ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <GarbageCollectionAdaptationMode>0</GarbageCollectionAdaptationMode>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<RootNamespace>SLS4All.Compact</RootNamespace>
 		<PublishReadyToRun>true</PublishReadyToRun>
 		<RuntimeIdentifiers>linux-arm64;linux-arm;linux-x64;win-x64</RuntimeIdentifiers>
-		<!-- workaround for hot-reload problem https://github.com/dotnet/sdk/issues/36666 -->
-		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-		<EnableMLUnsupportedPlatformTargetCheck>false</EnableMLUnsupportedPlatformTargetCheck>
-		<EnableLightGBMUnsupportedPlatformTargetCheck>false</EnableLightGBMUnsupportedPlatformTargetCheck>
-	</PropertyGroup>
+
+    <!-- https://github.com/dotnet/sdk/issues/43470 -->
+    <StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
+    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
+    <EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
+  </PropertyGroup>
 
 	<ItemGroup>
 		<Compile Remove="GeneratedFiles\**" />
@@ -24,6 +26,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Remove="Defaults\Inova\Jobs\SLS4All Dry Test.s4a" />
 	  <None Remove="Defaults\Inova\Surface\Formlabs_PA12_2024-06-27_09-24-22.s4a-sha" />
 	  <None Remove="Defaults\Inova\Surface\Formlabs_PA12_2024-10-14_14-47-52.s4a-sha" />
 	  <None Remove="Firmware\.gitkeep" />
@@ -48,6 +51,9 @@
 		<Content Include="appsettings.Inova.toml">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<DependentUpon>appsettings.toml</DependentUpon>
+		</Content>
+		<Content Include="Defaults\Inova\Jobs\SLS4All Dry Test.s4a">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 		<Content Include="Defaults\Inova\Surface\Formlabs_PA12_2024-10-14_14-47-52.s4a-sha">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -77,22 +83,22 @@
 
 	<ItemGroup>
 		<PackageReference Include="NReco.Logging.File" Version="1.2.1" />
-		<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.8" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
+		<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.9" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\SLS4All.Compact.AppCore\SLS4All.Compact.AppCore.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.McuApp\SLS4All.Compact.McuApp.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.151.2.494"/>
-		<PackageReference Include="SLS4All.Compact.Platform" Version="1.151.2.494"/>
-		<PackageReference Include="SLS4All.Compact.Printing" Version="1.151.2.494"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.151.2.494"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.151.2.494"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Platform" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Printing" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.182.0.562"/>
 		<ProjectReference Include="..\SLS4All.Compact.McuClient\SLS4All.Compact.McuClient.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.Telegram\SLS4All.Compact.Telegram.csproj" />
-		<PackageReference Include="SLS4All.Compact.Temperature" Version="1.151.2.494"/>
+		<PackageReference Include="SLS4All.Compact.Temperature" Version="1.182.0.562"/>
 		<ProjectReference Include="..\SLS4All.Compact.Tomlet\SLS4All.Compact.Tomlet.csproj" />
 	</ItemGroup>
 

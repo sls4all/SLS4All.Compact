@@ -14,7 +14,6 @@ using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
 using SLS4All.Compact.McuClient.Sensors;
-using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Concurrent;
@@ -53,7 +52,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
-            IPrinterSettingsStorage settingsStorage)
+            IPrinterSettings settingsStorage)
             : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuManagerLocal>(), options, appDataWriter, deviceFactories, settingsStorage)
         {
         }

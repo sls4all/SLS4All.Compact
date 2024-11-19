@@ -10,6 +10,7 @@ using FFMpegCore.Pipes;
 using SkiaSharp;
 using System.Diagnostics;
 using System.Drawing.Imaging;
+using System.IO.Compression;
 using System.Threading;
 using System.Threading.Channels;
 
@@ -71,8 +72,8 @@ namespace SLS4All.Compact.VideoRecorder
 
             foreach (var item in input.ReadAllAsync().ToBlockingEnumerable())
             {
-                using var thermoBitmap = SKBitmap.Decode(item.Thermo);
-                using var videoBitmap = SKBitmap.Decode(item.Video);
+                using var thermoBitmap = DecodeFixRotation(item.Thermo);
+                using var videoBitmap = DecodeFixRotation(item.Video);
 
                 var height = 512;
                 var thermoWidth = thermoBitmap.Width * height / thermoBitmap.Height;
@@ -94,6 +95,99 @@ namespace SLS4All.Compact.VideoRecorder
             }
         }
 
+        private SKBitmap DecodeFixRotation(byte[] video)
+        {
+            using (var inputStream = new MemoryStream(video))
+            {
+                using (var codec = SKCodec.Create(inputStream))
+                {
+                    using (var original = SKBitmap.Decode(codec))
+                    {
+                        var useWidth = original.Width;
+                        var useHeight = original.Height;
+                        Action<SKCanvas> transform = canvas => { };
+                        switch (codec.EncodedOrigin)
+                        {
+                            case SKEncodedOrigin.TopLeft:
+                                break;
+                            case SKEncodedOrigin.TopRight:
+                                // flip along the x-axis
+                                transform = canvas => canvas.Scale(-1, 1, useWidth / 2, useHeight / 2);
+                                break;
+                            case SKEncodedOrigin.BottomRight:
+                                transform = canvas => canvas.RotateDegrees(180, useWidth / 2, useHeight / 2);
+                                break;
+                            case SKEncodedOrigin.BottomLeft:
+                                // flip along the y-axis
+                                transform = canvas => canvas.Scale(1, -1, useWidth / 2, useHeight / 2);
+                                break;
+                            case SKEncodedOrigin.LeftTop:
+                                useWidth = original.Height;
+                                useHeight = original.Width;
+                                transform = canvas =>
+                                {
+                                    // Rotate 90
+                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
+                                    canvas.Scale(useHeight * 1.0f / useWidth, -useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
+                                };
+                                break;
+                            case SKEncodedOrigin.RightTop:
+                                useWidth = original.Height;
+                                useHeight = original.Width;
+                                transform = canvas =>
+                                {
+                                    // Rotate 90
+                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
+                                    canvas.Scale(useHeight * 1.0f / useWidth, useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
+                                };
+                                break;
+                            case SKEncodedOrigin.RightBottom:
+                                useWidth = original.Height;
+                                useHeight = original.Width;
+                                transform = canvas =>
+                                {
+                                    // Rotate 90
+                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
+                                    canvas.Scale(-useHeight * 1.0f / useWidth, useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
+                                };
+                                break;
+                            case SKEncodedOrigin.LeftBottom:
+                                useWidth = original.Height;
+                                useHeight = original.Width;
+                                transform = canvas =>
+                                {
+                                    // Rotate 90
+                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
+                                    canvas.Scale(-useHeight * 1.0f / useWidth, -useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
+                                };
+                                break;
+                            default:
+                                break;
+                        }
+                        var target = new SKBitmap(useWidth, useHeight, original.ColorType, original.AlphaType);
+                        using (var canvas = new SKCanvas(target))
+                        {
+                            using (var paint = new SKPaint())
+                            {
+                                // high quality with antialiasing
+                                paint.IsAntialias = true;
+                                paint.FilterQuality = SKFilterQuality.High;
+
+                                // rotate according to origin
+                                transform.Invoke(canvas);
+
+                                // draw the bitmap to fill the surface
+                                canvas.DrawBitmap(original, 0, 0, paint);
+                                canvas.Flush();
+
+                                return target;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         private async Task RecorderProc(string address, int fps, string filename, CancellationTokenSource cancelSource)
         {
             var cancel = cancelSource.Token;
@@ -104,6 +198,7 @@ namespace SLS4All.Compact.VideoRecorder
                 {
                     _startStopButton.Text = "Stop";
                 });
+                await EnsureFfmpeg(cancel);
                 var channel = System.Threading.Channels.Channel.CreateUnbounded<(DateTime Time, long Iteration, TimeSpan Elapsed, byte[] Thermo, byte[] Video, string Status)>(new UnboundedChannelOptions
                 {
                     AllowSynchronousContinuations = false,
@@ -148,12 +243,12 @@ namespace SLS4All.Compact.VideoRecorder
                                 var thermoImageAsync = Task.Run(async () =>
                                 {
                                     using (var ms = new MemoryStream(await thermoDataAsync, false))
-                                        return Image.FromStream(ms);
+                                        return FixImage(Image.FromStream(ms));
                                 });
                                 var videoImageAsync = Task.Run(async () =>
                                 {
                                     using (var ms = new MemoryStream(await videoDataAsync, false))
-                                        return Image.FromStream(ms);
+                                        return FixImage(Image.FromStream(ms));
                                 });
 
                                 await Task.WhenAll(thermoImageAsync, videoImageAsync, statusAsync);
@@ -161,10 +256,8 @@ namespace SLS4All.Compact.VideoRecorder
                                 var videoImage = await videoImageAsync;
                                 var status = await statusAsync;
 
-                                if ((thermoImage.RawFormat.Equals(ImageFormat.Png) ||
-                                        thermoImage.RawFormat.Equals(ImageFormat.Jpeg)) &&
-                                    (videoImage.RawFormat.Equals(ImageFormat.Png) ||
-                                        videoImage.RawFormat.Equals(ImageFormat.Jpeg)))
+                                if ((thermoImage.RawFormat.Equals(ImageFormat.Png) || thermoImage.RawFormat.Equals(ImageFormat.Jpeg) || thermoImage.RawFormat.Equals(ImageFormat.MemoryBmp)) &&
+                                    (videoImage.RawFormat.Equals(ImageFormat.Png) || videoImage.RawFormat.Equals(ImageFormat.Jpeg) || videoImage.RawFormat.Equals(ImageFormat.MemoryBmp)))
                                 {
                                     await channel.Writer.WriteAsync((DateTime.Now, iteration, stopwatch.Elapsed, thermoDataAsync.Result, videoDataAsync.Result, status), cancel);
                                     BeginInvoke(() =>
@@ -199,7 +292,15 @@ namespace SLS4All.Compact.VideoRecorder
                 {
                     BeginInvoke(() =>
                     {
+                        _statusBox.Text = "";
                         MessageBox.Show(this, ex.Message, "Error during recording", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    });
+                }
+                else
+                {
+                    BeginInvoke(() =>
+                    {
+                        _statusBox.Text = "";
                     });
                 }
             }
@@ -207,6 +308,45 @@ namespace SLS4All.Compact.VideoRecorder
             {
                 _startStopButton.Text = "Start";
             });
+        }
+
+        private static Image FixImage(Image img)
+        {
+            if (img is not Bitmap bmp)
+                return img;
+            var pi = bmp.PropertyItems.FirstOrDefault(x => x.Id == 0x0112);
+            if (pi != null && pi.Value?.Length > 0)
+            {
+                switch (pi.Value[0])
+                {
+                    case 2: bmp.RotateFlip(RotateFlipType.RotateNoneFlipX); break;
+                    case 3: bmp.RotateFlip(RotateFlipType.RotateNoneFlipXY); break;
+                    case 4: bmp.RotateFlip(RotateFlipType.RotateNoneFlipY); break;
+                    case 5: bmp.RotateFlip(RotateFlipType.Rotate90FlipX); break;
+                    case 6: bmp.RotateFlip(RotateFlipType.Rotate90FlipNone); break;
+                    case 7: bmp.RotateFlip(RotateFlipType.Rotate90FlipY); break;
+                }
+            }
+            return bmp;
+        }
+
+        private async Task EnsureFfmpeg(CancellationToken cancel)
+        {
+            if (!File.Exists("ffmpeg.exe"))
+            {
+                BeginInvoke(() =>
+                {
+                    _statusBox.Text = "Downloading FFMPEG...";
+                });
+                using (var client = new HttpClient())
+                using (var ms = new MemoryStream())
+                {
+                    using (var source = await client.GetStreamAsync("https://tools.sls4all.com/ffmpeg-win.zip", cancel))
+                        await source.CopyToAsync(ms, cancel);
+                    ms.Position = 0;
+                    ZipFile.ExtractToDirectory(ms, Path.GetDirectoryName(Process.GetCurrentProcess().MainModule!.FileName)!);
+                }
+            }
         }
 
         private void _startStopButton_Click(object sender, EventArgs e)

@@ -230,7 +230,7 @@ namespace SLS4All.Compact.McuClient
         private McuCommand _cmdGetUptime = McuCommand.PlaceholderCommand, _cmdGetUptimeResponse = McuCommand.PlaceholderCommand;
         private McuCommand _cmdGetClock = McuCommand.PlaceholderCommand, _cmdGetClockResponse = McuCommand.PlaceholderCommand;
         private IDisposable? _getUptimeSubscription;
-        private readonly object _lock = new object();
+        private readonly Lock _lock = new();
         private volatile State? _stateLazy;
         private int _queriesPending;
         private bool _resetNeeded;

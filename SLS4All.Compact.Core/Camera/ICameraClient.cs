@@ -19,10 +19,9 @@ namespace SLS4All.Compact.Camera
         Sintering,
     }
 
-    public interface ICameraClient
+    public interface ICameraClient : IImageGenerator
     {
         bool IsMostlyEmpty { get; }
-        AsyncEvent<MimeData> ImageCaptured { get; }
 
         Task<IAsyncDisposable> SetCameraMode(CameraMode mode, CancellationToken cancel = default);
     }

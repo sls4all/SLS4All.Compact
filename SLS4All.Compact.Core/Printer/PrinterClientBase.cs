@@ -94,7 +94,7 @@ namespace SLS4All.Compact.Printer
                 SingleReader = true,
                 SingleWriter = true,
             });
-            var publishChannel = Channel.CreateUnbounded<(ArraySegment<CodeCommand> Segment, SystemTimestamp DoneAt, SystemTimestamp StartedAt)>(new UnboundedChannelOptions
+            var publishChannel = Channel.CreateUnbounded<(ArraySegment<CodeCommand> Segment, SystemTimestamp StartAt, SystemTimestamp EndAt)>(new UnboundedChannelOptions
             {
                 AllowSynchronousContinuations = false,
                 SingleReader = true,
@@ -122,17 +122,16 @@ namespace SLS4All.Compact.Printer
             {
                 try
                 {
-                    await foreach (var item in publishChannel.Reader.ReadAllAsync(cancel))
+                    await foreach (var batch in publishChannel.Reader.ReadAllAsync(cancel))
                     {
-                        var startedAt = item.StartedAt;
-                        var duration = Math.Max(item.DoneAt.Timestamp - startedAt.Timestamp, 0);
-                        var segment = item.Segment;
+                        var batchDuration = Math.Max(batch.EndAt.Timestamp - batch.StartAt.Timestamp, 0);
+                        var segment = batch.Segment;
                         for (int i = 0; i < segment.Count; i++)
                         {
-                            var executeAt = new SystemTimestamp(startedAt.Timestamp + duration * i / segment.Count);
                             Publish(segment[i], allowSynchronous: true, hidden, needsResponse: false);
                             if (!options.DisableStreamPublishSynchronization)
                             {
+                                var executeAt = new SystemTimestamp(batch.StartAt.Timestamp + batchDuration * i / segment.Count);
                                 var delay = executeAt - SystemTimestamp.Now;
                                 if (delay > TimeSpan.Zero)
                                     await Task.Delay(delay, cancel);
@@ -153,12 +152,12 @@ namespace SLS4All.Compact.Printer
                 {
                     using (var movement = _movementFactory.CreateDisposable())
                     {
-                        // delay, to start publishing about the same time the items start executing
-                        var queueAheadDelay = movement.Instance.GetQueueAheadDuration(context);
                         var streamingBatchSize = Math.Max(options.StreamingBatchSize, 1);
                         var remainingInBatch = streamingBatchSize;
                         var publishBatchBuffer = new List<CodeCommand>();
                         SystemTimestamp publishBatchStart = default;
+                        var queueAheadDelay = movement.Instance.GetQueueAheadDuration(context);
+                        var publishBatchStartFirst = SystemTimestamp.Now + queueAheadDelay;
                         await foreach (var cmd in executeChannel.Reader.ReadAllAsync(cancel))
                         {
                             if (remainingInBatch == 0)
@@ -168,7 +167,7 @@ namespace SLS4All.Compact.Printer
                                 var publishBatchSegment = new ArraySegment<CodeCommand>(ArrayPool<CodeCommand>.Shared.Rent(publishBatchBuffer.Count), 0, publishBatchBuffer.Count);
                                 publishBatchBuffer.CopyTo(publishBatchSegment.Array!, 0);
                                 publishBatchBuffer.Clear();
-                                await publishChannel.Writer.WriteAsync((publishBatchSegment, remaining.Timestamp, publishBatchStart), cancel);
+                                await publishChannel.Writer.WriteAsync((publishBatchSegment, publishBatchStart, remaining.Timestamp), cancel);
                                 if (remaining.Duration > options.StreamingBufferTime)
                                     await Task.Delay(remaining.Duration - options.StreamingBufferTime, cancel);
                                 remainingInBatch = streamingBatchSize;
@@ -178,7 +177,14 @@ namespace SLS4All.Compact.Printer
                                 remainingInBatch--;
 
                             if (publishBatchStart.IsEmpty)
-                                publishBatchStart = SystemTimestamp.Now + queueAheadDelay;
+                            {
+                                var remaining = (await movement.Instance.GetRemainingPrintTime(context, cancel));
+                                if (remaining.Timestamp > publishBatchStartFirst)
+                                    publishBatchStart = remaining.Timestamp;
+                                else
+                                    publishBatchStart = publishBatchStartFirst;
+                            }
+
                             publishBatchBuffer.Add(cmd);
                             if (cmd.Value is DelegatedCodeFormatter formatter)
                                 await formatter.Execute(cmd, hidden, context, cancel);
@@ -190,7 +196,7 @@ namespace SLS4All.Compact.Printer
                             var remaining = (await movement.Instance.GetRemainingPrintTime(context, cancel));
                             var publishBatchSegment = new ArraySegment<CodeCommand>(ArrayPool<CodeCommand>.Shared.Rent(publishBatchBuffer.Count), 0, publishBatchBuffer.Count);
                             publishBatchBuffer.CopyTo(publishBatchSegment.Array!, 0);
-                            await publishChannel.Writer.WriteAsync((publishBatchSegment, remaining.Timestamp, publishBatchStart), cancel);
+                            await publishChannel.Writer.WriteAsync((publishBatchSegment, publishBatchStart, remaining.Timestamp), cancel);
                         }
                     }
                     publishChannel.Writer.TryComplete();

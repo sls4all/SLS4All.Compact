@@ -4,8 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Lexical.FileSystem;
-using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nito.Disposables.Internals;
@@ -612,12 +610,13 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             helper.Send(message);
         }
 
-        public bool TryCollectGarbageBlocking()
+        public bool TryCollectGarbageBlocking(bool performMajorCleanup)
         {
             using var helper = SendHelper();
-            Span<byte> write = stackalloc byte[MinMessageLength];
+            Span<byte> write = stackalloc byte[MinMessageLength + 1];
             var writeSpan = write;
             Initialize(ref writeSpan, MessageType.CollectGarbageCommand);
+            Write(ref writeSpan, performMajorCleanup);
             var message = Finish(write, writeSpan);
             helper.Send(message);
             return helper.ReadBoolean();

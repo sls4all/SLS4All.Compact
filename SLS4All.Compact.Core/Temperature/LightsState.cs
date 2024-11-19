@@ -4,11 +4,9 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
-
 namespace SLS4All.Compact.Temperature
 {
-    public record LightsState(bool IsEnabled) : INotification
+    public record LightsState(bool IsEnabled)
     {
         public static LightsState LightsStateEnabled { get; } = new LightsState(true);
         public static LightsState LightsStateDisabled { get; } = new LightsState(false);

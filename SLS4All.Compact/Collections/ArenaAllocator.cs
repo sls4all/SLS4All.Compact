@@ -16,7 +16,7 @@ namespace SLS4All.Compact.Collections
 {
     public sealed class ArenaAllocator<T>
     {
-        private readonly object _lock = new object();
+        private readonly Lock _lock = new();
         private readonly bool _needsClear;
         private readonly int _arenaLength;
         private volatile Arena<T> _currentArena;

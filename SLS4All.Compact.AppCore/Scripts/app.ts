@@ -64,17 +64,19 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
             var elementAny = element as any;
             if (!elementAny.dataSrcLoadedHasHandler) {
                 element.addEventListener("load", function () {
-                    elementAny.dataSrcLoaded = element.src;
+                    var currentSrc = element.getAttribute('src'); // do not read .src, might be absolute
+                    elementAny.dataSrcLoaded = currentSrc; // do not read .src, might be absolute
                     var dataSrcToLoad = elementAny.dataSrcToLoad;
-                    if (dataSrcToLoad && dataSrcToLoad != element.src) {
+                    if (dataSrcToLoad && dataSrcToLoad != currentSrc) {
                         elementAny.dataSrcToLoad = null;
-                        element.src = dataSrcToLoad;
+                        element.setAttribute("src", dataSrcToLoad);
                     }
                 });
                 element.addEventListener("error", function () {
+                    var currentSrc = element.getAttribute('src'); // do not read .src, might be absolute
                     elementAny.dataSrcLoaded = null;
                     var dataSrcToLoad = elementAny.dataSrcToLoad;
-                    if (dataSrcToLoad && dataSrcToLoad != element.src) {
+                    if (dataSrcToLoad && dataSrcToLoad != currentSrc) {
                         elementAny.dataSrcLoading = dataSrcToLoad;
                         elementAny.dataSrcToLoad = null;
                     }
@@ -82,15 +84,15 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
                 elementAny.dataSrcLoadedHasHandler = true;
             }
             if (element) {
-                var srcAbs = new URL(src, document.baseURI).href;
-                if (element.src != srcAbs && elementAny.dataSrcToLoad != srcAbs) {
-                    if (!elementAny.dataSrcLoaded || elementAny.dataSrcLoaded == element.src) {
-                        elementAny.dataSrcLoaded = element.src;
+                var currentSrc = element.getAttribute('src'); // do not read .src, might be absolute
+                if (currentSrc != src && elementAny.dataSrcToLoad != src) {
+                    if (!elementAny.dataSrcLoaded || elementAny.dataSrcLoaded == currentSrc) {
+                        elementAny.dataSrcLoaded = currentSrc;
                         elementAny.dataSrcToLoad = null;
-                        element.src = srcAbs;
+                        element.setAttribute("src", src);
                     }
                     else {
-                        elementAny.dataSrcToLoad = srcAbs;
+                        elementAny.dataSrcToLoad = src;
                     }
                 }
             }

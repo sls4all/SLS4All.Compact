@@ -31,6 +31,7 @@ namespace SLS4All.Compact.Printing
         public required PrintProfileReference PrintProfile { get; set; }
 
         public bool NeedsLaser => false;
+        public bool DryPrintEnabled => false;
 
         public IStorageObject Clone()
             => (AnalyseJob)MemberwiseClone();

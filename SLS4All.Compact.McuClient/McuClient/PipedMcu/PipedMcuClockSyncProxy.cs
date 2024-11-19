@@ -97,7 +97,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
         private readonly ILogger _logger;
         private readonly AutoResetEvent _updatedEvent;
         private readonly CancellationTokenSource _unreachableCancelSource;
-        private readonly object _sync = new();
+        private readonly Lock _sync = new();
         private volatile State _state;
         private IMcu? _mcu;
         private long _updatedCount;

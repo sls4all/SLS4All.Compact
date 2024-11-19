@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -93,10 +92,9 @@ namespace SLS4All.Compact.Temperature
 
         private readonly ILogger<FakeTemperatureClient> _logger;
         private readonly IOptionsMonitor<FakeTemperatureClientOptions> _options;
-        private readonly IMediator _mediator;
         private readonly ITemperatureCamera _temperatureCamera;
 
-        private readonly object _stateLock = new object();
+        private readonly Lock _stateLock = new();
         private volatile TemperatureState _lowFrequencyState;
         private readonly Dictionary<string, StateItem> _stateDict;
 
@@ -127,13 +125,11 @@ namespace SLS4All.Compact.Temperature
         public FakeTemperatureClient(
             IOptionsMonitor<FakeTemperatureClientOptions> options,
             ILogger<FakeTemperatureClient> logger,
-            IMediator mediator,
             ITemperatureCamera temperatureCamera)
             : base(logger)
         {
             _options = options;
             _logger = logger;
-            _mediator = mediator;
             _temperatureCamera = temperatureCamera;
 
             _lowFrequencyState = new TemperatureState(Array.Empty<TemperatureEntry>(), null);
@@ -273,7 +269,6 @@ namespace SLS4All.Compact.Temperature
                 {
                     var state = GetState();
                     _lowFrequencyState = state;
-                    await _mediator.Publish(state, cancel);
                     await StateChangedHighFrequency.Invoke(state, cancel);
                     await StateChangedLowFrequency.Invoke(state, cancel);
                 }

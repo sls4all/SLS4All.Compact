@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Lexical.FileSystem;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Collections;
 using SLS4All.Compact.Configuration;
@@ -32,7 +31,6 @@ using System.Threading.Tasks.Sources;
 using System.Xml.Linq;
 using static System.Collections.Specialized.BitVector32;
 using System.Collections.Frozen;
-using SLS4All.Compact.Storage.PrinterSettings;
 using System.Security.AccessControl;
 
 namespace SLS4All.Compact.McuClient.Sensors
@@ -142,10 +140,10 @@ namespace SLS4All.Compact.McuClient.Sensors
         }
 
         private readonly IOptions<InovaSurfaceHeaterOptions> _options;
-        private readonly object _locker = new object();
+        private readonly Lock _locker = new();
         private readonly McuManager _manager;
         private readonly ITemperatureCamera _camera;
-        private readonly IPrinterSettingsStorage _settingsStorage;
+        private readonly IPrinterSettings _settingsStorage;
         private readonly List<float> _calcTemperatureTemp;
         private readonly HashSet<Pin> _pinsTemp;
         private readonly List<SectionPair> _sectionPairsTemp;
@@ -229,7 +227,7 @@ namespace SLS4All.Compact.McuClient.Sensors
             IOptions<InovaSurfaceHeaterOptions> options,
             McuManager manager,
             ITemperatureCamera camera,
-            IPrinterSettingsStorage settingsStorage,
+            IPrinterSettings settingsStorage,
             string name)
         {
             _options = options;

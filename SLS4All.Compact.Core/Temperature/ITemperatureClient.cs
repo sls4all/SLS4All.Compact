@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using SLS4All.Compact.Configuration;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Printer;
@@ -18,7 +17,7 @@ using System.Transactions;
 
 namespace SLS4All.Compact.Temperature
 {
-    public record TemperatureState(TemperatureEntry[] Entries, TemperatureMatrix? BedMatrix) : INotification
+    public record TemperatureState(TemperatureEntry[] Entries, TemperatureMatrix? BedMatrix)
     {
         public bool TryGetValue(string id, [MaybeNullWhen(false)] out TemperatureEntry value)
         {

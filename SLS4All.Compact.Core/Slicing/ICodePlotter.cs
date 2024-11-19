@@ -23,8 +23,8 @@ namespace SLS4All.Compact.Slicing
         int Height { get; }
         SystemTimestamp[] TimestampMap { get; }
 
-        void Clear();
-        MimeData CreateImage(TimeSpan newerThan = default, string caption = "", int? layerIndex = null, bool drawHotspot = false, int? maxSize = null);
+        void Clear(bool beginPrint);
+        MimeData CreateImage(TimeSpan hotspotAge = default, SystemTimestamp? hotspotTo = default, string caption = "", int? layerIndex = null, int? maxSize = null, bool noCache = false);
         (int width, int height) GetMask(ref float[] output);
         void ReplaceWith(float[] mask);
         Vector2 GetCenter();

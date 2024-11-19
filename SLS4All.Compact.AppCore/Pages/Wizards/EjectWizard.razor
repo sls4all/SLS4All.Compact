@@ -142,7 +142,11 @@
                 var session = await TryGetLastSession();
                 if (session != null)
                 {
-                    await LayerClient.EjectCake((double?)session.FinalPrintDepth, cancel);
+                    var setup = new EjectCakeSetup
+                    {
+                        ExpectedDepth = (double?)session.FinalPrintDepth,
+                    };
+                    await LayerClient.EjectCake(setup, cancel);
                     await PrintSessionStorage.SetHasEjectedSession(session.Id);
                 }
             },

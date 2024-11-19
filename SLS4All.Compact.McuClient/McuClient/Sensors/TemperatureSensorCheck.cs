@@ -33,7 +33,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly IOptions<TemperatureSensorCheckOptions> _options;
         private readonly McuManager _manager;
         private readonly IMcuTemperatureSensor _sensor;
-        private readonly object _syncRoot = new();
+        private readonly Lock _syncRoot = new();
         private SystemTimestamp _outOfRangeStartTime;
         private SystemTimestamp _readLastTime;
         private double _readLastTemperature;

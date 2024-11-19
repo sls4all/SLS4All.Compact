@@ -76,13 +76,20 @@ namespace SLS4All.Compact
             CompactServiceCollectionExtensions.ScanAssemblies.Add(typeof(Mesh).Assembly);
             CompactServiceCollectionExtensions.ScanAssemblies.Add(typeof(BitmapSliceProcessor).Assembly);
 
-            using (var host = CreateHostBuilder<Startup>(args).Build())
+            var builder = WebApplication.CreateBuilder(args);
+            PrepareConfiguration(builder.Environment, args, builder.Configuration);
+            
+            var startup = new Startup(builder.Configuration);
+            startup.ConfigureServices(builder.Services);
+
+            using (var app = builder.Build())
             {
-                var logger = host.Services.GetRequiredService<ILogger<Program>>();
+                var logger = app.Services.GetRequiredService<ILogger<Program>>();
                 try
                 {
+                    startup.ConfigureApp(logger, app);
                     logger.LogInformation($"Host is starting to run at {DateTime.UtcNow} UTC");
-                    await host.RunAsync();
+                    await app.RunAsync();
                     logger.LogInformation($"Host has finished running at {DateTime.UtcNow} UTC");
                 }
                 catch (Exception ex)
@@ -91,6 +98,17 @@ namespace SLS4All.Compact
                     throw;
                 }
             }
+        }
+
+        private static void PrepareConfiguration(IHostEnvironment env, string[] args, ConfigurationManager manager)
+        {
+            SetupConfigurationBuilder(args, env, manager);
+            var optionsWriterFiles = UserProfileAppDataWriter.GetPrivateOptionsFilenames(
+                manager,
+                StartupBase.AppDataWriterSection,
+                StartupBase.OptionsWriterTypes.ToArray());
+            foreach (var filename in optionsWriterFiles)
+                manager.AddJsonFile(filename, optional: true, reloadOnChange: true);
         }
 
         protected static void SetMinThreads()
@@ -106,24 +124,6 @@ namespace SLS4All.Compact
                 ThreadPool.SetMinThreads(newWorkerThread, newCompletionPortThreads);
             }
         }
-
-        public static IHostBuilder CreateHostBuilder<TStartup>(string[] args)
-            where TStartup : class
-            => Host.CreateDefaultBuilder(args)
-                .ConfigureAppConfiguration((context, builder) =>
-                {
-                    var intermediate = SetupConfigurationBuilder(args, context, builder);
-                    var optionsWriterFiles = UserProfileAppDataWriter.GetPrivateOptionsFilenames(
-                        intermediate,
-                        StartupBase.AppDataWriterSection,
-                        StartupBase.OptionsWriterTypes.ToArray());
-                    foreach (var filename in optionsWriterFiles)
-                        builder.AddJsonFile(filename, optional: true, reloadOnChange: true);
-                })
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseStartup<TStartup>();
-                });
 
         private static bool ExistsConfigurationFile(string path)
         {
@@ -159,9 +159,8 @@ namespace SLS4All.Compact
             }
         }
 
-        private static IConfigurationRoot SetupConfigurationBuilder(string[] args, HostBuilderContext context, IConfigurationBuilder builder)
+        private static void SetupConfigurationBuilder(string[] args, IHostEnvironment env, ConfigurationManager manager)
         {
-            var env = context.HostingEnvironment;
             const string userFile = "appsettings.user";
             const int defaultOrder = 0;
             const int userOrder = 1;
@@ -172,8 +171,7 @@ namespace SLS4All.Compact
                 (userOrder, userFile),
                 (userOrder, $"appsettings.{env.EnvironmentName}.user"),
             };
-            var initalConfig = builder.Build();
-            var publicOptionsDirectory = UserProfileAppDataWriter.GetPublicOptionsDirectory(initalConfig, StartupBase.ApplicationSection);
+            var publicOptionsDirectory = UserProfileAppDataWriter.GetPublicOptionsDirectory(manager, StartupBase.ApplicationSection);
             Directory.CreateDirectory(publicOptionsDirectory);
             var userFilePath = Path.Combine(publicOptionsDirectory, userFile);
             var userFilePathToml = userFilePath + ".toml";
@@ -188,11 +186,13 @@ namespace SLS4All.Compact
                     Property4 = [ 1, 2, 3 ]
                     Property5.SubProperty = "something"
                     """);
+            var minimumSources = manager.Sources.OfType<ChainedConfigurationSource>().ToArray();
 
             string[] Apply(IConfigurationBuilder builder)
             {
-                while (builder.Sources.Count > 1)
-                    builder.Sources.RemoveAt(builder.Sources.Count - 1);
+                builder.Sources.Clear();
+                foreach (var source in minimumSources)
+                    builder.Sources.Add(source);
 
                 if (env.IsDevelopment() && env.ApplicationName is { Length: > 0 })
                 {
@@ -206,7 +206,7 @@ namespace SLS4All.Compact
                 var files = new List<string>();
                 foreach (var item in loadedFiles.OrderBy(x => x.order))
                 {
-                    if (Startup.AppsettingsSafeModeEnabled && (item.filename == userFilePath || item.filename == userFile))
+                    if (Startup.AppsettingsSafeModeEnabled && Path.GetFileName(item.filename) == userFile)
                         continue;
                     var publicFilename = Path.Combine(publicOptionsDirectory, item.filename);
                     string filename = !Startup.AppsettingsSafeModeEnabled && ExistsConfigurationFile(publicFilename)
@@ -225,14 +225,45 @@ namespace SLS4All.Compact
             }
             while (true)
             {
-                Apply(builder);
-
-                IConfigurationRoot config;
+                var config = new ConfigurationManager();
                 try
                 {
-                    config = builder.Build();
+                    Apply(config);
+
+                    var options = new ApplicationOptions();
+                    config.Bind(StartupBase.ApplicationSection, options);
+                    var modified = false;
+                    foreach (var include in options.Includes)
+                    {
+                        if (!string.IsNullOrWhiteSpace(include) &&
+                            !loadedFiles.Any(x => x.filename == include))
+                        {
+                            loadedFiles.Add((defaultOrder, include));
+                            modified = true;
+                        }
+                    }
+                    foreach (var dependency in options.Dependencies.Values.Where(x => x.IsEnabled))
+                    {
+                        if (!loadedFiles.Any(x => x.filename == dependency.Filename))
+                        {
+                            var beforeIndex = loadedFiles.FindIndex(x => x.filename == dependency.Before);
+                            var afterIndex = loadedFiles.FindIndex(x => x.filename == dependency.After);
+                            if (beforeIndex != -1)
+                                loadedFiles.Insert(beforeIndex, (loadedFiles[beforeIndex].order, dependency.Filename));
+                            else if (afterIndex != -1)
+                                loadedFiles.Insert(afterIndex + 1, (loadedFiles[afterIndex].order, dependency.Filename));
+                            else
+                                loadedFiles.Add((defaultOrder, dependency.Filename));
+                            modified = true;
+                        }
+                    }
+                    if (!modified)
+                    {
+                        Startup.ConfigurationSources = Apply(manager); // reset streams
+                        break;
+                    }
                 }
-                catch (Exception ex) when (!Startup.AppsettingsSafeModeEnabled && 
+                catch (Exception ex) when (!Startup.AppsettingsSafeModeEnabled &&
                     (ex is JsonException || ex is TomlException || ex is FormatException || ex is InvalidDataException))
                 {
                     Startup.AppsettingsSafeModeException = ex;
@@ -241,37 +272,9 @@ namespace SLS4All.Compact
                     Console.WriteLine($"Will try to build configuration without user overridable files!");
                     continue;
                 }
-                var options = new ApplicationOptions();
-                config.Bind(StartupBase.ApplicationSection, options);
-                var modified = false;
-                foreach (var include in options.Includes)
+                finally
                 {
-                    if (!string.IsNullOrWhiteSpace(include) &&
-                        !loadedFiles.Any(x => x.filename == include))
-                    {
-                        loadedFiles.Add((defaultOrder, include));
-                        modified = true;
-                    }
-                }
-                foreach (var dependency in options.Dependencies.Values.Where(x => x.IsEnabled))
-                {
-                    if (!loadedFiles.Any(x => x.filename == dependency.Filename))
-                    {
-                        var beforeIndex = loadedFiles.FindIndex(x => x.filename == dependency.Before);
-                        var afterIndex = loadedFiles.FindIndex(x => x.filename == dependency.After);
-                        if (beforeIndex != -1)
-                            loadedFiles.Insert(beforeIndex, (loadedFiles[beforeIndex].order, dependency.Filename));
-                        else if (afterIndex != -1)
-                            loadedFiles.Insert(afterIndex + 1, (loadedFiles[afterIndex].order, dependency.Filename));
-                        else
-                            loadedFiles.Add((defaultOrder, dependency.Filename));
-                        modified = true;
-                    }
-                }
-                if (!modified)
-                {
-                    Startup.ConfigurationSources = Apply(builder); // reset streams
-                    return config;
+                    config.Dispose();
                 }
             }
         }

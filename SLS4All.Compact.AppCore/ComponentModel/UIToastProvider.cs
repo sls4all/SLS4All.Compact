@@ -42,7 +42,7 @@ namespace SLS4All.Compact.ComponentModel
         private readonly IObjectFactory<IMelodyClient, object> _melodyClient;
         private readonly ConcurrentDictionary<ToastMessage, bool> _messages;
         private readonly TaskQueue _taskQueue;
-        private readonly object _melodyLock = new();
+        private readonly Lock _melodyLock = new();
         private CancellationTokenSource? _melodyCancel;
 
         public IEnumerable<ToastMessage> Messages => _messages.Keys;

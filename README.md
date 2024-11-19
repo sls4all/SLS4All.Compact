@@ -31,7 +31,7 @@ token as a password to pull the packages and build the project.
 [Full GitHub NuGet packages documentation.](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry)
 
 ## Building
-All sources in this repository are compilable using [.NET 8.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0). 
+All sources in this repository are compilable using [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0). 
 We recommend free [Visual Studio Community](https://visualstudio.microsoft.com/cs/vs/community/) for development. Suggested minumum workloads when installing Visual Studio are: 
 .NET desktop development, ASP.NET and web development, Node.js development.
 
@@ -48,7 +48,7 @@ cd SLS4All.Compact/SLS4All.Compact.PrinterApp
 dotnet build -c Release
 dotnet publish -c Release -r linux-arm64 --self-contained
 
-cd bin\Release\net8.0\linux-arm64\publish
+cd bin/Release/net9.0/linux-arm64/publish
 
 # contents of current directory should be copied 
 # to the embedded (or development) computer, properly configured and

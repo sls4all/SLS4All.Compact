@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Printer;
 using SLS4All.Compact.Threading;
@@ -17,9 +16,9 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Power
 {
-    public record PowermanState(double MaxPower, double CurrentPower, double RequiredPower, string PoweredPinsDescription) : INotification;
-    public record PowerEntry(SystemTimestamp Timestamp, string Id, double Power) : INotification;
-    public record PowerState(PowerEntry[] Entries, PowermanState Powerman) : INotification
+    public record PowermanState(double MaxPower, double CurrentPower, double RequiredPower, string PoweredPinsDescription);
+    public record PowerEntry(SystemTimestamp Timestamp, string Id, double Power);
+    public record PowerState(PowerEntry[] Entries, PowermanState Powerman)
     {
         public bool TryGetEntry(string id, [MaybeNullWhen(false)] out PowerEntry entry)
         {

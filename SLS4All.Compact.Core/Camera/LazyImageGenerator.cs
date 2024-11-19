@@ -21,6 +21,7 @@ using System.Dynamic;
 using System.IO;
 using System.IO.Pipelines;
 using System.Linq;
+using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -29,16 +30,19 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Camera
 {
-    public abstract class ImageGrabber : IDisposable
+    public abstract class LazyImageGenerator : IDisposable, IImageGenerator
     {
         private readonly ILogger _logger;
+        private readonly Lock _lastMimeLock = new();
+        private MimeData _lastMime;
+        private bool _grabberRunning;
         private CancellationTokenSource _cancelSource;
         private Task? _grabberTask;
 
         protected CancellationTokenSource CancelSource => _cancelSource;
         public AsyncEvent<MimeData> ImageCaptured { get; } = new();
 
-        public ImageGrabber(
+        public LazyImageGenerator(
             ILogger logger)
         {
             _logger = logger;
@@ -106,6 +110,10 @@ namespace SLS4All.Compact.Camera
         {
             try
             {
+                lock (_lastMimeLock)
+                {
+                    _grabberRunning = true;
+                }
                 cancel.ThrowIfCancellationRequested();
                 await RunGrabberOverride(cancel);
             }
@@ -114,6 +122,24 @@ namespace SLS4All.Compact.Camera
                 if (!cancel.IsCancellationRequested)
                     _logger.LogError(ex, $"Failed to start/run grabber task");
             }
+            finally
+            {
+                lock (_lastMimeLock)
+                {
+                    _grabberRunning = false;
+                    _lastMime = default;
+                }
+            }
+        }
+
+        protected ValueTask OnImageCaptured(MimeData data, CancellationToken cancel)
+        {
+            lock (_lastMimeLock)
+            {
+                if (_grabberRunning)
+                    _lastMime = data;
+            }
+            return ImageCaptured.Invoke(data, cancel);
         }
 
         protected abstract Task RunGrabberOverride(CancellationToken cancel);
@@ -128,6 +154,15 @@ namespace SLS4All.Compact.Camera
         {
             _cancelSource.Cancel();
             ReleaseTemporaryResources();
+        }
+
+        public bool TryGetLastImage(out MimeData data)
+        {
+            lock (_lastMimeLock)
+            {
+                data = _lastMime;
+            }
+            return !data.IsEmpty;
         }
     }
 }

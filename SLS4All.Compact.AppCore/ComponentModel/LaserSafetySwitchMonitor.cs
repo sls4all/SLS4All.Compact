@@ -10,6 +10,7 @@ using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Helpers;
 using SLS4All.Compact.IO;
 using SLS4All.Compact.Power;
+using SLS4All.Compact.Printer;
 using SLS4All.Compact.Printing;
 using SLS4All.Compact.Threading;
 using System;
@@ -31,22 +32,22 @@ namespace SLS4All.Compact.ComponentModel
         private readonly IToastProvider _toastProvider;
         private readonly IInputClient _inputClient;
         private readonly IPowerClient _powerClient;
-        private readonly IObjectFactory<IPrintingService, object> _printingServiceFactory;
+        private readonly IPrinterSafetySessionManager _safetySessionManager;
         private volatile bool _shown;
-        private volatile bool _shownWhilePrinting;
+        private volatile bool _shownWhileNeeded;
 
         public LaserSafetySwitchMonitor(
             IOptionsMonitor<LaserSafetySwitchMonitorOptions> options,
             IToastProvider toastProvider,
             IInputClient inputClient,
             IPowerClient powerClient,
-            IObjectFactory<IPrintingService, object> printingServiceFactory)
+            IPrinterSafetySessionManager safetySessionManager)
         {
             _options = options;
             _toastProvider = toastProvider;
             _inputClient = inputClient;
             _powerClient = powerClient;
-            _printingServiceFactory = printingServiceFactory;
+            _safetySessionManager = safetySessionManager;
 
             _powerClient.StateChangedHighFrequency.AddHandler(OnPowerState);
             _inputClient.StateChangedHighFrequency.AddHandler(OnInputState);
@@ -69,7 +70,9 @@ namespace SLS4All.Compact.ComponentModel
         private ValueTask OnPowerState(PowerState state, CancellationToken cancel)
         {
             var options = _options.CurrentValue;
-            if (_powerClient.TryGetRecentPower(
+            var needsLaser = _safetySessionManager.NeedsLaser;
+            if (needsLaser &&
+                _powerClient.TryGetRecentPower(
                     _powerClient.LaserId, 
                     out _, 
                     out var laserPower, 
@@ -93,16 +96,12 @@ namespace SLS4All.Compact.ComponentModel
             // reset `shown` if stopped printing
             if (_shown)
             {
-                using (var printingService = _printingServiceFactory.CreateDisposable())
+                if (needsLaser)
+                    _shownWhileNeeded = true;
+                else if (_shownWhileNeeded)
                 {
-                    var isPrinting = printingService.Instance.IsPrinting;
-                    if (isPrinting)
-                        _shownWhilePrinting = true;
-                    else if (_shownWhilePrinting)
-                    {
-                        _shownWhilePrinting = false;
-                        _shown = false;
-                    }
+                    _shownWhileNeeded = false;
+                    _shown = false;
                 }
             }
             return ValueTask.CompletedTask;

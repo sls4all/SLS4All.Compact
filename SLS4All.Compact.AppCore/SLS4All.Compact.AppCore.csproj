@@ -2,7 +2,7 @@
 	<Import Project="..\SharedProperties.props" />
 
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -13,6 +13,11 @@
 		<RootNamespace>SLS4All.Compact</RootNamespace>
 		<!--<GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>-->
     <!--<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
+
+    <!-- https://github.com/dotnet/sdk/issues/43470 -->
+    <StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
+    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
+    <EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -28,10 +33,10 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.151.2.494"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.151.2.494"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.151.2.494"/>
-		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.10" />
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.182.0.562"/>
+		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="9.0.0" />
 	</ItemGroup>
 
 	<!--<ItemGroup>
@@ -44,7 +49,7 @@
 		<None Update="Pages\BackupsPage.razor.css" CssScope="b-backups" />
 		<None Update="Pages\MaintenancePage.razor.css" CssScope="b-maintenance" />
 		<None Update="Pages\Test2D.razor.css" CssScope="b-test2d" />
-		<None Update="Pages\Wizards\AnalyseHeatingWizard.razor.css" CssScope="b-analyse-heating-wizard"/>
+		<None Update="Pages\Wizards\AnalyseHeatingWizard.razor.css" CssScope="b-analyse-heating-wizard" />
 		<None Update="Pages\Wizards\GalvoCalibrationWizard.razor.css" CssScope="b-calibration-wizard" />
 		<None Update="Pages\Wizards\ThermoSetupWizard.razor.css" CssScope="b-thermo-setup-wizard" />
 		<None Update="Pages\Wizards\PrintWizard.razor.css" CssScope="b-print-wizard" />
@@ -79,7 +84,7 @@
 		<WebPackSource Include="Scripts/*.ts" />
 		<WebPackSource Include="Scripts/*.js" />
 		<WebPackSource Include="Scripts/*.css" />
-		<EmbeddedResource Include="Temperature\BedMatrixGrabber.ttf" />
+		<EmbeddedResource Include="Temperature\BedMatrixFont.ttf" />
 		<EmbeddedResource Include="Helpers\ImageStreamingPlaceholder.gif" />
 		<EmbeddedResource Include="appsettings.storage-default.json" />
 		<WebPackTarget Include="wwwroot/bundles/bundle.js" />
@@ -99,7 +104,7 @@
 		<Touch Files="$(OutputPath)/.npm-install-stamp" AlwaysCreate="true" />
 	</Target>
 
-	<Target Name="NpmBuild" Inputs="@(WebPackSource);@(WebPackStamp)" Outputs="@(WebPackTarget)" BeforeTargets="BeforePublish" AfterTargets="CompileTypeScriptWithTSConfig" DependsOnTargets="NpmInstall">
+	<Target Name="NpmBuild" Inputs="@(WebPackSource);@(WebPackStamp)" Outputs="@(WebPackTarget)" BeforeTargets="BeforePublish;ResolveProjectStaticWebAssets" AfterTargets="CompileTypeScriptWithTSConfig" DependsOnTargets="NpmInstall">
 		<Message Text="### NPM RUN BUILD ###" Importance="high" />
 		<Error Condition="!Exists('Scripts/app.js')" Text="Missing TS compiled files!" />
 		<Delete Files="@(WebPackTarget)" />

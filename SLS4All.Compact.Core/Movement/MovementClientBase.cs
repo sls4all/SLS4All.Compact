@@ -141,7 +141,7 @@ namespace SLS4All.Compact.Movement
         public ValueTask DwellCode(ChannelWriter<CodeCommand> channel, TimeSpan delay, CancellationToken cancel = default)
             => channel.WriteAsync(_dwellFormatter.Create((float)delay.TotalSeconds), cancel);
 
-        public abstract Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        public abstract Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public abstract ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
@@ -206,7 +206,7 @@ namespace SLS4All.Compact.Movement
             }
         }
 
-        public abstract TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null);
+        public abstract TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext ? context = null);
 
         public abstract ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 

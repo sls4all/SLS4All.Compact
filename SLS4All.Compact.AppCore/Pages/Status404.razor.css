@@ -1,0 +1,13 @@
+﻿.dummy {
+}
+
+.printing-notification {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+}
+
+    .printing-notification .btn {
+        font-size: 17px;
+    }
+

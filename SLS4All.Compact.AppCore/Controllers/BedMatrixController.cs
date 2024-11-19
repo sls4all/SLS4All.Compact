@@ -39,7 +39,7 @@ namespace SLS4All.Compact.Controllers
         public bool IsEnabled { get; set; } = true;
     }
 
-    public class BedMatrixControllerOptions : BedMatrixGrabberOptions
+    public class BedMatrixControllerOptions : BedMatrixImageGeneratorOptions
     {
     }
 
@@ -55,7 +55,7 @@ namespace SLS4All.Compact.Controllers
     [ApiController]
     public class BedMatrixController : ControllerBase
     {
-        private readonly static ConcurrentDictionary<(double Average, double RefreshRate, bool Cropped, UnitConverterFlags Units, Type Type), BedMatrixGrabber> _grabbers = new();
+        private readonly static ConcurrentDictionary<(double Average, double RefreshRate, bool Cropped, UnitConverterFlags Units, Type Type), BedMatrixImageGenerator> _generators = new();
         private readonly ITemperatureCamera _camera;
         private readonly ILogger<BedMatrixController> _logger;
         private readonly IOptionsMonitor<BedMatrixControllerOptions> _options;
@@ -76,10 +76,10 @@ namespace SLS4All.Compact.Controllers
         [HttpGet("image/{id}")]
         public Task Image(string id, double seconds, [FromQuery] BedMatrixControllerQuery query, CancellationToken cancel)
         {
-            var grabber = GetGrabber(query.Average ?? 0, query);
+            var generator = GetGenerator(query.Average ?? 0, query);
             return _streamingHelper.PullImage(
                 id,
-                grabber.ImageCaptured,
+                generator,
                 Response,
                 cancel);
         }
@@ -87,16 +87,16 @@ namespace SLS4All.Compact.Controllers
         [HttpGet("average/{id}/{seconds}")]
         public Task Average(string id, double seconds, [FromQuery] BedMatrixControllerQuery query, CancellationToken cancel)
         {
-            var grabber = GetGrabber(query.Average ?? seconds, query);
+            var generator = GetGenerator(query.Average ?? seconds, query);
             return _streamingHelper.PullImage(
                 id,
-                grabber.ImageCaptured,
+                generator,
                 Response,
                 cancel);
         }
 
-        private BedMatrixGrabber GetGrabber(double seconds, BedMatrixControllerQuery query)
-            => _grabbers.GetOrAdd((seconds, query.RefreshRate, query.Cropped, query.Units, GetType()), key => new BedMatrixGrabber(
+        private BedMatrixImageGenerator GetGenerator(double seconds, BedMatrixControllerQuery query)
+            => _generators.GetOrAdd((seconds, query.RefreshRate, query.Cropped, query.Units, GetType()), key => new BedMatrixImageGenerator(
                 _logger,
                 _options,
                 _camera,

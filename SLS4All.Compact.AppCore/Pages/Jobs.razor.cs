@@ -1071,7 +1071,7 @@ namespace SLS4All.Compact.Pages
                 return default;
             }
             await Sync(nestingOnly: true, cancelPrev: true);
-            var setup = await PrintingGlobal.CreateSetup(profile, powerSettings);
+            var setup = await PrintingGlobal.CreateSetup(job.Job, profile, powerSettings);
             var instances = await GetJobNestedSlicingMeshesForPrint(setup);
             return new PrintingParameters(
                 powerSettings, 

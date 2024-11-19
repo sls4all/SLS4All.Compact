@@ -50,13 +50,13 @@ namespace SLS4All.Compact.Nesting
         private readonly SortedDictionary<long, NestingInstance> _instances = new();
         private readonly ConcurrentStack<INester> _nesterBag = new();
         private readonly Random _random = new Random();
-        private readonly object _locker = new();
+        private readonly Lock _locker = new();
         private readonly BackgroundTask _collapseTask = new();
         private volatile ExhaustiveNesterVoxelChamber? _voxelChamber;
         private long _voxelChamberVersion;
         private long _lastInstanceIndex;
 
-        protected object Locker => _locker;
+        protected Lock Locker => _locker;
         protected Dictionary<string, NestingMesh> MeshesNeedsLock => _meshes;
         protected SortedDictionary<long, NestingInstance> InstancesNeedsLock => _instances;
 

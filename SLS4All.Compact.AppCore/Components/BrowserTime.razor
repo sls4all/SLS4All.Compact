@@ -16,22 +16,60 @@
         switch (days)
         {
             case 0:
-                <text>today </text>
+                if (!ShortDisplay)
+                {
+                    <text>today </text>
+                }
                 break;
             case 1:
-                <text>tomorrow </text>
+                if (!ShortDisplay)
+                {
+                    <text>tomorrow </text>
+                }
+                else
+                {
+                    <text>+1d </text>
+                }
                 break;
             case 2:
-                <text>overmorrow </text>
+                if (!ShortDisplay)
+                {
+                    <text>overmorrow </text>
+                }
+                else
+                {
+                    <text>+2d </text>
+                }
                 break;
             case -1:
-                <text>yesterday </text>
+                if (!ShortDisplay)
+                {
+                    <text>yesterday </text>
+                }
+                else
+                {
+                    <text>-1d </text>
+                }
                 break;
             case int v when v > 0:
-                <text>+@days days </text>
+                if (!ShortDisplay)
+                {
+                    <text>+@days days </text>
+                }
+                else
+                {
+                    <text>+@(days)d</text>
+                }
                 break;
             case int v when v < 0:
-                <text>@days days </text>
+                if (!ShortDisplay)
+                {
+                    <text>-@days days </text>
+                }
+                else
+                {
+                    <text>-@(days)d</text>
+                }
                 break;
         }        
     }
@@ -45,6 +83,8 @@
     public DateTime? DateTime { get; set; } = System.DateTime.UtcNow;
     [Parameter]
     public bool EnableSmartDate { get; set; }
+    [Parameter]
+    public bool ShortDisplay { get; set; }
     [Parameter]
     public string? Format { get; set; }
     [CascadingParameter]

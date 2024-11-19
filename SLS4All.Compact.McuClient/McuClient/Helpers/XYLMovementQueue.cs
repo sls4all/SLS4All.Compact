@@ -4,8 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Lexical.FileSystem;
-using Lexical.FileSystem.Decoration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Collections;
@@ -236,7 +234,7 @@ namespace SLS4All.Compact.McuClient.Helpers
         private readonly IOptionsMonitor<XYLMovementQueueOptions> _options;
         private readonly McuPrinterClient _printerClient;
         private readonly McuMovementClient _movementClient;
-        private readonly object _flushLock = new();
+        private readonly Lock _flushLock = new();
         private readonly Timer _flushTimer;
         private readonly PriorityScheduler _flushScheduler1;
         private readonly PriorityScheduler _flushScheduler2;
@@ -251,7 +249,7 @@ namespace SLS4All.Compact.McuClient.Helpers
         /// Gets synchronization object acquired while flushing. Master lock cannot be held when locking <see cref="FlushLock"/>!
         /// While in flush lock, the XYL steppers timestamps might be updated.
         /// </summary>
-        public object FlushLock => _flushLock;
+        public Lock FlushLock => _flushLock;
         /// <summary>
         /// If flush is scheduled, this is maxiumum time after it will happen. Otherwise set to <see cref="TimeSpan.MaxValue"/>.
         /// Read in flush and then master lock.
@@ -424,19 +422,16 @@ namespace SLS4All.Compact.McuClient.Helpers
         {
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
             Debug.Assert(!manager.IsMasterQueueLocked());
-            var lockTaken = false;
+            if (!_flushLock.TryEnter()) // if we are currently flushing, the flush method will automatically reschedule/process any sources remainder
+                return;
             try
             {
-                Monitor.TryEnter(_flushLock, ref lockTaken);
-                if (!lockTaken) // if we are currently flushing, the flush method will automatically reschedule/process any sources remainder
-                    return;
                 var options = _options.CurrentValue;
                 ScheduleFlushInner(manager, false, false, options, context);
             }
             finally
             {
-                if (lockTaken)
-                    Monitor.Exit(_flushLock);
+                _flushLock.Exit();
             }
         }
 
@@ -494,50 +489,43 @@ namespace SLS4All.Compact.McuClient.Helpers
             McuMinClockFunc? minClock,
             bool dryRun)
         {
-            var posStart = state.FlushingData.Value;
             var timeStart = state.FlushingData.Time;
             var elapsed = timeEnd - timeStart;
+            var posStart = state.FlushingData.Value;
             Debug.Assert(elapsed >= 0);
 
-            if (posStart == posEnd)
+            if (elapsed > 0)
             {
-                QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
-                state.FlushingData.Time = timeEnd;
-            }
-            else if (elapsed > 0)
-            {
-                var velocity = Math.Abs(posEnd - posStart) / elapsed;
-                var steps = stepper.GetSteps(velocity, posStart, posEnd, state.FlushingData.PrecisionRemainder);
-                if (steps.Count == 0)
+                if (posStart == posEnd)
                 {
                     QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
                 }
                 else
                 {
-                    var positive = posEnd > posStart;
-                    timestamp = stepper.QueueStep(
-                        positive,
-                        steps.PrecisionInterval,
-                        steps.Count,
-                        0,
-                        timestamp,
-                        now: now,
-                        minClock: minClock,
-                        dryRun: dryRun);
-
-                    state.FlushingData.PrecisionRemainder = steps.PrecisionRemainder;
-                    state.FlushingData.Value = steps.FinalPosition;
-                    state.FlushingData.Time = timeEnd;
+                    var velocity = Math.Abs(posEnd - posStart) / elapsed;
+                    var steps = stepper.GetSteps(velocity, posStart, posEnd, state.FlushingData.PrecisionRemainder);
+                    if (steps.Count == 0)
+                    {
+                        QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                    }
+                    else
+                    {
+                        var positive = posEnd > posStart;
+                        timestamp = stepper.QueueStep(
+                            positive,
+                            steps.PrecisionInterval,
+                            steps.Count,
+                            0,
+                            timestamp,
+                            now: now,
+                            minClock: minClock,
+                            dryRun: dryRun);
+                        state.FlushingData.PrecisionRemainder = steps.PrecisionRemainder;
+                    }
                 }
             }
-            else
-            {
-#if DEBUG
-                var start = stepper.GetSteps(posStart);
-                var end = stepper.GetSteps(posEnd);
-                Debug.Assert(start.Count == end.Count);
-#endif
-            }
+            state.FlushingData.Time = timeEnd;
+            state.FlushingData.Value = posEnd;
         }
 
         private void SetLaserFlushingInner(
@@ -756,6 +744,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                         now,
                         null,
                         false);
+                    state.FlushingData.Time = fallbackTime;
                 }
                 else // nothing to do
                     return;
@@ -837,9 +826,9 @@ namespace SLS4All.Compact.McuClient.Helpers
                         copyTimestamp = SystemTimestamp.Now;
 
                         // process if there is anything
-                        //if (_stateX.FlushingData.Intermediate.Count > 0 ||
-                        //    _stateY.FlushingData.Intermediate.Count > 0 ||
-                        //    _stateL.FlushingData.Intermediate.Count > 0)
+                        if (_stateX.FlushingData.Intermediate.Count > 0 ||
+                            _stateY.FlushingData.Intermediate.Count > 0 ||
+                            _stateL.FlushingData.Intermediate.Count > 0)
                         {
                             // ensure that `now` is not behind current stepper timestamps (may happen after XYL reset)
                             var now = SystemTimestamp.Now;
@@ -934,13 +923,13 @@ namespace SLS4All.Compact.McuClient.Helpers
                                 }
                             }
                         }
-                        //else
-                        //{
-                        //    Debug.Assert(!immediateRetry);
-                        //    stepperX.QueueFlush();
-                        //    stepperY.QueueFlush();
-                        //    stepperL.QueueFlush();
-                        //}
+                        else
+                        {
+                            Debug.Assert(!immediateRetry);
+                            stepperX.QueueFlush();
+                            stepperY.QueueFlush();
+                            stepperL.QueueFlush();
+                        }
 
                         var endTimestamp = SystemTimestamp.Now;
                         var elapsed = endTimestamp - startTimestamp;

@@ -1,0 +1,12 @@
+<Router AppAssembly="@typeof(StartupBase).Assembly">
+    <Found Context="routeData">
+        <RedirectingRouteView RouteData="@routeData" OriginalRouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+    </Found>
+</Router>
+
+@code{
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+}

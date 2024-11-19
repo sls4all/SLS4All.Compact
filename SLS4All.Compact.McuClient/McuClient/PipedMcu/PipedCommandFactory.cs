@@ -18,7 +18,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 {
     public sealed class PipedCommandFactory
     {
-        private readonly object _locker = new();
+        private readonly Lock _locker = new();
         private readonly ArenaAllocator<byte> _arena;
         private readonly IMcu _mcu;
         private FrozenDictionary<int, ConcurrentBag<McuCommand>> _bags = FrozenDictionary<int, ConcurrentBag<McuCommand>>.Empty;

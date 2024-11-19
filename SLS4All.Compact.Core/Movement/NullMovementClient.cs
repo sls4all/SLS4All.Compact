@@ -49,7 +49,7 @@ namespace SLS4All.Compact.Movement
         public ValueTask DwellCode(ChannelWriter<CodeCommand> channel, TimeSpan delay, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
-        public Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false,IPrinterClientCommandContext ? context = null, CancellationToken cancel = default)
@@ -70,7 +70,7 @@ namespace SLS4All.Compact.Movement
         public ValueTask MoveContinuous(MovementAxis axis, bool positive, double speed, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
-        public TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null)
+        public TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext ? context = null)
             => TimeSpan.Zero;
 
         public ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)

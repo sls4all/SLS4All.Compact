@@ -14,7 +14,9 @@ namespace SLS4All.Compact.Printer
 {
     public interface IPrinterSafetySessionManager
     {
-        Task<bool> CheckReadyForSafetySession(CancellationToken cancel);
-        Task<IAsyncDisposable> BeginSafetySession(CancellationToken cancel);
+        bool HasSession { get; }
+        bool NeedsLaser { get; }
+
+        Task<IAsyncDisposable> BeginSafetySession(bool needsLaser, CancellationToken cancel);
     }
 }

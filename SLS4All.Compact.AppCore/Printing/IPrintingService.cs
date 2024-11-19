@@ -8,6 +8,7 @@ using SLS4All.Compact.Collections;
 using SLS4All.Compact.Nesting;
 using SLS4All.Compact.Slicing;
 using SLS4All.Compact.Storage.PrinterSettings;
+using SLS4All.Compact.Storage.PrintJobs;
 using SLS4All.Compact.Storage.PrintProfiles;
 using SLS4All.Compact.Threading;
 using System.Collections.Concurrent;
@@ -23,12 +24,15 @@ namespace SLS4All.Compact.Printing
         CoolNow,
     }
 
+    public record class LastStreamingLayerInfo(int Index, int Count);
+
     public interface IPrintingService
     {
         public static WeakConcurrentDictionary<string, IPrintingService> Services { get; } = new();
         string Id { get; }
         BackgroundTask<PrintingStatus> BackgroundTask { get; }
         long PreviewVersion { get; }
+        LastStreamingLayerInfo? LastStreamingLayer { get; }
         bool IsPrinting { get; }
         int PreviewLayerFinalCount { get; }
         PrintedLayer[] PreviewLayers { get; }
@@ -36,7 +40,7 @@ namespace SLS4All.Compact.Printing
 
         void Clear();
         Task AnalyseHeating(PrintSetup setup, string jobName, CancellationToken cancel);
-        Task<PrintSetup> CreateSetup(PrintProfile profile, PrinterPowerSettings powerSettings);
+        Task<PrintSetup> CreateSetup(IPrintJob? job, PrintProfile profile, PrinterPowerSettings powerSettings);
         PrintingServiceLayerStats GetLayerStats(PrintingParameters parameters);
         Task PlotLayer(
             INestingService? nesting, 

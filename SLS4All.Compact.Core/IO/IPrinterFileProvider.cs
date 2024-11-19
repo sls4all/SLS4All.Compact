@@ -4,8 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Lexical.FileSystem;
-using Lexical.FileSystem.Decoration;
 using Microsoft.Extensions.FileProviders;
 using System;
 using System.Collections.Generic;
@@ -16,23 +14,36 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.IO
 {
+    public interface IPrinterFileEntry
+    {
+        bool IsDirectory { get; }
+
+        string Path { get; }
+
+        string Name { get; }
+
+        DateTimeOffset LastModified { get; }
+
+        DateTimeOffset LastAccess { get; }
+    }
+
     public interface IPrinterFileProvider : IFileProvider
     {
-        IPrinterFileSystem FileSystem { get; }
-
-        void MoveFile(PrinterPath source, PrinterPath target);
+        void Move(PrinterPath source, PrinterPath target, bool overwrite);
         bool Exists(PrinterPath path);
         bool FileExists(PrinterPath path);
         bool DirectoryExists(PrinterPath path);
         string? Normalize(string? path);
         Stream OpenRead(PrinterPath filename);
+        void Delete(PrinterPath filename);
         string GetHash(PrinterPath filename);
         Stream CreateFile(PrinterPath filename);
         void CreateDirectory(PrinterPath filename);
-        void DeleteFile(PrinterPath filename);
-        IEntry? TryGetEntry(PrinterPath filename);
+        IPrinterFileEntry? TryGetEntry(PrinterPath filename);
         void CopyOverwrite(PrinterPath srcPath, PrinterPath dstPath);
         Task Eject(PrinterPath directory, CancellationToken cancel = default);
         bool IsEjectable(PrinterPath directory);
+        IEnumerable<IPrinterFileEntry> Browse(PrinterPath directory);
+        Stream Open(PrinterPath path, FileMode mode, FileAccess access, FileShare share);
     }
 }

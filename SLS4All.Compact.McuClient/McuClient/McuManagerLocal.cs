@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Lexical.FileSystem.Decoration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,9 +14,7 @@ using SLS4All.Compact.Helpers;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
-using SLS4All.Compact.McuClient.PipedMcu;
 using SLS4All.Compact.McuClient.Sensors;
-using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Temperature;
 using SLS4All.Compact.Threading;
 using System;
@@ -208,7 +205,7 @@ namespace SLS4All.Compact.McuClient
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
-            IPrinterSettingsStorage settingsStorage,
+            IPrinterSettings settingsStorage,
             IOptionsMonitor<McuStepperGlobalOptions>? optionsStepperGlobal = null,
             ITemperatureCamera? temperatureCamera = null)
             : base(loggerFactory, loggerFactory.CreateLogger<McuManager>(), options, appDataWriter, deviceFactories, settingsStorage)

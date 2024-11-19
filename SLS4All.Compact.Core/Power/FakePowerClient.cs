@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nito.AsyncEx;
@@ -42,9 +41,8 @@ namespace SLS4All.Compact.Power
 
         public FakePowerClient(
             ILogger<FakePowerClient> logger, 
-            IOptionsMonitor<FakePowerClientOptions> options,
-            IMediator mediator)
-            : base(logger, options, mediator)
+            IOptionsMonitor<FakePowerClientOptions> options)
+            : base(logger, options)
         {
             _logger = logger;
             _options = options;

@@ -44,7 +44,7 @@ namespace SLS4All.Compact.Printer
         private readonly ITemperatureClient _temperatureClient;
         private readonly IInputClient _inputClient;
         private readonly Dictionary<string, double> _shutdownTemperatures;
-        private readonly object _syncRoot = new();
+        private readonly Lock _syncRoot = new();
         private bool _temperaturesUnsafe;
 
         public PrinterShutdownMonitor(

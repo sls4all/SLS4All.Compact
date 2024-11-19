@@ -16,6 +16,16 @@ kill_descendants()
     kill $(list_descendants $$) >/dev/null 2>&1
 }
 
+sudo_grep_tee()
+{
+  FILENAME=$1
+  TEXT=$2
+  sudo cat "$FILENAME" | grep "$TEXT"
+  if [ $? -ne 0 ]; then
+    echo "$TEXT" | sudo tee -a "$FILENAME"
+  fi
+}
+
 trap 'kill_descendants' KILL INT TERM EXIT # just a precaution to not to keep anything running
 
 if [ -z "$BASEURL" ]; then
@@ -86,6 +96,9 @@ retVal=$?
 if [ $retVal -eq 1 ]; then # mode missing, add
     sudo sed -i 's|fsck.repair=|fsck.mode=force fsck.repair=|g' /boot/firmware/cmdline.txt
 fi
+
+# ensure we can disable paging (NOTE: this should primarily go to install script)
+sudo_grep_tee /etc/security/limits.conf "$USER    -    memlock  4294967296"
 
 # run
 while :; do

@@ -316,7 +316,11 @@
         var options = Options.CurrentValue;
         await CancelModal.Execute(async cancel =>
             {
-                await LayerClient.HomeBedsAndRecoater(0, cancel: cancel);
+                var setup = new HomeBedsAndRecoaterSetup
+                {
+                    PowderChamberDepth = 0,
+                };
+                await LayerClient.HomeBedsAndRecoater(setup, cancel: cancel);
             },
             titleText: "Please wait",
             bodyText: "Homing beds...",

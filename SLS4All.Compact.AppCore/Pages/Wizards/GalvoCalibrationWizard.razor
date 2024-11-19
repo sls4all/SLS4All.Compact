@@ -29,7 +29,6 @@
 @inject IInputClient InputClient
 @inject IMovementClient MovementClient
 @inject IValidationContextFactoryScoped ValidationContextFactory
-@inject IPrinterSettingsStorage SettingsStorage
 @inject IObjectFactory<IEmergencyHelper, object> EmergencyHelper
 @inject IPrinterSafetySessionManager SafetySession
 @inject IBedProjection Projection
@@ -355,7 +354,11 @@
         var options = Options.CurrentValue;
         await CancelModal.Execute(async cancel =>
             {
-                await LayerClient.HomeBedsAndRecoater(0, cancel: cancel);
+                var setup = new HomeBedsAndRecoaterSetup
+                {
+                    PowderChamberDepth = 0,
+                };
+                await LayerClient.HomeBedsAndRecoater(setup, cancel: cancel);
                 await MovementClient.MoveAux(MovementAxis.Z2, new MoveAuxItem
                     {
                         Relative = false,
@@ -374,8 +377,8 @@
     private async Task<PrinterPowerSettings?> GetPrinterPowerSettings()
     {
         var context = ValidationContextFactory.CreateContext();
-        var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
-        powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
+        var powerSettings = PrinterSettings.GetPowerSettingsDefaults();
+        powerSettings.MergeFrom(PrinterSettings.GetPowerSettings());
         var powerSettingsValidation = await powerSettings.Validate(context);
         if (!powerSettingsValidation!.IsValid)
         {
@@ -473,17 +476,17 @@
 
                     if (closedScript != null)
                     {
-                        Plotter.Clear();
+                        Plotter.Clear(true);
                         Logger.LogInformation($"Starting to print pattern");
                         watch = System.Diagnostics.Stopwatch.StartNew();
-                        await using (await SafetySession.BeginSafetySession(cancel))
+                        await using (await SafetySession.BeginSafetySession(true, cancel))
                         {
                             await Movement.HomeXY(cancel: cancel);
                             await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
                             await Movement.FinishMovement(cancel: cancel);
                         }
                         watch.Stop();
-                        Plotter.Clear();
+                        Plotter.Clear(true);
                         Logger.LogInformation($"Printed pattern in {watch.Elapsed}");
                     }
                 }

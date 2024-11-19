@@ -3,7 +3,7 @@
 [Kestrel.Endpoints.Http]
 Url = "http://0.0.0.0:80"
 
-[DefaultPrintProfileInitializer]
+[DefaultsInitializer]
 DefaultsDirectory = "Defaults/Inova"
 
 [ImageCodePlotter]

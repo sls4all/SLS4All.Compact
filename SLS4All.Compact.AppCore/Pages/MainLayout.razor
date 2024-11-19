@@ -41,8 +41,8 @@
 
 <CascadingValue Value="(IMainLayout)this" IsFixed="true">
     <div class="app-component"
-         style="transform: scale(@scaleXStr, @scaleYStr); @(isFullPage ? $"min-height: {heightStr} !important; height: {heightStr} !important" : ""); width: @widthStr !important; transform-origin: top left; overflow: hidden"
-         data-sa-theme="@_theme">
+    style="transform: scale(@scaleXStr, @scaleYStr); @(isFullPage ? $"min-height: {heightStr} !important; height: {heightStr} !important" : ""); width: @widthStr !important; transform-origin: top left; overflow: hidden"
+    data-sa-theme="@_theme">
         <main class="main @(isFullPage ? "h-100" : "")">
             <div class="page-loader">
                 <div class="page-loader__spinner">
@@ -480,14 +480,14 @@
                     </li>*@
                 </ul>
 
-                <div class="dropdown d-none d-md-inline-block">
-                    <div class="clock" data-toggle="dropdown">
+                <div class="dropdown">
+                    <div class="clock d-none d-md-inline-block" data-toggle="dropdown">
                         <div class="time">
                             <CurrentTime />
                         </div>
                     </div>
 
-                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block system-notifications">
+                    <div class="dropdown-menu dropdown-menu-right dropdown-menu--block system-notifications system-performance">
                         <div class="dropdown-header">
                             System Performance
                         </div>
@@ -647,6 +647,8 @@
 
     public void SetTitle(PrinterPageTitle? title)
     {
+        if (_title == title)
+            return;
         _title = title;
         StateHasChanged();
     }

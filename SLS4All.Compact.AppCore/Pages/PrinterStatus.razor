@@ -25,6 +25,7 @@
 @inject ICameraClient CameraClient
 @inject IPrintSessionStorage PrintSessionStorage
 @inject ICodePlotter Plotter
+@inject IPrinterSafetySessionManager SafetySessionManager
 
 <PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
 
@@ -35,7 +36,7 @@
                 Stop printing?
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             Do you really want to stop the current print?
         </div>
         <div class="modal-footer">
@@ -72,6 +73,7 @@
     var position = MovementClient.CurrentPosition;
     var power = PowerClient.CurrentState;
     var laserOn = PowerClient.HasRecentPower(PowerClient.LaserId);
+    var needsLaser = SafetySessionManager.NeedsLaser;
     var halogenOn = LightsClient.HasRecentLightPower();
     var warningTemp = GetUnits(_warningTempCelsius, Units.Celsius);
     var surfaceTemperature = GetUnits(GetTemperature(temperatures, TemperatureClient.AvgSurfaceId), Units.Celsius);
@@ -291,8 +293,12 @@
                                                                 }
                                                                 else
                                                                 {
-                                                                    <span class="status-estimate-absolute">
-                                                                        (<BrowserTime DateTime="DateTime.UtcNow + value" Format="t" EnableSmartDate="true" />)&nbsp;
+                                                                    var utcNow = DateTime.UtcNow;
+                                                                    <span class="status-estimate-absolute d-none d-sm-inline">
+                                                                        <text>(<BrowserTime DateTime="utcNow + value" Format="t" EnableSmartDate="true" />)&nbsp;</text>
+                                                                    </span>
+                                                                    <span class="status-estimate-absolute d-inline d-sm-none">
+                                                                        <text>(<BrowserTime DateTime="utcNow + value" Format="t" EnableSmartDate="true" ShortDisplay="true" />)&nbsp;</text>
                                                                     </span>
                                                                     <text>after @hours:@(minutes.ToString("00"))&nbsp;</text>
                                                                 }
@@ -318,7 +324,7 @@
                             </td>
                         </tr>
                         <tr class="hide-top-line">
-                            <td class="align-middle col-auto"><SmartImage Source="/_content/SLS4All.Compact.AppCore/ui/img/status-laser.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
+                            <td class="align-middle col-auto"><img src="/_content/SLS4All.Compact.AppCore/ui/img/status-laser.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
                             <td class="align-middle col">
                                 <table class="table table-sm value-table m-0">
                                     <tbody>
@@ -327,7 +333,22 @@
                                                 Laser:
                                             </th>
                                             <td class="status-value col-11" colspan="2">
-                                                <span class="laser-status @(laserOn ? "text-warning" : "")">@(laserOn ? "ON" : "OFF")</span>
+                                                @if (laserOn)
+                                                {
+                                                    if (needsLaser)
+                                                    {
+                                                        <span class="laser-status text-warning">ON</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="laser-status text-warning">dry&nbsp;ON</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="laser-status">OFF</span>
+
+                                                }
                                             </td>
                                         </tr>
                                         <tr>
@@ -376,7 +397,7 @@
                             </td>
                         </tr>
                         <tr>
-                            <td class="align-middle col-auto"><SmartImage Source="/_content/SLS4All.Compact.AppCore/ui/img/status-position.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
+                            <td class="align-middle col-auto"><img src="/_content/SLS4All.Compact.AppCore/ui/img/status-position.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
                             <td class="align-middle col">
                                 <table class="table table-sm value-table m-0">
                                     <tbody>

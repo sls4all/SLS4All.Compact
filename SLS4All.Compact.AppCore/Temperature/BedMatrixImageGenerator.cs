@@ -30,7 +30,7 @@ using static System.Net.Mime.MediaTypeNames;
 
 namespace SLS4All.Compact.Temperature
 {
-    public class BedMatrixGrabberOptions
+    public class BedMatrixImageGeneratorOptions
     {
         public float TextSize { get; set; } = 13.0f;
         public int Scale { get; set; } = 30;
@@ -41,18 +41,18 @@ namespace SLS4All.Compact.Temperature
         public float PathDashLength { get; set; } = 20;
     }
 
-    public sealed class BedMatrixGrabber : ImageGrabber
+    public sealed class BedMatrixImageGenerator : LazyImageGenerator
     {
         public const string ImageMime = "image/jpeg";
         private readonly ILogger _logger;
-        private readonly IOptionsMonitor<BedMatrixGrabberOptions> _options;
+        private readonly IOptionsMonitor<BedMatrixImageGeneratorOptions> _options;
         private readonly ITemperatureCamera _camera;
         private readonly double _average;
         private readonly bool _cropped;
         private readonly UnitConverterFlags _units;
         private readonly double _refreshRate;
 
-        private readonly object _locker = new();
+        private readonly Lock _locker = new();
         private readonly SKTypeface _typeface;
         private readonly SKFont _font;
         private SKBitmap? _bitmap;
@@ -63,9 +63,9 @@ namespace SLS4All.Compact.Temperature
         private int _lastBoxWidth;
         private int _lastBoxHeight;
 
-        public BedMatrixGrabber(
+        public BedMatrixImageGenerator(
             ILogger logger,
-            IOptionsMonitor<BedMatrixGrabberOptions> options,
+            IOptionsMonitor<BedMatrixImageGeneratorOptions> options,
             ITemperatureCamera camera,
             double average,
             bool cropped,
@@ -82,7 +82,7 @@ namespace SLS4All.Compact.Temperature
             _refreshRate = refreshRate;
 
             var o = _options.CurrentValue;
-            using (var stream = GetType().Assembly.GetManifestResourceStream("SLS4All.Compact.Temperature.BedMatrixGrabber.ttf")!)
+            using (var stream = GetType().Assembly.GetManifestResourceStream("SLS4All.Compact.Temperature.BedMatrixFont.ttf")!)
                 _typeface = SKTypeface.FromStream(stream);
             _font = new SKFont(_typeface);
         }

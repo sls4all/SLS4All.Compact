@@ -37,7 +37,7 @@ namespace SLS4All.Compact.McuClient.Sensors
     public sealed class HysteresisHeater : IMcuHeater
     {
         private readonly IOptions<HysteresisHeaterOptions> _options;
-        private readonly object _locker = new object();
+        private readonly Lock _locker = new();
         private readonly McuManager _manager;
         private readonly IMcuTemperatureSensor _sensor;
         private readonly string _name;

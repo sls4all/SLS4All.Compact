@@ -18,6 +18,7 @@ namespace SLS4All.Compact.Diagnostics
         private static readonly double s_tickFrequency = (double)TimeSpan.TicksPerSecond / Stopwatch.Frequency;
         private static readonly double s_tickFrequencyInv = (double)Stopwatch.Frequency / TimeSpan.TicksPerSecond;
 
+        public static long Frequency => Stopwatch.Frequency;
         public bool IsEmpty => Timestamp == 0;
         public static DateTime BaseDateTimeValue { get; set; }
         public static SystemTimestamp Now => new SystemTimestamp(Stopwatch.GetTimestamp());

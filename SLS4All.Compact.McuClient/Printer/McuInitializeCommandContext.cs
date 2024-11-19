@@ -15,6 +15,16 @@ namespace SLS4All.Compact.Printer
         public McuInitializeCommandContext(McuManager manager)
             => Manager = manager;
 
+        public static McuManager GetManagerEvenInShutdown(McuPrinterClient printerClient, IPrinterClientCommandContext? context)
+        {
+            if (context is PrinterShutdownCommandContext)
+                return printerClient.ManagerEvenInShutdown;
+            else if (context is McuInitializeCommandContext initialize)
+                return initialize.Manager;
+            else
+                return printerClient.ManagerEvenInShutdown;
+        }
+
         public static McuManager GetManager(McuPrinterClient printerClient, IPrinterClientCommandContext? context)
         {
             if (context is PrinterShutdownCommandContext)

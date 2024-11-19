@@ -1,5 +1,4 @@
 ﻿.dummy {
-
 }
 
 .safe-button-on {
@@ -12,48 +11,11 @@
     0% {
         background-position: 0% 0%;
     }
+
     100% {
         background-position: 100% 100%;
     }
 }
-
-/*@keyframes pulsate-safe {
-    from {
-        background: repeating-linear-gradient( 45deg, #ff000080, #ff000080 5px, #00000000 5px, #00000000 10px );
-    }
-
-    12.5% {
-        background: repeating-linear-gradient( 45deg, #ff000060, #ff000060 5px, #00000000 5px, #00000000 10px );
-    }
-
-    25% {
-        background: repeating-linear-gradient( 45deg, #ff000040, #ff000040 5px, #00000000 5px, #00000000 10px );
-    }
-
-    37.5% {
-        background: repeating-linear-gradient( 45deg, #ff000020, #ff000020 5px, #00000000 5px, #00000000 10px );
-    }
-
-    50% {
-        background: repeating-linear-gradient( 45deg, #ff000000, #ff000000 5px, #00000000 5px, #00000000 10px );
-    }
-
-    62.5% {
-        background: repeating-linear-gradient( 45deg, #ff000020, #ff000020 5px, #00000000 5px, #00000000 10px );
-    }
-
-    75% {
-        background: repeating-linear-gradient( 45deg, #ff000040, #ff000040 5px, #00000000 5px, #00000000 10px );
-    }
-
-    87.5% {
-        background: repeating-linear-gradient( 45deg, #ff000060, #ff000060 5px, #00000000 5px, #00000000 10px );
-    }
-
-    to {
-        background: repeating-linear-gradient( 45deg, #ff000080, #ff000080 5px, #00000000 5px, #00000000 10px );
-    }
-}*/
 
 .main-title-image {
     height: 50px;
@@ -74,4 +36,8 @@
 
 .page-name-version {
     padding-right: 8px;
+}
+
+.page-name-small {
+    font-size: 15px;
 }

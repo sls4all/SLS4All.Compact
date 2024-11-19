@@ -25,6 +25,7 @@ using SLS4All.Compact.IO;
 using SLS4All.Compact.Threading;
 using static System.Net.Mime.MediaTypeNames;
 using SLS4All.Compact.Diagnostics;
+using SLS4All.Compact.Camera;
 
 namespace SLS4All.Compact.Controllers
 {
@@ -32,35 +33,29 @@ namespace SLS4All.Compact.Controllers
     [ApiController]
     public class PlottedImageController : ControllerBase
     {
-        private readonly static object _singleThreadedCreateImageLock = new(); // helps to reduce CPU load when multiple clients are connected and requesting plots
-        //private readonly DefaultCalibrationMaskComparer _comparer;
+        private readonly static Lock _singleThreadedCreateImageLock = new(); // helps to reduce CPU load when multiple clients are connected and requesting plots
+        private readonly ImageStreamingHelper _streamingHelper;
+        private readonly ICurrentPlotterImageGenerator _generator;
         private readonly ICodePlotter _plotter;
 
-        // TODO: remove comparer
         public PlottedImageController(
-            //DefaultCalibrationMaskComparer comparer,
+            ImageStreamingHelper streamingHelper,
+            ICurrentPlotterImageGenerator generator,
             ICodePlotter plotter)
         {
-            //_comparer = comparer;
+            _streamingHelper = streamingHelper;
+            _generator = generator;
             _plotter = plotter;
         }
 
         [HttpGet("{id}")]
-        public async Task Image(string id, [FromQuery] double age = 0, [FromQuery] int? maxSize = null)
+        public Task Image(string id, CancellationToken cancel)
         {
-            MimeData image;
-            lock (_singleThreadedCreateImageLock)
-            {
-                //var mask = Array.Empty<float>();
-                //var size = _plotter.GetMask(ref mask);
-                //_comparer.FinalizeMask(size.width, size.height, mask);
-                //_plotter.ReplaceWith(mask);
-
-                image = _plotter.CreateImage(newerThan: TimeSpan.FromSeconds(age), drawHotspot: true, maxSize: maxSize);
-            }
-            Response.ContentType = image.ContentType;
-            Response.Headers["Cache"] = "no-store, no-cache, must-revalidate";
-            await Response.Body.WriteAsync(image.Data);
+            return _streamingHelper.PullImage(
+                id,
+                _generator,
+                Response,
+                cancel);
         }
 
         [HttpGet("{id}/{layerIndex}")]

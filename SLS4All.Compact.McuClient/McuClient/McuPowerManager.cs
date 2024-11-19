@@ -21,7 +21,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
-using SLS4All.Compact.Storage.PrinterSettings;
 
 namespace SLS4All.Compact.McuClient
 {
@@ -68,10 +67,10 @@ namespace SLS4All.Compact.McuClient
 
         private readonly ILogger<McuPowerManager> _logger;
         private readonly IOptions<McuPowerManagerOptions> _options;
-        private readonly IPrinterSettingsStorage _printerSettings;
+        private readonly IPrinterSettings _printerSettings;
         private readonly McuManager _manager;
         private readonly Dictionary<IMcuOutputPin, PinInfo> _infos;
-        private readonly object _syncRoot = new();
+        private readonly Lock _syncRoot = new();
         private readonly long _baseConsumption = 0;
         private readonly List<PinInfo> _switchList;
         private readonly List<PinInfo> _powerOffList;
@@ -82,7 +81,7 @@ namespace SLS4All.Compact.McuClient
         public McuPowerManager(
             IOptions<McuPowerManagerOptions> options,
             McuManager manager,
-            IPrinterSettingsStorage printerSettings)
+            IPrinterSettings printerSettings)
         {
             _logger = manager.CreateLogger<McuPowerManager>();
             _options = options;

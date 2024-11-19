@@ -72,17 +72,19 @@ var SLS4All;
                             var elementAny = element;
                             if (!elementAny.dataSrcLoadedHasHandler) {
                                 element.addEventListener("load", function () {
-                                    elementAny.dataSrcLoaded = element.src;
+                                    var currentSrc = element.getAttribute('src');
+                                    elementAny.dataSrcLoaded = currentSrc;
                                     var dataSrcToLoad = elementAny.dataSrcToLoad;
-                                    if (dataSrcToLoad && dataSrcToLoad != element.src) {
+                                    if (dataSrcToLoad && dataSrcToLoad != currentSrc) {
                                         elementAny.dataSrcToLoad = null;
-                                        element.src = dataSrcToLoad;
+                                        element.setAttribute("src", dataSrcToLoad);
                                     }
                                 });
                                 element.addEventListener("error", function () {
+                                    var currentSrc = element.getAttribute('src');
                                     elementAny.dataSrcLoaded = null;
                                     var dataSrcToLoad = elementAny.dataSrcToLoad;
-                                    if (dataSrcToLoad && dataSrcToLoad != element.src) {
+                                    if (dataSrcToLoad && dataSrcToLoad != currentSrc) {
                                         elementAny.dataSrcLoading = dataSrcToLoad;
                                         elementAny.dataSrcToLoad = null;
                                     }
@@ -90,15 +92,15 @@ var SLS4All;
                                 elementAny.dataSrcLoadedHasHandler = true;
                             }
                             if (element) {
-                                var srcAbs = new URL(src, document.baseURI).href;
-                                if (element.src != srcAbs && elementAny.dataSrcToLoad != srcAbs) {
-                                    if (!elementAny.dataSrcLoaded || elementAny.dataSrcLoaded == element.src) {
-                                        elementAny.dataSrcLoaded = element.src;
+                                var currentSrc = element.getAttribute('src');
+                                if (currentSrc != src && elementAny.dataSrcToLoad != src) {
+                                    if (!elementAny.dataSrcLoaded || elementAny.dataSrcLoaded == currentSrc) {
+                                        elementAny.dataSrcLoaded = currentSrc;
                                         elementAny.dataSrcToLoad = null;
-                                        element.src = srcAbs;
+                                        element.setAttribute("src", src);
                                     }
                                     else {
-                                        elementAny.dataSrcToLoad = srcAbs;
+                                        elementAny.dataSrcToLoad = src;
                                     }
                                 }
                             }

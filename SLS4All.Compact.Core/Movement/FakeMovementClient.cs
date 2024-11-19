@@ -54,7 +54,7 @@ namespace SLS4All.Compact.Movement
         private readonly IPowerClient _powerClient;
         private SystemTimestamp _timestamp;
         private double _posX, _posY, _posR, _posZ1, _posZ2;
-        private readonly object _lock = new();
+        private readonly Lock _lock = new();
         private readonly AsyncLock _homingLock;
         private readonly TrapezoidCalculator _trapezoid;
 
@@ -99,7 +99,7 @@ namespace SLS4All.Compact.Movement
             return ValueTask.CompletedTask;
         }
 
-        public override Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
             TimeSpan duration;
@@ -121,7 +121,7 @@ namespace SLS4All.Compact.Movement
         {
             using (await _homingLock.LockAsync(cancel))
             {
-                await FinishMovement(context, cancel);
+                await FinishMovement(context: context, cancel: cancel);
                 double distance;
                 lock (_lock)
                 {
@@ -160,7 +160,7 @@ namespace SLS4All.Compact.Movement
         {
             using (await _homingLock.LockAsync(cancel))
             {
-                await FinishMovement(context, cancel);
+                await FinishMovement(context: context, cancel: cancel);
                 lock (_lock)
                 {
                     _posX = 0;
@@ -212,11 +212,11 @@ namespace SLS4All.Compact.Movement
         {
             foreach (var item in items)
                 await MoveAux(axis, item, hidden, context, cancel);
-            await FinishMovement(context, cancel);
+            await FinishMovement(context: context, cancel: cancel);
             return false;
         }
 
-        public override TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null)
+        public override TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext ? context = null)
         {
             var options = _options.CurrentValue;
             var distance = Math.Sqrt(rx * rx + ry * ry);

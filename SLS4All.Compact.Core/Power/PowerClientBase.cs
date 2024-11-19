@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nito.AsyncEx;
@@ -42,18 +41,17 @@ namespace SLS4All.Compact.Power
     {
         private readonly ILogger _logger;
         private readonly IOptionsMonitor<PowerClientBaseOptions> _options;
-        private readonly IMediator _mediator;
         private readonly PeriodicTimer _lowFrequencyTimer;
         private readonly string _laserId;
         private readonly TimeSpan _laserChangedNotifyPeriod;
         private SystemTimestamp _laserNotifiedTimestamp;
 
-        protected readonly object _stateLock = new object();
+        protected readonly Lock _stateLock = new();
         protected readonly PowermanState _fallbackPowermanState;
         private volatile PowerState _lowFrequencyState;
         private readonly Dictionary<string, (double value, SystemTimestamp timestamp, double prevNonZeroValue, SystemTimestamp prevZeroingTimestamp)> _stateDict;
 
-        private readonly object _setPowerFormattersLock = new();
+        private readonly Lock _setPowerFormattersLock = new();
         private readonly static object _setPowerLaserFormatterTag = new();
         private readonly DelegatedCodeFormatter _setPowerLaserFormatter;
         private volatile FrozenDictionary<string, DelegatedCodeFormatter> _setPowerFormatters;
@@ -65,13 +63,11 @@ namespace SLS4All.Compact.Power
 
         protected PowerClientBase(
             ILogger logger, 
-            IOptionsMonitor<PowerClientBaseOptions> options,
-            IMediator mediator)
+            IOptionsMonitor<PowerClientBaseOptions> options)
             : base(logger)
         {
             _logger = logger;
             _options = options;
-            _mediator = mediator;
             
             var o = options.CurrentValue;
             _laserId = o.LaserId;
@@ -204,7 +200,6 @@ namespace SLS4All.Compact.Power
                     }
                     await StateChangedHighFrequency.Invoke(state, cancel); // for laser
                     await StateChangedLowFrequency.Invoke(state, cancel);
-                    await _mediator.Publish(state, cancel);
                 }
                 catch (Exception ex)
                 {

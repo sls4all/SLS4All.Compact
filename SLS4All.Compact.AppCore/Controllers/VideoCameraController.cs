@@ -51,7 +51,7 @@ namespace SLS4All.Compact.Controllers
         {
             return _streamingHelper.PullImage(
                 id,
-                _client.ImageCaptured,
+                _client,
                 Response,
                 cancel);
         }

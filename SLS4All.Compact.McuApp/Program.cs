@@ -21,8 +21,7 @@ using SLS4All.Compact.McuClient.PipedMcu;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.McuClient.Devices;
 using NReco.Logging.File;
-using SLS4All.Compact.PrinterSettings;
-using SLS4All.Compact.Storage.PrinterSettings;
+using SLS4All.Compact.Threading;
 
 namespace SLS4All.Compact.McuApp
 {
@@ -52,6 +51,9 @@ namespace SLS4All.Compact.McuApp
         {
             if (Array.IndexOf(args, "--debug") != -1)
                 DebuggerHelpers.WaitForDebugger();
+
+            // disable paging for this process so system I/O cant affect us as much
+            var disabledPaging = PrinterGC.TryDisableProcessPaging();
 
             CompactServiceCollectionExtensions.ScanAssemblies.Add(typeof(Program).Assembly);
             CompactServiceCollectionExtensions.ScanAssemblies.Add(typeof(IPrinterClient).Assembly);
@@ -86,7 +88,7 @@ namespace SLS4All.Compact.McuApp
             builder.Services.Configure<McuManagerOptions>(builder.Configuration.GetSection("McuManager"));
             builder.Services.AddAsImplementationAndParents<PipedMcuManagerLocal>(ServiceLifetime.Singleton);
             builder.Services.AddAsImplementationAndInterfaces<PipedMcuComponent>(ServiceLifetime.Singleton);
-            builder.Services.AddAsImplementationAndInterfaces<NullPrinterSettingsStorage>(ServiceLifetime.Singleton);
+            builder.Services.AddAsImplementationAndInterfaces<NullPrinterSettings>(ServiceLifetime.Singleton);
 
             builder.Services.Configure<McuAliasesOptions>(builder.Configuration.GetSection("McuAliases"));
             switch (applicationOptions.McuSerialDeviceFactory)
@@ -108,8 +110,20 @@ namespace SLS4All.Compact.McuApp
             using (var host = builder.Build())
             {
                 var logger = host.Services.GetRequiredService<ILogger<Program>>();
-                logger.LogInformation($"Configuration was loaded from: {Environment.NewLine}{configurationSources}");
-                await host.RunAsync();
+                try
+                {
+                    logger.LogInformation($"MCU Host is starting to run at {DateTime.UtcNow} UTC");
+                    if (!disabledPaging)
+                        logger.LogWarning($"Failed to disable system paging for this process");
+                    logger.LogInformation($"Configuration was loaded from: {Environment.NewLine}{configurationSources}");
+                    await host.RunAsync();
+                    logger.LogInformation($"MCU Host has finished running at {DateTime.UtcNow} UTC");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogCritical(ex, $"Unhandled exception in MCU Host run, application is crashing at {DateTime.UtcNow} UTC");
+                    throw;
+                }
             }
         }
 

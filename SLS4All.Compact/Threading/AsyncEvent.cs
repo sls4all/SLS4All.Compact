@@ -18,7 +18,7 @@ namespace SLS4All.Compact.Threading
     public sealed class AsyncEvent
     {
         private static readonly Delegate _noHandlerDelegate = () => { };
-        private readonly object _handlersChangedSync = new();
+        private readonly Lock _handlersChangedSync = new();
         private readonly ConcurrentDictionary<Delegate, long> _handlers = new();
         private readonly bool _ordered;
         private volatile Delegate? _singleHandler;
@@ -27,7 +27,7 @@ namespace SLS4All.Compact.Threading
         public bool HasHandlers => _singleHandler != _noHandlerDelegate;
         public int HandlersCount => _handlers.Count;
         public event EventHandler? HandlersChanged;
-        public object HandlersChangedSync => _handlersChangedSync;
+        public Lock HandlersChangedSync => _handlersChangedSync;
 
         public AsyncEvent(bool ordered = false)
         {
@@ -128,7 +128,7 @@ namespace SLS4All.Compact.Threading
     public sealed class AsyncEvent<TArg1>
     {
         private static readonly Delegate _noHandlerDelegate = () => { };
-        private readonly object _handlersChangedSync = new();
+        private readonly Lock _handlersChangedSync = new();
         private readonly ConcurrentDictionary<Delegate, long> _handlers = new();
         private readonly bool _ordered;
         private volatile Delegate? _singleHandler;
@@ -137,7 +137,7 @@ namespace SLS4All.Compact.Threading
         public bool HasHandlers => _singleHandler != _noHandlerDelegate;
         public int HandlersCount => _handlers.Count;
         public event EventHandler? HandlersChanged;
-        public object HandlersChangedSync => _handlersChangedSync;
+        public Lock HandlersChangedSync => _handlersChangedSync;
 
         public AsyncEvent(bool ordered = false)
         {

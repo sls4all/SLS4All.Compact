@@ -592,7 +592,7 @@
     {
         if (_currentDirectory == "/")
             return;
-        var parentDir = PrinterPath.GetParent(_currentDirectory);
+        var parentDir = PrinterPath.GetDirectoryName(_currentDirectory.TrimEnd('/')) ?? "/";
         var parent = FileProvider.Normalize(parentDir);
         if (parent != null)
         {
@@ -653,7 +653,7 @@
         {
             var drivesOld = _drives.ToHashSet();
             _drives.Clear();
-            foreach (var drive in FileProvider.FileSystem.Browse(PrinterPath.Drives))
+            foreach (var drive in FileProvider.Browse(PrinterPath.Drives))
             {
                 _drives.Add(new DriveEntry
                     {
@@ -669,7 +669,7 @@
                 _currentDirectory.Split('/').Any(x => IsPackageOfAnyKind(x));
             _currentDirectoryEjectableDrive = FileProvider.IsEjectable(_currentDirectory);
 
-            foreach (var entry in FileProvider.FileSystem.Browse(_currentDirectory))
+            foreach (var entry in FileProvider.Browse(_currentDirectory))
             {
                 if (entry.Name.StartsWith('.'))
                     continue;
@@ -679,7 +679,7 @@
                       attr.FileAttributes.HasFlag(FileAttributes.Temporary) ||
                       attr.FileAttributes.HasFlag(FileAttributes.Device)))
                     continue;
-                if (entry.IsDirectory())
+                if (entry.IsDirectory)
                     dirnames.Add(entry.Path);
                 else if (_showAllFiles || IsMasked(entry.Name) || IsPackage(entry.Name))
                     filenames.Add(entry.Path);
@@ -842,7 +842,7 @@
             return;
         var uploadedFiles = new List<string>();
         await _cancelModal!.Execute(
-            async cancel =>
+            (Func<CancellationToken, Task>)(async cancel =>
             {
                 foreach (var file in sources)
                 {
@@ -868,7 +868,7 @@
                                 {
                                     await Task.Run(async () =>
                                 {
-                                    using (var output = FileProvider.FileSystem.Open(tempFilename, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                                    using (var output = FileProvider.Open(tempFilename, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
                                     using (var input = file.factory(cancel))
                                     {
                                         await input.CopyToAsync(output, cancel);
@@ -876,9 +876,7 @@
                                 });
                                     if (action == Action.Overwrite)
                                     {
-                                        // TODO: move with overwrite / atomic
-                                        FileProvider.FileSystem.Delete(targetFilename);
-                                        FileProvider.FileSystem.Move(tempFilename, targetFilename);
+                                        FileProvider.Move(tempFilename, targetFilename, true);
                                         uploadedFiles.Add(targetFilename);
                                         break;
                                     }
@@ -886,11 +884,11 @@
                                     {
                                         try
                                         {
-                                            FileProvider.FileSystem.Move(tempFilename, targetFilename);
+                                            FileProvider.Move(tempFilename, targetFilename, false);
                                             uploadedFiles.Add(targetFilename);
                                             break;
                                         }
-                                        catch (Exception)
+                                        catch
                                         {
                                             // swallow and show the user
                                         }
@@ -906,7 +904,7 @@
                                 try
                                 {
                                     if (FileProvider.FileExists(tempFilename))
-                                        FileProvider.FileSystem.Delete(tempFilename);
+                                        FileProvider.Delete(tempFilename);
                                 }
                                 catch
                                 {
@@ -969,7 +967,7 @@
                     }
                 }
             Finished:;
-            },
+            }),
             titleText: "Copying files",
             bodyText: "Files are being copied, this dialog will automatically close when done...",
             cancelText: "Cancel the upload",
@@ -1009,17 +1007,14 @@
                         {
                             if (action == Action.Overwrite)
                             {
-                                // TODO: move with overwrite / atomic
-                                if (FileProvider.Exists(newFilename))
-                                    FileProvider.FileSystem.Delete(newFilename);
-                                FileProvider.FileSystem.Move(oldFilename, newFilename);
+                                FileProvider.Move(oldFilename, newFilename, true);
                                 break;
                             }
                             else
                             {
                                 try
                                 {
-                                    FileProvider.FileSystem.Move(oldFilename, newFilename);
+                                    FileProvider.Move(oldFilename, newFilename, false);
                                     break;
                                 }
                                 catch (Exception)
@@ -1091,7 +1086,7 @@
                 foreach (var entry in entries)
                 {
                     if (FileProvider.Exists(entry.Path))
-                        FileProvider.FileSystem.Delete(entry.Path);
+                        FileProvider.Delete(entry.Path);
                 }
             }
         }
@@ -1161,7 +1156,7 @@
             try
             {
                 var candidateTarget = PrinterPath.Combine(_currentDirectory, name);
-                FileProvider.FileSystem.CreateDirectory(candidateTarget);
+                FileProvider.CreateDirectory(candidateTarget);
             }
             catch (Exception ex)
             {

@@ -1,15 +1,11 @@
-﻿@using Microsoft.AspNetCore.Components.Web
-@namespace SLS4All.Compact
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>SLS4All Compact</title>
-     <base href="~/" />
- 
+    <base href="/" />
+
     <!-- favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -30,12 +26,15 @@
     <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app.css">
     <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app-custom.css">
     <link rel="stylesheet" href="SLS4All.Compact.PrinterApp.styles.css" />
+
+    <ImportMap />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
     <script src="_content/SLS4All.Compact.AppCore/bundles/bundle.js"></script>
 
-    @RenderBody()
+    <Routes @rendermode="InteractiveServer" />
 
     <div id="components-reconnect-modal">
         <div class="main-overlay-message">
@@ -70,7 +69,7 @@
             <div class="main-overlay-message-notification">
                 <p>
                     <span class="badge badge-dark text-wrap">
-                        <i class="bi bi-exclamation-triangle"></i> An error has occurred. Application will not respond until reloaded. Background processes may still continue to work. 
+                        <i class="bi bi-exclamation-triangle"></i> An error has occurred. Application will not respond until reloaded. Background processes may still continue to work.
                     </span>
                 </p>
                 <p>
@@ -100,7 +99,13 @@
     <script src="_content/SLS4All.Compact.AppCore/js/template.js"></script>
 
     <!-- Libraries -->
-    <script src="_framework/blazor.server.js"></script>
-    <script src="_content/EventHorizon.Blazor.Server.Interop/server-interop-bridge.js"></script>
+    <script src="_framework/blazor.web.js"></script>
 </body>
 </html>
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+}

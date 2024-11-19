@@ -13,7 +13,6 @@ using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
 using SLS4All.Compact.McuClient.Sensors;
-using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Frozen;
@@ -90,13 +89,13 @@ namespace SLS4All.Compact.McuClient
         protected readonly IOptionsMonitor<McuManagerOptions> _options;
         protected readonly IAppDataWriter _appDataWriter;
         protected readonly IEnumerable<IMcuDeviceFactory> _deviceFactories;
-        protected readonly IPrinterSettingsStorage _settingsStorage;
+        protected readonly IPrinterSettings _settingsStorage;
         protected readonly FrozenDictionary<string, McuItem> _mcuItems;
         private readonly CancellationTokenSource _runningCancelSource;
         private volatile McuShutdownMessage? _managerShutdownReason;
         private readonly List<(IMcu? Mcu, Delegate Delegate)> _setupHandlers;
         private readonly TaskCompletionSource _hasStartedSource;
-        private readonly object _queueMasterLock = new object();
+        private readonly Lock _queueMasterLock = new();
         private readonly Dictionary<object, McuTimestamp> _masterTimestamp;
 
         public AsyncEvent<McuShutdownMessage> ShutdownEvent { get; } = new();
@@ -193,7 +192,7 @@ namespace SLS4All.Compact.McuClient
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
-            IPrinterSettingsStorage settingsStorage)
+            IPrinterSettings settingsStorage)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
@@ -517,20 +516,23 @@ namespace SLS4All.Compact.McuClient
 
         public LockMasterQueueDisposable LockMasterQueue()
         {
-            Monitor.Enter(_queueMasterLock);
+            _queueMasterLock.Enter();
             return new LockMasterQueueDisposable(this);
         }
 
         public bool IsMasterQueueLocked()
-            => Monitor.IsEntered(_queueMasterLock);
+            => _queueMasterLock.IsHeldByCurrentThread;
 
         private void QueueMasterEnd()
         {
-            Monitor.Exit(_queueMasterLock);
+            _queueMasterLock.Exit();
         }
 
-        public virtual bool TryCollectGarbageBlocking()
+        public virtual bool TryCollectGarbageBlocking(bool performMajorCleanup)
         {
+            if (performMajorCleanup)
+                PrinterGC.CollectGarbageBlockingAggressive();
+            else
             PrinterGC.CollectGarbageBlocking();
             return true;
         }

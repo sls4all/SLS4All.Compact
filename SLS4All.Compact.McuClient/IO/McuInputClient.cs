@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Diagnostics;
@@ -33,12 +32,11 @@ namespace SLS4All.Compact.IO
     {
         private readonly ILogger<McuInputClient> _logger;
         private readonly IOptionsMonitor<McuInputClientOptions> _options;
-        private readonly IMediator _mediator;
         private readonly PeriodicTimer _lowFrequencyTimer;
         private readonly string _safeButtonId;
         private readonly string _lidClosedId;
 
-        private readonly object _stateLock = new object();
+        private readonly Lock _stateLock = new();
         private volatile InputState _lowFrequencyState;
         private readonly Dictionary<string, (int value, SystemTimestamp timestamp)> _stateDict;
 
@@ -51,13 +49,11 @@ namespace SLS4All.Compact.IO
         public McuInputClient(
             ILogger<McuInputClient> logger,
             IOptionsMonitor<McuInputClientOptions> options,
-            IMediator mediator,
             McuPrinterClient printerClient)
             : base(logger)
         {
             _logger = logger;
             _options = options;
-            _mediator = mediator;
 
             var o = options.CurrentValue;
             _safeButtonId = o.SafeButtonName;
@@ -122,7 +118,6 @@ namespace SLS4All.Compact.IO
                 {
                     var state = GetState();
                     _lowFrequencyState = state;
-                    await _mediator.Publish(state, cancel);
                     await StateChangedLowFrequency.Invoke(state, cancel);
                 }
                 catch (Exception ex)

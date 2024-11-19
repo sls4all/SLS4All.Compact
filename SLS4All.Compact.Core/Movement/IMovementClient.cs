@@ -41,14 +41,14 @@ namespace SLS4All.Compact.Movement
         AsyncEvent<PositionHighFrequency> PositionChangedHighFrequency { get; }
 
         TimeSpan GetQueueAheadDuration(IPrinterClientCommandContext? context = null);
-        TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, IPrinterClientCommandContext? context = null);
+        TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext? context = null);
         ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask HomeXY(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-        Task FinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask MoveContinuous(MovementAxis axis, bool positive, double speed, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask SetLaser(double value, bool noCompensation = false, IPrinterClientCommandContext ? context = null, CancellationToken cancel = default);

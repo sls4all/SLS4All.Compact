@@ -18,10 +18,10 @@ namespace SLS4All.Compact.Movement
     {
         public static NullLayerClient Instance { get; } = new();
 
-        public Task BedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default)
+        public Task BedLeveling(BedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task FinishBedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default)
+        public Task FinishBedLeveling(FinishBedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
@@ -30,28 +30,31 @@ namespace SLS4All.Compact.Movement
         public Task BeginLayer(BeginLayerSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task BeginPrint(CancellationToken cancel = default)
+        public Task BeginPrint(BeginPrintSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task EjectCake(double? expectedDepth, CancellationToken cancel = default)
+        public Task EjectCake(EjectCakeSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task EndLayer(CancellationToken cancel = default)
+        public Task EndLayer(EndLayerSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task EndPrint(CancellationToken cancel = default)
+        public Task EndPrint(EndPrintSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public PowderVolumeTotals GetPowderVolume(PowderVolumeSetup setup)
             => new PowderVolumeTotals(default, default, default, default, default, null, default, default);
 
-        public Task HomeBedsAndRecoater(double powderChamberDepth, StatusUpdater? status = null, CancellationToken cancel = default)
+        public Task HomeBedsAndRecoater(HomeBedsAndRecoaterSetup setup, StatusUpdater? status = null, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public Task PrintCap(PrintCapSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task SetPowderDepth(double totalPowderChamberDepth, CancellationToken cancel = default)
+        public Task SetPowderDepth(SetPowderDepthSetup setup, CancellationToken cancel = default)
+            => Task.CompletedTask;
+
+        public Task PrepareDryPrint(CancellationToken cancel)
             => Task.CompletedTask;
     }
 }

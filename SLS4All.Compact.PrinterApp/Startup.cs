@@ -54,13 +54,9 @@ namespace SLS4All.Compact
             services.AddAsImplementationAndInterfaces<McuProxyComponent>(ServiceLifetime.Singleton);
         }
 
-        protected override async void ConfigureProxy(
-            IServiceProvider services, 
-            IHostApplicationLifetime lifetime, 
-            ILogger<StartupBase> logger, 
-            IOptions<ApplicationOptions> options)
+        protected override async void ConfigureAppAsProxy(ILogger logger, IOptions<ApplicationOptions> options, IServiceProvider services, IHostApplicationLifetime lifetime, WebApplication app)
         {
-            base.ConfigureProxy(services, lifetime, logger, options);
+            base.ConfigureAppAsProxy(logger, options, services, lifetime, app);
 
             lifetime.ApplicationStarted.Register(() =>
             {
@@ -82,11 +78,13 @@ namespace SLS4All.Compact
             }
         }
 
-        protected override void SetupApp(IServiceProvider bootServiceProvider, ApplicationOptions applicationOptions, IServiceCollection services)
+        protected override void ConfigureAppAsApplication(ILogger logger, IOptions<ApplicationOptions> options, IServiceProvider services, IHostApplicationLifetime lifetime, WebApplication app)
         {
-            base.SetupApp(bootServiceProvider, applicationOptions, services);
-            services.AddRazorPages();
-            services.AddServerSideBlazor();
+            base.ConfigureAppAsApplication(logger, options, services, lifetime, app);
+            app.UseStatusCodePagesWithRedirects("/Status{0}");
+            app.MapRazorComponents<Pages.App>()
+                .AddAdditionalAssemblies(typeof(StartupBase).Assembly)
+                .AddInteractiveServerRenderMode();
         }
 
         protected override IServiceProvider GetBootServiceProvider(IServiceCollection services)
@@ -289,7 +287,7 @@ namespace SLS4All.Compact
                     break;
             }
 
-            // NOTE: code history is not currentlt used and consumes resources
+            // NOTE: code history is not currently used and consumes resources
             //services.Configure<DefaultGCodeHistoryOptions>(Configuration.GetSection("DefaultGCodeHistory"));
             //services.AddAsImplementationAndInterfaces<DefaultGCodeHistory>(ServiceLifetime.Singleton);
 
@@ -341,8 +339,8 @@ namespace SLS4All.Compact
             services.Configure<FileSystemTempBlobStorageOptions>(Configuration.GetSection("FileSystemTempBlobStorage"));
             services.AddAsImplementationAndInterfaces<FileSystemTempBlobStorage>(ServiceLifetime.Singleton);
 
-            services.Configure<DefaultPrintProfileInitializerOptions>(Configuration.GetSection("DefaultPrintProfileInitializer"));
-            services.AddAsImplementationAndInterfaces<DefaultPrintProfileInitializer>(ServiceLifetime.Transient);
+            services.Configure<DefaultsInitializerOptions>(Configuration.GetSection("DefaultsInitializer"));
+            services.AddAsImplementationAndInterfaces<DefaultsInitializer>(ServiceLifetime.Transient);
 
             services.Configure<PrinterPowerPinSafetySessionManagerOptions>(Configuration.GetSection("PrinterPowerPinSafetySessionManager"));
             services.AddAsImplementationAndInterfaces<PrinterPowerPinSafetySessionManager>(ServiceLifetime.Singleton);
@@ -353,6 +351,9 @@ namespace SLS4All.Compact
             services.Configure<DefaultLayerEstimateExtrapolatorOptions>(Configuration.GetSection("DefaultLayerEstimateExtrapolator"));
             services.AddAsImplementationAndInterfaces<DefaultLayerEstimateExtrapolator>(ServiceLifetime.Transient);
             services.AddSingleton(provider => new Func<ILayerEstimateExtrapolator>(() => provider.GetRequiredService<ILayerEstimateExtrapolator>()));
+
+            services.Configure<PlotterImageGeneratorOptions>(Configuration.GetSection("PlotterImageGenerator"));
+            services.AddAsImplementationAndInterfaces<CurrentPlotterImageGenerator>(ServiceLifetime.Singleton);
 
             services.Configure<PageRedirectorOptions>(Configuration.GetSection("PageRedirector"));
             services.AddAsImplementationAndInterfaces<PageRedirector>(ServiceLifetime.Singleton);

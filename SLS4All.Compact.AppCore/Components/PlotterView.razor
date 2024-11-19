@@ -11,10 +11,11 @@
 @using System.Globalization
 @inject IJSRuntime JSRuntime
 @inject ICodePlotter Plotter
+@inject ImageStreamingHelper ImageStreamingHelper
 
 <div @ref="@ElementRef" id="@ElementId" class="d-flex flex-column plotter-view @ClassNames" style="@StyleNames" @attributes="@AttributesWithCssScope">
     <div class="plotter-image-container" @attributes="@JustAttributesWithCssScope">
-        <img id="@_id" @key="_streamKey" class="plotter-image" src="@PlotterImageUri" @attributes="@JustAttributesWithCssScope" />
+        <img id="@_id" @key="_streamKey" class="plotter-image" src="@StreamUri" @attributes="@JustAttributesWithCssScope" />
     </div>
 </div>
 
@@ -23,33 +24,53 @@
     private readonly object _streamKey = new();
     private readonly string _id = Guid.NewGuid().ToString();
     private Timer _timer;
-    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private const int _timerPeriod = 500;
+    private ImageStreamingHandle? _streamHandle;
+    private long _streamCounter;
 
-    private string PlotterImageUri
-        => string.Create(CultureInfo.InvariantCulture, $"/api/PlottedImage/{Plotter.Version}?age={s_period.TotalSeconds}&maxsize={MaxSize}");
-
-    [Parameter]
-    public int? MaxSize { get; set; }
+    private string StreamUri
+        => string.Create(CultureInfo.InvariantCulture, $"/api/PlottedImage/{_id}?c={_streamCounter}");
 
     public PlotterView()
     {
         _timer = new Timer(OnTimer);
     }
 
+    private bool TryRegisterImageReady()
+    {
+        if (_streamHandle == null)
+            _streamHandle = new ImageStreamingHandle(JSRuntime, ImageStreamingHelper, _id, () =>
+            {
+                _streamCounter++;
+                return StreamUri;
+            });
+        return _streamHandle.TryRegisterImageReady();
+    }
+
+    private void TryUnregisterImageReady()
+    {
+        _streamHandle?.TryUnregisterImageReady();
+    }
+
     private void OnTimer(object? state)
     {
-        TryInvokeStateHasChanged();
+        TryInvokeStateHasChanged(() =>
+        {
+            TryRegisterImageReady();
+            return ValueTask.FromResult(true);
+        });
     }
 
     protected override void OnAfterRender(bool firstRender)
     {
         base.OnAfterRender(firstRender);
         if (firstRender)
-            _timer.Change(TimeSpan.Zero, s_period);
+            _timer.Change(0, _timerPeriod);
     }
 
     public override async ValueTask DisposeAsync()
     {
+        TryUnregisterImageReady();
         _timer.Dispose();
         await base.DisposeAsync();
     }

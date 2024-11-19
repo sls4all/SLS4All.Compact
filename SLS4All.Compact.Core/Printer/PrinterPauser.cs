@@ -9,7 +9,7 @@ namespace SLS4All.Compact.Printer
 {
     public class PrinterPauser : IPrinterPauser
     {
-        private readonly object _sync = new();
+        private readonly Lock _sync = new();
         private TaskCompletionSource? _pauseTaskSource;
         private volatile Task _pauseTask;
 

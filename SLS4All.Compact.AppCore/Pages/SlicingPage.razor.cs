@@ -224,7 +224,7 @@ namespace SLS4All.Compact.Pages
                 var powerSettings = await GetPrinterPowerSettings();
                 if (powerSettings == null)
                     return null;
-                var setup = await Printing.CreateSetup(profile, powerSettings);
+                var setup = await Printing.CreateSetup(null, profile, powerSettings);
                 return setup;
             }
         }

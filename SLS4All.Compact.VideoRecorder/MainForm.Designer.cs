@@ -66,7 +66,7 @@
             _addressBox.Name = "_addressBox";
             _addressBox.Size = new Size(645, 23);
             _addressBox.TabIndex = 1;
-            _addressBox.Text = "http://192.168.1.105:5000/";
+            _addressBox.Text = "http://192.168.1.126/";
             // 
             // label2
             // 

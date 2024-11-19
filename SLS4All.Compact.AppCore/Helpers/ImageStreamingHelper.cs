@@ -44,7 +44,7 @@ namespace SLS4All.Compact.Helpers
         private readonly ILogger _logger;
         private readonly IOptionsMonitor<ImageStreamingHelperOptions> _options;
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _streamCancels;
-        private readonly object _locker;
+        private readonly Lock _locker;
         private readonly Dictionary<AsyncEvent<MimeData>, PullData> _pullDataByEvent;
         private readonly Dictionary<string, PullData> _pullDataById;
         private readonly MimeData _imageStreamingPlaceholder;
@@ -170,17 +170,17 @@ namespace SLS4All.Compact.Helpers
 
         public async Task PullImage(
             string id,
-            AsyncEvent<MimeData> imageCaptured,
+            IImageGenerator generator,
             HttpResponse response,
             CancellationToken cancel)
         {
             PullData? pullData;
-
-            var now = SystemTimestamp.Now;
-            var data = _imageStreamingPlaceholder;
-
+            if (!generator.TryGetLastImage(out var data))
+                data = _imageStreamingPlaceholder;
+            var imageCaptured = generator.ImageCaptured;
             lock (_locker)
             {
+                var now = SystemTimestamp.Now;
                 if (!_pullDataByEvent.TryGetValue(imageCaptured, out pullData))
                 {
                     if (!_pullDataByEvent.TryGetValue(imageCaptured, out pullData))

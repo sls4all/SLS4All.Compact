@@ -7,7 +7,6 @@
 @using SLS4All.Compact.Numerics
 @inherits AppComponent
 @inject IJSRuntime JSRuntime
-@inject ITemperatureHistory TemperatureHistory
 @inject ITemperatureClient TemperatureClient
 @inject IHalogenClient HalogenClient
 @inject ITemperatureLogger TemperatureLogger
@@ -33,6 +32,7 @@
         _lastMeasureReport = measureReport;
     }
     var prevMeasureReport = _prevMeasureReport;
+    var temperatureState = TemperatureClient.CurrentState;
 }
 
 <Modal @ref="_heatingModal" class="fade" Context="modal">
@@ -286,7 +286,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var entry in TemperatureHistory.LastItem.Entries)
+                    @foreach (var entry in temperatureState.Entries)
                     {
                         var targetTemp = entry.Id == TemperatureClient.SurfaceId ? SoftSurfaceHeater.TargetTemperature : entry.TargetTemperature;
                         var reachedTemp = entry.Id == TemperatureClient.SurfaceId ? SoftSurfaceHeater.TargetReached : entry.TargetReached;
@@ -404,21 +404,20 @@
     protected override void OnInitialized()
     {
         base.OnInitialized();
-        TemperatureHistory.HistoryItemsChanged += OnTemperatureHistoryChanged;
+        TemperatureClient.StateChangedLowFrequency.AddHandler(OnTemperaturesChanged);
     }
 
-    private void OnTemperatureHistoryChanged(object? sender, EventArgs e)
-    => InvokeAsync(() =>
+    private ValueTask OnTemperaturesChanged(TemperatureState state, CancellationToken cancel)
     {
-        try
-        {
-            StateHasChanged();
-        }
-        catch (ObjectDisposedException)
-        {
-            /* swallow */
-        }
-    });
+        TryInvokeStateHasChanged();
+        return ValueTask.CompletedTask;
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        TemperatureClient.StateChangedLowFrequency.RemoveHandler(OnTemperaturesChanged);
+        return base.DisposeAsync();
+    }
 
     private async Task SetTemperatureTarget(string id, double value)
     {
@@ -648,12 +647,6 @@
                 });
             }
         }
-    }
-
-    public override ValueTask DisposeAsync()
-    {
-        TemperatureHistory.HistoryItemsChanged -= OnTemperatureHistoryChanged;
-        return base.DisposeAsync();
     }
 
     private void ToastHeatingSuccess()

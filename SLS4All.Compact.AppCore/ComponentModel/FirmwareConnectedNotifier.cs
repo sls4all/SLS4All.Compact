@@ -37,7 +37,7 @@ namespace SLS4All.Compact.ComponentModel
         private readonly IOptionsMonitor<FirmwareConnectedNotifierOptions> _options;
         private readonly IPrinterClient _printer;
         private readonly IObjectFactory<IMelodyClient, object> _melodyClient;
-        private readonly object _syncRoot = new();
+        private readonly Lock _syncRoot = new();
         private readonly CancellationTokenSource _cancelSource;
         private bool _wasConnected;
 

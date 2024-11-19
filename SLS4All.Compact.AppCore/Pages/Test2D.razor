@@ -435,7 +435,7 @@
                         await closedScript.Execute(cancel);
                     else
                     {
-                        await using (await SafetySession.BeginSafetySession(cancel))
+                        await using (await SafetySession.BeginSafetySession(true, cancel))
                         {
                             await Movement.HomeXY(cancel: cancel);
                             await Printer.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings

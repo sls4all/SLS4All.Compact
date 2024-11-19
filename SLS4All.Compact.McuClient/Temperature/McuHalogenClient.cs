@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Diagnostics;
@@ -17,7 +16,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Configuration;
 
 namespace SLS4All.Compact.Temperature
@@ -32,9 +30,8 @@ namespace SLS4All.Compact.Temperature
     {
         private readonly ILogger _logger;
         private readonly IOptionsMonitor<McuHalogenClientOptions> _options;
-        private readonly IMediator _mediator;
         private readonly McuPrinterClient _printerClient;
-        private readonly IPrinterSettingsStorage _settingsStorage;
+        private readonly IPrinterSettings _settingsStorage;
         private readonly PeriodicTimer _lowFrequencyTimer;
         private readonly string _surfaceId;
 
@@ -51,14 +48,12 @@ namespace SLS4All.Compact.Temperature
         public McuHalogenClient(
             ILogger<McuHalogenClient> logger,
             IOptionsMonitor<McuHalogenClientOptions> options,
-            IMediator mediator,
             McuPrinterClient printerClient,
-            IPrinterSettingsStorage settingsStorage)
+            IPrinterSettings settingsStorage)
             : base(logger)
         {
             _logger = logger;
             _options = options;
-            _mediator = mediator;
             _printerClient = printerClient;
             _settingsStorage = settingsStorage;
 
@@ -130,7 +125,6 @@ namespace SLS4All.Compact.Temperature
                             var state = GetState(heater);
                             _lightCount = heater.LightCount;
                             _lowFrequencyState = state;
-                            await _mediator.Publish(state, cancel);
                             await StateChangedLowFrequency.Invoke(state, cancel);
                         }
                     }

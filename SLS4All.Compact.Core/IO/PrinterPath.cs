@@ -11,7 +11,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using Lexical.FileSystem.Internal;
 
 namespace SLS4All.Compact.IO
 {
@@ -29,7 +28,7 @@ namespace SLS4All.Compact.IO
         public const string Documents = "/documents";
         public const string JobExtension = ".s4a";
         public const string BackupExtension = ".s4abak";
-        public static readonly string[] PackageMasks = new[] { "*.s4a", "*.zip", "*.gz", "*.s4abak" };
+        public static readonly string[] PackageMasks = [ "*.s4a", "*.zip", "*.gz", "*.s4abak" ];
 
         public string PathSafe
         {
@@ -140,9 +139,6 @@ namespace SLS4All.Compact.IO
 
         public static string GetFileNameWithoutExtension(PrinterPath path)
             => System.IO.Path.GetFileNameWithoutExtension(path.PathSafe);
-
-        public static string GetParent(PrinterPath path)
-            => PathEnumerable.GetParent(path.PathSafe);
 
         public static implicit operator PrinterPath(string filename)
             => new PrinterPath(false, filename);

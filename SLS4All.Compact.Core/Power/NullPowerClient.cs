@@ -22,6 +22,8 @@ namespace SLS4All.Compact.Power
 {
     public sealed class NullPowerClient : IPowerClient
     {
+        public static NullPowerClient Instance { get; } = new ();
+
         public string LaserId => "laser";
 
         public PowerState CurrentState { get; } = new PowerState(Array.Empty<PowerEntry>(), new PowermanState(0, 0, 0, ""));

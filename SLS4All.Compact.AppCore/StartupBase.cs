@@ -4,7 +4,6 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Hosting;
@@ -52,6 +51,7 @@ using System.Net.WebSockets;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using SLS4All.Compact.Pages.Wizards;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore;
 
 namespace SLS4All.Compact
 {
@@ -59,8 +59,7 @@ namespace SLS4All.Compact
     {
         public static HashSet<string> NoCacheExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".css",
-            ".js",
+            ".css", ".js",
         };
         public const string ApplicationSection = "Application";
         public const string AppDataWriterSection = "UserProfileAppDataWriter";
@@ -111,21 +110,26 @@ namespace SLS4All.Compact
         {
         }
 
-        // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
-        public void ConfigureServices(IServiceCollection services)
+        public virtual void ConfigureServices(IServiceCollection services)
         {
             // application config
             var bootServiceProvider = GetBootServiceProvider(services);
-            var applicationOptions = bootServiceProvider.GetRequiredService<IOptions<ApplicationOptions>>().Value;
+            try
+            {
+                var applicationOptions = bootServiceProvider.GetRequiredService<IOptions<ApplicationOptions>>().Value;
 
-            // logging
-            ConfigureLogging(applicationOptions, services);
+                // logging
+                ConfigureLogging(applicationOptions, services);
 
-            if (applicationOptions.Proxy)
-                ConfigureServicesProxy(bootServiceProvider, applicationOptions, services);
-            else
-                ConfigureServicesApp(bootServiceProvider, applicationOptions, services);
+                if (applicationOptions.Proxy)
+                    ConfigureServicesProxy(bootServiceProvider, applicationOptions, services);
+                else
+                    ConfigureServicesApp(bootServiceProvider, applicationOptions, services);
+            }
+            finally
+            {
+                (bootServiceProvider as IDisposable)?.Dispose();
+            }
         }
 
         protected virtual void ConfigureServicesProxy(IServiceProvider bootServiceProvider, ApplicationOptions applicationOptions, IServiceCollection services)
@@ -134,21 +138,13 @@ namespace SLS4All.Compact
 
         protected virtual void ConfigureServicesApp(IServiceProvider bootServiceProvider, ApplicationOptions applicationOptions, IServiceCollection services)
         { 
-            SetupApp(bootServiceProvider, applicationOptions, services);
-
             LoadPluginAssemblies(applicationOptions);
             LoadPluginReplacements(applicationOptions);
 
-            services.Configure<ForwardedHeadersOptions>(options =>
-            {
-                options.ForwardedHeaders = ForwardedHeaders.All;
-            });
-            services.AddMediatR(builder =>
-            {
-                builder.RegisterServicesFromAssembly(typeof(StartupBase).Assembly);
-            });
+            services.Configure<ForwardedHeadersOptions>(Configuration.GetSection("ForwardedHeaders"));
             services.AddHttpClient();
             services.AddControllers().AddApplicationPart(typeof(StartupBase).Assembly);
+            services.AddRazorComponents().AddInteractiveServerComponents();
 
             // storage
             services.Configure<FileSystemPrintProfileStorageOptions>(Configuration.GetSection("FileSystemPrintProfileStorage"));
@@ -323,36 +319,27 @@ namespace SLS4All.Compact
             }
         }
 
-        protected virtual void SetupApp(IServiceProvider bootServiceProvider, ApplicationOptions applicationOptions, IServiceCollection services)
-        {
-        }
-
         protected abstract IServiceProvider GetBootServiceProvider(IServiceCollection services);
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public virtual void Configure(
-            IServiceProvider services,
-            IApplicationBuilder app,
-            IHostApplicationLifetime lifetime,
-            ILogger<StartupBase> logger,
-            IOptions<ApplicationOptions> options)
+        public virtual void ConfigureApp(
+            ILogger logger,
+            WebApplication app)
         {
+            var options = app.Services.GetRequiredService<IOptions<ApplicationOptions>>();
+            var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
             var o = options.Value;
             if (o.Proxy)
-                ConfigureProxy(services, lifetime, logger, options);
+                ConfigureAppAsProxy(logger, options, app.Services, lifetime, app);
             else
-                ConfigureApp(
-                    logger,
-                    options,
-                    app,
-                    lifetime,
-                    services);
+                ConfigureAppAsApplication(logger, options, app.Services, lifetime, app);
         }
 
-        protected virtual void ConfigureProxy(IServiceProvider services,
+        protected virtual void ConfigureAppAsProxy(
+            ILogger logger,
+            IOptions<ApplicationOptions> options,
+            IServiceProvider services,
             IHostApplicationLifetime lifetime,
-            ILogger<StartupBase> logger,
-            IOptions<ApplicationOptions> options)
+            WebApplication app)
         {
             var constructables = services.GetRequiredService<IEnumerable<IObjectFactory<IConstructable, object>>>();
             var delayedConstructables = services.GetRequiredService<IEnumerable<IObjectFactory<IDelayedConstructable, object>>>();
@@ -365,12 +352,12 @@ namespace SLS4All.Compact
                 .GetAwaiter().GetResult();
         }
 
-        protected virtual void ConfigureApp(
-            ILogger<StartupBase> logger,
+        protected virtual void ConfigureAppAsApplication(
+            ILogger logger,
             IOptions<ApplicationOptions> options,
-            IApplicationBuilder app,
+            IServiceProvider services,
             IHostApplicationLifetime lifetime,
-            IServiceProvider services)
+            WebApplication app)
         {
             var server = services.GetRequiredService<IServer>();
             var feOptions = services.GetRequiredService<IOptions<FrontendOptions>>();
@@ -399,6 +386,7 @@ namespace SLS4All.Compact
             });
 
             app.UseRouting();
+            app.UseAntiforgery();
 
             app.UseRequestLocalization(parameters =>
             {
@@ -412,15 +400,11 @@ namespace SLS4All.Compact
                 parameters.RequestCultureProviders.Insert(0, new PrinterLocalRequestCultureProvider(printerCultureManager));
             });
 
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
-                endpoints.MapBlazorHub();
-                endpoints.MapFallbackToPage("/_Host");
-            });
+            app.MapControllers();
 
             // https://github.com/dotnet/aspnetcore/issues/27966
-            app.Use((ctx, next) => {
+            app.Use((ctx, next) =>
+            {
                 SetCacheHeadersIfNecessary(ctx);
                 return next();
             });

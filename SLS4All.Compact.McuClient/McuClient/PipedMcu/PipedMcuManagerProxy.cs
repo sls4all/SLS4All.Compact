@@ -11,7 +11,6 @@ using SLS4All.Compact.Helpers;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
-using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Temperature;
 using SLS4All.Compact.Threading;
 using System;
@@ -32,7 +31,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             ILoggerFactory loggerFactory, 
             IOptionsMonitor<McuManagerOptions> options, 
             IAppDataWriter appDataWriter,
-            IPrinterSettingsStorage settingsStorage,
+            IPrinterSettings settingsStorage,
             IOptionsMonitor<McuStepperGlobalOptions>? optionsStepperGlobal = null, 
             ITemperatureCamera? temperatureCamera = null) : base(loggerFactory, options, appDataWriter, [], settingsStorage, optionsStepperGlobal, temperatureCamera)
         {
@@ -44,9 +43,9 @@ namespace SLS4All.Compact.McuClient.PipedMcu
         protected override IMcu CreateMcu(ILoggerFactory loggerFactory, IAppDataWriter appDataWriter, McuManager mcuManagerBase, IOptions<McuManagerOptions.ManagerMcuOptions> options, IMcuClockSync clockSync, IEnumerable<IMcuDeviceFactory> deviceFactories)
             => new PipedMcuProxy(loggerFactory, appDataWriter, this, options, clockSync);
 
-        public override bool TryCollectGarbageBlocking()
+        public override bool TryCollectGarbageBlocking(bool performMajorCleanup)
         {
-            if (!base.TryCollectGarbageBlocking())
+            if (!base.TryCollectGarbageBlocking(performMajorCleanup))
                 return false;
             foreach (var mcu in _mcuItems.Values)
             {
@@ -54,7 +53,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 {
                     try
                     {
-                        if (((PipedMcuProxy)mcu.Mcu).TryCollectGarbageBlocking())
+                        if (((PipedMcuProxy)mcu.Mcu).TryCollectGarbageBlocking(performMajorCleanup))
                         {
                             // single MCU suffices, all MCUs lead to the same process
                             return true;

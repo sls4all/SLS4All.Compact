@@ -39,7 +39,7 @@ namespace SLS4All.Compact.McuClient.Sensors
     public sealed class InovaSurfaceBoxSensor : IMcuTemperatureSensor
     {
         private readonly IOptions<InovaSurfaceBoxSensorOptions> _options;
-        private readonly object _locker = new object();
+        private readonly Lock _locker = new();
         private readonly McuManager _manager;
         private readonly ITemperatureCamera _camera;
         private readonly TaskQueue _readEventQueue;

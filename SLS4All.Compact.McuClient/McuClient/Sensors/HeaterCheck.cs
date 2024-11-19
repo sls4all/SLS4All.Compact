@@ -32,7 +32,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         private readonly IOptions<HeaterCheckOptions> _options;
         private readonly McuManager _manager;
         private readonly IMcuHeater _heater;
-        private readonly object _syncRoot = new();
+        private readonly Lock _syncRoot = new();
         private double _error;
         private double? _lastTarget;
         private double _goalTemperature;

@@ -36,7 +36,7 @@ namespace SLS4All.Compact.ComponentModel
         private readonly ISurfaceHeater _surface;
         private readonly IPrintingService _printing;
         private readonly IPrinterLifetime _lifetime;
-        private readonly object _lock = new();
+        private readonly Lock _lock = new();
         private CancellationTokenSource? _cancelSource;
         private Task _task = Task.CompletedTask;
         private PrinterShutdownMode _scheduledMode;

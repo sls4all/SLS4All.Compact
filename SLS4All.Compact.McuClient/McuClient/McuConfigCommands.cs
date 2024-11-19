@@ -21,7 +21,7 @@ namespace SLS4All.Compact.McuClient
 {
     public sealed class McuConfigCommands
     {
-        private readonly object _lock = new object();
+        private readonly Lock _lock = new();
         private readonly List<McuCommand> _initCommands = new();
         private readonly List<McuCommand> _configCommands = new();
         private readonly List<McuCommand> _restartCommands = new();

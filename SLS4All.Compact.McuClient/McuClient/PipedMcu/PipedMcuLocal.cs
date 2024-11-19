@@ -11,7 +11,6 @@ using SLS4All.Compact.Configuration;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.Printer;
-using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Concurrent;
@@ -31,7 +30,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
     {
         private readonly ConcurrentDictionary<long, IDisposable> _responseHandlers;
         private readonly PriorityScheduler _streamToDeviceScheduler;
-        private readonly object _commandFactoriesLock = new();
+        private readonly Lock _commandFactoriesLock = new();
         private PipedCommandFactory[] _commandFactories = [];
         private long _lastSendWaitId;
         private long _lastResponseHandlerId;
@@ -66,7 +65,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             IOptions<McuOptions> options, 
             IMcuClockSync clockSync, 
             IEnumerable<IMcuDeviceFactory> deviceFactories,
-            IPrinterSettingsStorage settingsStorage) 
+            IPrinterSettings settingsStorage) 
             : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuLocal>(), appDataWriter, manager, options, clockSync, deviceFactories)
         {
             _responseHandlers = new();
@@ -231,22 +230,23 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                     GetCurrentErrorCommand(streamToDevice, cancel);
                     break;
                 case MessageType.CollectGarbageCommand:
-                    CollectGarbageCommand(streamToDevice, cancel);
+                    CollectGarbageCommand(body, streamToDevice, cancel);
                     break;
                 default:
                     throw new InvalidOperationException($"Invalid command received for MCU {Name}: {message.Type}");
             }
         }
 
-        private void CollectGarbageCommand(Stream streamToDevice, CancellationToken cancel)
+        private void CollectGarbageCommand(Span<byte> body, Stream streamToDevice, CancellationToken cancel)
         {
+            var performMajorCleanup = ReadBoolean(ref body);
             var hasCollected = false;
             var hasTimingCriticalCommandsScheduled = _manager.HasTimingCriticalCommandsScheduled;
             if (!hasTimingCriticalCommandsScheduled)
             {
                 _logger.LogDebug($"Collect garbage - begin");
                 var start = SystemTimestamp.Now;
-                hasCollected = _manager.TryCollectGarbageBlocking();
+                hasCollected = _manager.TryCollectGarbageBlocking(performMajorCleanup);
                 _logger.LogDebug($"Collect garbage - end. GC duration = {start.ElapsedFromNow}. CreatedCommands={_manager.CreatedCommands}, CreatedArenas={_manager.CreatedArenas}");
             }
             else

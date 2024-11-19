@@ -158,6 +158,18 @@ namespace SLS4All.Compact.Movement
         public double SinteredVolumeFactor { get; set; }
     }
 
+    public class BedLevelingSetup
+    {
+    }
+
+    public class FinishBedLevelingSetup
+    {
+        /// <summary>
+        /// Gets or sets if we are preparing for a dry printing (this generaly means that Z2 axis will be lowered slightly to prevent recoater from disturbing the surface during dry printing)
+        /// </summary>
+        public bool DryPrintEnabled { get; set; }
+    }
+
     /// <param name="Depth">Depth in mm</param>
     /// <param name="Volume">Volume in mm^3</param>
     public readonly record struct VolumeAndDepth(double Depth, double Volume)
@@ -166,7 +178,43 @@ namespace SLS4All.Compact.Movement
             => new VolumeAndDepth(x.Depth + y.Depth, x.Volume + y.Volume);
     }
 
-    public sealed record class PowderVolumeTotals(
+    public class BeginPrintSetup
+    {
+    }
+
+    public class EjectCakeSetup
+    {
+        /// <summary>
+        /// Depth [mm]
+        /// </summary>
+        public double? ExpectedDepth { get; set; }
+    }
+
+    public class HomeBedsAndRecoaterSetup
+    {
+        /// <summary>
+        /// Depth [mm]
+        /// </summary>
+        public double PowderChamberDepth { get; set; }
+    }
+
+    public class SetPowderDepthSetup
+    {
+        /// <summary>
+        /// Depth [mm]
+        /// </summary>
+        public double TotalPowderChamberDepth { get; set; }
+    }
+
+    public class EndLayerSetup
+    {
+    }
+
+    public class EndPrintSetup
+    {
+    }
+
+    public record class PowderVolumeTotals(
         VolumeAndDepth BedLeveling,
         VolumeAndDepth BedPreparation,
         VolumeAndDepth Job, 
@@ -189,16 +237,16 @@ namespace SLS4All.Compact.Movement
     public interface ILayerClient
     {
         PowderVolumeTotals GetPowderVolume(PowderVolumeSetup setup);
-        Task BedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default);
-        Task FinishBedLeveling(StatusUpdater? onStatus, CancellationToken cancel = default);
-        Task BeginPrint(CancellationToken cancel = default);
+        Task BedLeveling(BedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task FinishBedLeveling(FinishBedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task BeginPrint(BeginPrintSetup setup, CancellationToken cancel = default);
         Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
         Task BeginLayer(BeginLayerSetup setup, CancellationToken cancel = default);
-        Task EndLayer(CancellationToken cancel = default);
+        Task EndLayer(EndLayerSetup setup, CancellationToken cancel = default);
         Task PrintCap(PrintCapSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
-        Task EndPrint(CancellationToken cancel = default);
-        Task HomeBedsAndRecoater(double powderChamberDepth, StatusUpdater? status = null, CancellationToken cancel = default);
-        Task SetPowderDepth(double totalPowderChamberDepth, CancellationToken cancel = default);
-        Task EjectCake(double? expectedDepth, CancellationToken cancel = default);
+        Task EndPrint(EndPrintSetup setup, CancellationToken cancel = default);
+        Task HomeBedsAndRecoater(HomeBedsAndRecoaterSetup setup, StatusUpdater? status = null, CancellationToken cancel = default);
+        Task SetPowderDepth(SetPowderDepthSetup setup, CancellationToken cancel = default);
+        Task EjectCake(EjectCakeSetup setup, CancellationToken cancel = default);
     }
 }

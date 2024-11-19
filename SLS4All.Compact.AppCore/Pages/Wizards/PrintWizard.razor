@@ -42,6 +42,7 @@
 
     var isSafeButtonOn = InputClient.CurrentState.TryGetEntry(InputClient.SafeButtonId, out var state) && state.Value;
     var needsLaser = _params?.Job?.NeedsLaser == true;
+    var dryPrintEnabled = _params?.Job?.DryPrintEnabled == true;
 }
 
 <PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
@@ -580,13 +581,40 @@
                 <p>
                     Printer has been <span class="text-success">sucessfuly prepared and checked!</span> Please continue to start the job on the <i>status</i> page.
                 </p>
-                @if (!isSafeButtonOn && needsLaser)
+                @if (dryPrintEnabled)
                 {
-                    <p class="pt-3">
-                        <span class="badge badge-warning text-wrap">
-                            Please close the <i>Printer Lid</i>, put on the <i>Over Powder Bin</i> and turn on the <i>Laser Safety Key</i> before continuing. Remember to turn off the <i>Laser Safety Key</i> while not printing!
-                        </span>
+                    <p>
+                        The job will be <span class="text-warning">printed in <b>test mode</b> (so called <b>dry printing</b>)</span>. 
+                        This means that only minimum amount powder will be used, only for correct thermal response for testing of the surface heater. 
+                        Chamber heaters will also be enabled, same as in real printing. 
+                        The Z1, Z2 axes and recoater will move, but will not add new layers. 
+                        The laser will remain disabled, no powder will be sintered.
                     </p>
+                    <p>
+                        If you do not wish the <b>dry printing</b> to be enabled, please disable the corresponding property in the job.
+                    </p>
+                }
+                @if (needsLaser)
+                {
+                    if (!isSafeButtonOn)
+                    {
+                        <p class="pt-3">
+                            <span class="badge badge-warning text-wrap">
+                                Please close the <i>Printer Lid</i>, put on the <i>Over Powder Bin</i> and turn on the <i>Laser Safety Key</i> before continuing. Remember to turn off the <i>Laser Safety Key</i> while not printing!
+                            </span>
+                        </p>
+                    }
+                }
+                else
+                {
+                    if (isSafeButtonOn)
+                    {
+                        <p class="pt-3">
+                            <span class="badge badge-warning text-wrap">
+                                This job does not need laser to be enabled. Please <b>turn OFF</b> the <i>Laser Safety Key</i>.
+                            </span>
+                        </p>
+                    }
                 }
                 @if (_showSurfaceHeaterOverride)
                 {
@@ -613,7 +641,7 @@
                 }
                 <hr class="my-3">
                 <p class="lead">
-                    @if (isSafeButtonOn || !needsLaser)
+                    @if ((needsLaser && isSafeButtonOn) || (!needsLaser && !isSafeButtonOn))
                     {
                         <a class="btn btn-primary btn-lg" role="button" @onclick="() => DoStep()">Start the job...</a>
                     }
@@ -702,7 +730,8 @@
             _layerCount = null;
             if (MainLayout!.IsDeveloperMode && _params != null)
                 _showSurfaceHeaterOverride = !string.IsNullOrWhiteSpace(_params.Setup.SoftHeaterFilename);
-            if (_params?.Job is AnalyseJob analyseJob)
+            if (_params?.Job is AnalyseJob ||
+                _params?.Job.DryPrintEnabled == true)
             {
                 StepIndex = Step.Homing;
                 var setup = new PowderVolumeSetup
@@ -887,8 +916,8 @@
                     StepIndex++;
                 _addPowderIteration = 0;
                 _addPowderIterationCount = _params.Profile.AddPowderDepth > 0
-                ? (int)Math.Ceiling(_volumeTotals.Total.Depth / (double)_params.Profile.AddPowderDepth!.Value)
-                : _volumeTotals.Total.Depth > 0 ? 1 : 0;
+                    ? (int)Math.Ceiling(_volumeTotals.Total.Depth / (double)_params.Profile.AddPowderDepth!.Value)
+                    : _volumeTotals.Total.Depth > 0 ? 1 : 0;
             }
             else
                 StepIndex++;
@@ -1012,14 +1041,26 @@
                 }
                 catch (Exception ex)
                 {
+                    var lastStreamingLayer = PrintingGlobal.LastStreamingLayer;
                     if (cancel.IsCancellationRequested)
                     {
                         await session.Cancelled(default);
+                        
                         ToastProvider.Show(new ToastMessage
                             {
                                 Type = ToastMessageType.Warning,
                                 HeaderText = "Job failed",
-                                Body = @<text>The job was cancelled! <br />Click here to eject the cake...</text>,
+                                Body = 
+                                    @<text>
+                                        The job was cancelled!
+                                        @if (lastStreamingLayer != null)
+                                        {
+                                            <br />
+                                            <text>Last printed layer: @(lastStreamingLayer.Index + 1)/@(lastStreamingLayer.Count)</text>
+                                        }
+                                        <br />
+                                        Click here to eject the cake...
+                                    </text>,
                                 TargetUri = $"{EjectWizard.SelfPath}",
                                 Exception = ex,
                                 Silent = false, // async, beep
@@ -1034,7 +1075,15 @@
                                 {
                                     Type = ToastMessageType.Error,
                                     HeaderText = "Job failed",
-                                    Body =@<text>@ex.Message</text> ,
+                                    Body = 
+                                    @<text>
+                                        @ex.Message
+                                        @if (lastStreamingLayer != null)
+                                        {
+                                            <br />
+                                            <text>Last printed layer: @(lastStreamingLayer.Index + 1)/@(lastStreamingLayer.Count)</text>
+                                        }
+                                    </text>,
                                     Exception = ex,
                                     Silent = false, // async, beep
                                 });
@@ -1045,7 +1094,17 @@
                                 {
                                     Type = ToastMessageType.Error,
                                     HeaderText = "Job failed",
-                                    Body =@<text>@ex.Message <br />Click here to eject the cake...</text> ,
+                                    Body = 
+                                    @<text>
+                                        @ex.Message
+                                        @if (lastStreamingLayer != null)
+                                        {
+                                            <br />
+                                            <text>Last printed layer: @(lastStreamingLayer.Index + 1)/@(lastStreamingLayer.Count)</text>
+                                        }
+                                        <br />
+                                        Click here to eject the cake...
+                                    </text>,
                                     TargetUri = $"{EjectWizard.SelfPath}",
                                     Exception = ex,
                                     Silent = false, // async, beep
@@ -1086,7 +1145,11 @@
         return await ProgressModal.Execute(
             async cancel =>
             {
-                await LayerClient.HomeBedsAndRecoater(0, OnStatus, cancel);
+                var setup = new HomeBedsAndRecoaterSetup
+                {
+                    PowderChamberDepth = 0,
+                };
+                await LayerClient.HomeBedsAndRecoater(setup, OnStatus, cancel);
                 _startZ2Position = 0; // NOTE: homed, position is 0
                 return true;
             },
@@ -1105,7 +1168,10 @@
         if (!await ProgressModal.Execute(
             async cancel =>
             {
-                await LayerClient.BedLeveling(OnStatus, cancel);
+                var setup = new BedLevelingSetup
+                {
+                };
+                await LayerClient.BedLeveling(setup, OnStatus, cancel);
                 return true;
             },
             false,
@@ -1117,7 +1183,11 @@
             await CancelModal.Execute(
                 async cancel =>
                 {
-                    await LayerClient.SetPowderDepth(_volumeTotals!.Total.Depth * 1000, cancel: cancel);
+                    var setup = new SetPowderDepthSetup
+                    {
+                        TotalPowderChamberDepth = _volumeTotals!.Total.Depth,
+                    };
+                    await LayerClient.SetPowderDepth(setup, cancel: cancel);
                 },
                 titleText: "Please wait",
                 bodyText: "Resetting powder bed...",
@@ -1132,17 +1202,21 @@
         if (IsPrinting) // page will render error
             return false;
         ResetStatus();
+        var setup = new FinishBedLevelingSetup
+        {
+            DryPrintEnabled = _params?.Job?.DryPrintEnabled ?? false,
+        };
         return await ProgressModal.Execute(
             async cancel =>
             {
-                await LayerClient.FinishBedLeveling(OnStatus, cancel);
+                await LayerClient.FinishBedLeveling(setup, OnStatus, cancel);
                 return true;
             },
             false,
             titleText: "Please wait",
-            bodyText: "Finishinh bed leveling...",
-            cancelText: "Interrupt bed leveling finish",
-            errorToastHeaderText: "Failed to do bed leveling finish");
+            bodyText: "Finishing bed leveling...",
+            cancelText: "Interrupt bed leveling",
+            errorToastHeaderText: "Failed to do bed leveling");
     }
 
     private async Task<bool> DoHalogenCheck()
@@ -1218,7 +1292,11 @@
         await CancelModal.Execute(
             async cancel =>
             {
-                await LayerClient.SetPowderDepth(_volumeTotals!.Total.Depth * 1000 * (_addPowderIteration + 1) / _addPowderIterationCount, cancel: cancel);
+                var setup = new SetPowderDepthSetup
+                {
+                    TotalPowderChamberDepth = _volumeTotals!.Total.Depth * (_addPowderIteration + 1) / _addPowderIterationCount,
+                };
+                await LayerClient.SetPowderDepth(setup, cancel: cancel);
                 _addPowderIteration++;
             },
             titleText: "Please wait",
