@@ -52,8 +52,9 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
-            IPrinterSettings settingsStorage)
-            : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuManagerLocal>(), options, appDataWriter, deviceFactories, settingsStorage)
+            IPrinterSettings settingsStorage, 
+            IThreadStackTraceDumper stackTraceDumper)
+            : base(loggerFactory, loggerFactory.CreateLogger<PipedMcuManagerLocal>(), options, appDataWriter, deviceFactories, settingsStorage, stackTraceDumper)
         {
         }
 

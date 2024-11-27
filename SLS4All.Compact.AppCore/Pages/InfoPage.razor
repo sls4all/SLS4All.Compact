@@ -2,6 +2,7 @@
 @inherits AppPage
 @using System.Numerics
 @using SLS4All.Compact.ComponentModel;
+@using SLS4All.Compact.Diagnostics
 @using SLS4All.Compact.Power;
 @using SLS4All.Compact.Printer;
 @using SLS4All.Compact.Scripts
@@ -10,6 +11,8 @@
 @inject IPrinterClient PrinterClient
 @inject IToastProvider ToastProvider
 @inject IMelodyClient Buzzer
+@inject ILogger<InfoPage> Logger
+@inject ThreadStackTraceDumper ThreadStackTraceDumper
 
 <PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-home.png" IsFullPage="false" />
 
@@ -34,6 +37,8 @@ Window size @_width x @_height
 <button class="btn btn-danger" @onclick="() => ThrowError()">Throw error</button>
 <br />
 <button class="btn btn-warning" @onclick="() => PrinterGC.CollectGarbageBlockingAggressive()">GC Collect aggressive</button>
+<br />
+<button class="btn btn-warning" @onclick="() => DumpThreads()">Dump threads to log</button>
 <br />
 
 @code {
@@ -87,5 +92,11 @@ Window size @_width x @_height
     private void ThrowError()
     {
         throw new ApplicationException("User invoked error");
+    }
+
+    private void DumpThreads()
+    {
+        var dump = ThreadStackTraceDumper.DumpThreads();
+        Logger.LogError($"Thread dump\n{dump}");
     }
 }

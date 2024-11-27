@@ -45,6 +45,8 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             ClockSyncExceptionEvent,
             LostCommunicationEvent,
             CollectGarbageCommand,
+            EnterPrintingModeCommand,
+            ExitPrintingModeCommand,
         }
 
         public const int MinMessageLength = 5;

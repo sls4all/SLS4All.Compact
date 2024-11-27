@@ -106,7 +106,7 @@ namespace SLS4All.Compact.McuClient
             _responseTaskQueue = new();
             _maxInflightBlocks = Math.Min(o.MaxInflightBlocks, McuCodec.SeqMask);
             _statsPeriod = o.StatsPeriod;
-            _commandQueueNeedsLock = new McuCommandQueue(this, o);
+            _commandQueueNeedsLock = new McuCommandQueue(loggerFactory.CreateLogger<McuCommandQueue>(), this, o);
             _configCommands = new();
         }
 

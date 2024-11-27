@@ -7,6 +7,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Configuration;
+using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Helpers;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
@@ -32,8 +33,9 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             IOptionsMonitor<McuManagerOptions> options, 
             IAppDataWriter appDataWriter,
             IPrinterSettings settingsStorage,
+            IThreadStackTraceDumper stackTraceDumper,
             IOptionsMonitor<McuStepperGlobalOptions>? optionsStepperGlobal = null, 
-            ITemperatureCamera? temperatureCamera = null) : base(loggerFactory, options, appDataWriter, [], settingsStorage, optionsStepperGlobal, temperatureCamera)
+            ITemperatureCamera? temperatureCamera = null) : base(loggerFactory, options, appDataWriter, [], settingsStorage, stackTraceDumper, optionsStepperGlobal, temperatureCamera)
         {
         }
 
@@ -42,6 +44,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 
         protected override IMcu CreateMcu(ILoggerFactory loggerFactory, IAppDataWriter appDataWriter, McuManager mcuManagerBase, IOptions<McuManagerOptions.ManagerMcuOptions> options, IMcuClockSync clockSync, IEnumerable<IMcuDeviceFactory> deviceFactories)
             => new PipedMcuProxy(loggerFactory, appDataWriter, this, options, clockSync);
+
 
         public override bool TryCollectGarbageBlocking(bool performMajorCleanup)
         {
@@ -66,6 +69,52 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 }
             }
             return false;
+        }
+
+        public override void EnterPrintingMode()
+        {
+            // NOTE: do not call base
+            foreach (var mcu in _mcuItems.Values)
+            {
+                if (!mcu.Mcu.IsShutdown)
+                {
+                    try
+                    {
+                        if (((PipedMcuProxy)mcu.Mcu).TryEnterPrintingMode())
+                        {
+                            // single MCU suffices, all MCUs lead to the same process
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed to enter printing mode using MCU {mcu.Mcu}");
+                    }
+                }
+            }
+        }
+
+        public override void ExitPrintingMode()
+        {
+            // NOTE: do not call base
+            foreach (var mcu in _mcuItems.Values)
+            {
+                if (!mcu.Mcu.IsShutdown)
+                {
+                    try
+                    {
+                        if (((PipedMcuProxy)mcu.Mcu).TryExitPrintingMode())
+                        {
+                            // single MCU suffices, all MCUs lead to the same process
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed to enter prniting mode using MCU {mcu.Mcu}");
+                    }
+                }
+            }
         }
     }
 }

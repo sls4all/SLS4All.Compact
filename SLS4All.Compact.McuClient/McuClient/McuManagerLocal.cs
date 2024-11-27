@@ -152,6 +152,7 @@ namespace SLS4All.Compact.McuClient
         public Dictionary<string, string?> KeepaliveEnablePins { get; set; } = new();
         public TimeSpan KeepaliveEnablePeriod { get; set; } = TimeSpan.FromSeconds(1);
         public TimeSpan KeepaliveEnableMaxDuration { get; set; } = TimeSpan.FromSeconds(5);
+        public TimeSpan QueueMasterLockTimeout { get; set; } = TimeSpan.FromSeconds(5);
     }
 
     public record class McuManagerShutdownReason(IMcu? Mcu, string? Reason)
@@ -206,9 +207,10 @@ namespace SLS4All.Compact.McuClient
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
             IPrinterSettings settingsStorage,
+            IThreadStackTraceDumper stackTraceDumper,
             IOptionsMonitor<McuStepperGlobalOptions>? optionsStepperGlobal = null,
             ITemperatureCamera? temperatureCamera = null)
-            : base(loggerFactory, loggerFactory.CreateLogger<McuManager>(), options, appDataWriter, deviceFactories, settingsStorage)
+            : base(loggerFactory, loggerFactory.CreateLogger<McuManager>(), options, appDataWriter, deviceFactories, settingsStorage, stackTraceDumper)
         {
             _optionsStepperGlobal = optionsStepperGlobal ?? ConstantOptionsMonitor.Create(new McuStepperGlobalOptions());
             _temperatureCamera = temperatureCamera ?? NullTemperatureCamera.Instance;

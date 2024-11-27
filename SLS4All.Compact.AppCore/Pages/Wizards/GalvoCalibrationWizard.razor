@@ -482,7 +482,7 @@
                         await using (await SafetySession.BeginSafetySession(true, cancel))
                         {
                             await Movement.HomeXY(cancel: cancel);
-                            await PrinterClient.Stream(closedScript, synchronousScriptExecution: false, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
+                            await PrinterClient.Stream(closedScript, hidden: true /* hide! */, cancel: cancel); // NOTE: hide! Otherwise GC will go awry from all the GCode strings
                             await Movement.FinishMovement(cancel: cancel);
                         }
                         watch.Stop();

@@ -84,7 +84,7 @@ namespace SLS4All.Compact.Power
             }
             else
             {
-                using (var master = manager.LockMasterQueue())
+                using (var master = manager.EnterMasterQueueLock())
                 {
                     var timestamp = master[pin];
                     if (timestamp.IsEmpty || timestamp.ToSystem() < now + options.SetPinTime)

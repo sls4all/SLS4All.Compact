@@ -12,15 +12,16 @@
 		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>
 		<RootNamespace>SLS4All.Compact</RootNamespace>
 		<!--<GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>-->
-    <!--<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
+		<!--<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
 
-    <!-- https://github.com/dotnet/sdk/issues/43470 -->
-    <StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
-    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
-    <EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
+		<!-- https://github.com/dotnet/sdk/issues/43470 -->
+		<StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
+		<StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
+		<EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Microsoft.Diagnostics.Runtime" Version="4.0.0-beta.24360.3" />
 		<PackageReference Include="Microsoft.TypeScript.MSBuild" Version="5.6.2">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -33,9 +34,9 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.182.0.562"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.182.0.562"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.191.0.608"/>
 		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="9.0.0" />
 	</ItemGroup>
 

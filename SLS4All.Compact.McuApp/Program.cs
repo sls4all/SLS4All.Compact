@@ -89,6 +89,7 @@ namespace SLS4All.Compact.McuApp
             builder.Services.AddAsImplementationAndParents<PipedMcuManagerLocal>(ServiceLifetime.Singleton);
             builder.Services.AddAsImplementationAndInterfaces<PipedMcuComponent>(ServiceLifetime.Singleton);
             builder.Services.AddAsImplementationAndInterfaces<NullPrinterSettings>(ServiceLifetime.Singleton);
+            builder.Services.AddAsImplementationAndInterfaces<NullThreadStackTraceDumper>(ServiceLifetime.Singleton);
 
             builder.Services.Configure<McuAliasesOptions>(builder.Configuration.GetSection("McuAliases"));
             switch (applicationOptions.McuSerialDeviceFactory)

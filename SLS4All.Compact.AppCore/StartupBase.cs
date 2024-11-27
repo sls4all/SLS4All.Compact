@@ -244,6 +244,7 @@ namespace SLS4All.Compact
 
             //services.AddAsImplementationAndInterfaces<BasicSlicerEdgeSorter>(ServiceLifetime.Transient);
             services.AddAsImplementationAndInterfaces<AdvancedSlicerEdgeSorter>(ServiceLifetime.Transient);
+            services.AddAsImplementationAndInterfaces<ThreadStackTraceDumper>(ServiceLifetime.Singleton);
         }
 
         protected virtual void LoadPluginAssemblies(ApplicationOptions applicationOptions)

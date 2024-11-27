@@ -22,8 +22,9 @@ namespace SLS4All.Compact.Printer
         /// <summary>
         /// How many seconds of code commands to stream before throttling down to real-time for more
         /// </summary>
-        public TimeSpan StreamingBufferTime { get; set; } = TimeSpan.FromSeconds(15);
+        public TimeSpan StreamingBufferTime { get; set; } = TimeSpan.MaxValue;
         public bool DisableStreamPublishSynchronization { get; set; } = false;
+        public TimeSpan ExecuteDiagTaskPeriod { get; set; } = TimeSpan.FromMinutes(5);
     }
 
     public abstract class PrinterClientBase : IPrinterClient
@@ -32,8 +33,9 @@ namespace SLS4All.Compact.Printer
         private readonly IOptionsMonitor<PrinterClientBaseOptions> _options;
         private long _lastIndex;
         private readonly IObjectFactory<IMovementClient, object> _movementFactory;
-        private readonly PriorityScheduler _executeScheduler;
+        private readonly PriorityScheduler _scriptAndExecuteScheduler;
 
+        public abstract bool SupportsSustainedLowLatencyGCMode { get; }
         public abstract bool IsConnected { get; }
 
         public abstract long ConnectionIndex { get; }
@@ -66,7 +68,7 @@ namespace SLS4All.Compact.Printer
             _logger = logger;
             _options = options;
             _movementFactory = movementFactory;
-            _executeScheduler = new PriorityScheduler("PrinterClientExecute", ThreadPriority.AboveNormal, 3 /* script + publish + execute */);
+            _scriptAndExecuteScheduler = new PriorityScheduler("PrinterClientExecute", ThreadPriority.AboveNormal, 2 /* script + execute */);
         }
 
 
@@ -82,7 +84,6 @@ namespace SLS4All.Compact.Printer
 
         public async Task Stream(
             PrinterStream script, 
-            bool synchronousScriptExecution, 
             bool hidden, 
             IPrinterClientCommandContext? context = null, 
             CancellationToken cancel = default)
@@ -90,7 +91,7 @@ namespace SLS4All.Compact.Printer
             var options = _options.CurrentValue;
             var executeChannel = Channel.CreateUnbounded<CodeCommand>(new UnboundedChannelOptions()
             {
-                AllowSynchronousContinuations = synchronousScriptExecution,
+                AllowSynchronousContinuations = false,
                 SingleReader = true,
                 SingleWriter = true,
             });
@@ -110,13 +111,14 @@ namespace SLS4All.Compact.Printer
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, $"Exception in script task");
                     executeChannel.Writer.TryComplete(ex);
                 }
                 finally
                 {
                     _logger.LogDebug($"Script task completed");
                 }
-            }, default, TaskCreationOptions.LongRunning, _executeScheduler).Unwrap();
+            }, default, TaskCreationOptions.LongRunning, _scriptAndExecuteScheduler).Unwrap();
 
             var publishTask = Task.Factory.StartNew(async () =>
             {
@@ -140,11 +142,20 @@ namespace SLS4All.Compact.Printer
                         ArrayPool<CodeCommand>.Shared.Return(segment.Array!);
                     }
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Exception in publish task");
+                    throw;
+                }
                 finally
                 {
                     _logger.LogDebug($"Publish task completed");
                 }
             }, default, TaskCreationOptions.LongRunning, TaskScheduler.Current).Unwrap();
+
+            var executePhase = -1;
+            var executeCount = 0;
+            var executeBatchCount = 0;
 
             var executeTask = Task.Factory.StartNew(async () =>
             {
@@ -160,16 +171,23 @@ namespace SLS4All.Compact.Printer
                         var publishBatchStartFirst = SystemTimestamp.Now + queueAheadDelay;
                         await foreach (var cmd in executeChannel.Reader.ReadAllAsync(cancel))
                         {
+                            Volatile.Write(ref executePhase, 0);
                             if (remainingInBatch == 0)
                             {
                                 Debug.Assert(!publishBatchStart.IsEmpty);
-                                var remaining = (await movement.Instance.GetRemainingPrintTime(context, cancel));
+                                Volatile.Write(ref executePhase, 1);
+                                var remaining = await movement.Instance.GetRemainingPrintTime(context, cancel);
                                 var publishBatchSegment = new ArraySegment<CodeCommand>(ArrayPool<CodeCommand>.Shared.Rent(publishBatchBuffer.Count), 0, publishBatchBuffer.Count);
                                 publishBatchBuffer.CopyTo(publishBatchSegment.Array!, 0);
                                 publishBatchBuffer.Clear();
+                                Volatile.Write(ref executePhase, 2);
                                 await publishChannel.Writer.WriteAsync((publishBatchSegment, publishBatchStart, remaining.Timestamp), cancel);
+                                Interlocked.Increment(ref executeBatchCount);
                                 if (remaining.Duration > options.StreamingBufferTime)
+                                {
+                                    Volatile.Write(ref executePhase, 3);
                                     await Task.Delay(remaining.Duration - options.StreamingBufferTime, cancel);
+                                }
                                 remainingInBatch = streamingBatchSize;
                                 publishBatchStart = default;
                             }
@@ -178,7 +196,8 @@ namespace SLS4All.Compact.Printer
 
                             if (publishBatchStart.IsEmpty)
                             {
-                                var remaining = (await movement.Instance.GetRemainingPrintTime(context, cancel));
+                                Volatile.Write(ref executePhase, 4);
+                                var remaining = await movement.Instance.GetRemainingPrintTime(context, cancel);
                                 if (remaining.Timestamp > publishBatchStartFirst)
                                     publishBatchStart = remaining.Timestamp;
                                 else
@@ -187,31 +206,68 @@ namespace SLS4All.Compact.Printer
 
                             publishBatchBuffer.Add(cmd);
                             if (cmd.Value is DelegatedCodeFormatter formatter)
+                            {
+                                Volatile.Write(ref executePhase, 5);
                                 await formatter.Execute(cmd, hidden, context, cancel);
+                            }
+                            Volatile.Write(ref executePhase, 6);
+                            Interlocked.Increment(ref executeCount);
                         }
+                        Volatile.Write(ref executePhase, 7);
 
                         if (publishBatchBuffer.Count > 0)
                         {
                             Debug.Assert(!publishBatchStart.IsEmpty);
-                            var remaining = (await movement.Instance.GetRemainingPrintTime(context, cancel));
+                            Volatile.Write(ref executePhase, 8);
+                            var remaining = await movement.Instance.GetRemainingPrintTime(context, cancel);
                             var publishBatchSegment = new ArraySegment<CodeCommand>(ArrayPool<CodeCommand>.Shared.Rent(publishBatchBuffer.Count), 0, publishBatchBuffer.Count);
                             publishBatchBuffer.CopyTo(publishBatchSegment.Array!, 0);
+                            Volatile.Write(ref executePhase, 9);
                             await publishChannel.Writer.WriteAsync((publishBatchSegment, publishBatchStart, remaining.Timestamp), cancel);
+                            Interlocked.Increment(ref executeBatchCount);
                         }
                     }
                     publishChannel.Writer.TryComplete();
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, $"Exception in execute task (phase = {Volatile.Read(ref executePhase)}, count = {executeCount}, batchCount={executeBatchCount})");
                     publishChannel.Writer.TryComplete(ex);
                 }
                 finally
                 {
-                    _logger.LogDebug($"Execute task completed");
+                    _logger.LogDebug($"Execute task completed (phase = {Volatile.Read(ref executePhase)}, count = {executeCount}, batchCount={executeBatchCount})");
                 }
-            }, default, TaskCreationOptions.LongRunning, _executeScheduler).Unwrap();
+            }, default, TaskCreationOptions.LongRunning, _scriptAndExecuteScheduler).Unwrap();
 
-            await Task.WhenAll(scriptTask, executeTask, publishTask);
+            var executeDiagTask = Task.Factory.StartNew(async () =>
+            {
+                if (options.ExecuteDiagTaskPeriod == TimeSpan.Zero)
+                    return;
+                try
+                {
+                    while (true)
+                    {
+                        try
+                        {
+                            await executeTask.WaitAsync(options.ExecuteDiagTaskPeriod, cancel);
+                        }
+                        catch (TimeoutException)
+                        {
+                            // swallow
+                        }
+                        if (executeTask.IsCompleted)
+                            break;
+                        _logger.LogDebug($"Streaming execute phase: {Volatile.Read(ref executePhase)}, count: {Volatile.Read(ref executeCount)}, batchCount: {Volatile.Read(ref executeBatchCount)}");
+                    }
+                }
+                catch
+                {
+                    // swallow
+                }
+            }, default, TaskCreationOptions.LongRunning, TaskScheduler.Current).Unwrap();
+
+            await Task.WhenAll(scriptTask, executeTask, publishTask, executeDiagTask);
         }
 
         private PrinterResponse Publish(in CodeCommand cmd, bool allowSynchronous, bool hidden, bool needsResponse)
@@ -246,5 +302,9 @@ namespace SLS4All.Compact.Printer
         public abstract void Shutdown(string reason, Exception? ex, IPrinterClientCommandContext? context);
 
         public abstract (string Key, string Message)[] GetConnectionStatus();
+
+        public abstract Task EnterPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+
+        public abstract Task ExitPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
     }
 }

@@ -66,7 +66,7 @@ namespace SLS4All.Compact.McuClient
             if (Mcu == null)
                 return "empty";
             else
-                return $"{Clock} ({ClockPrecise} @ {Precision}) for {Mcu.Name} = {Mcu.ClockSync.GetTimestamp(Clock)}";
+                return $"{Clock} ({ClockPrecise} @ {Precision}) for {Mcu.Name} = {Mcu.ClockSync.GetTimestampDouble(ClockDouble)} ({Mcu.ClockSync.GetSecondsDurationDouble(ClockDouble)} sec)";
         }
 
         public static McuTimestamp FromSystem(IMcu mcu, SystemTimestamp timestamp, int precision = 0)

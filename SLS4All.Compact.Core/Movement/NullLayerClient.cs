@@ -53,8 +53,5 @@ namespace SLS4All.Compact.Movement
 
         public Task SetPowderDepth(SetPowderDepthSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
-
-        public Task PrepareDryPrint(CancellationToken cancel)
-            => Task.CompletedTask;
     }
 }

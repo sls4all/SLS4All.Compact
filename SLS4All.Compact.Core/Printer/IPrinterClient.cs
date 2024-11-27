@@ -51,8 +51,10 @@ namespace SLS4All.Compact.Printer
         Task WaitForConnection(CancellationToken cancel = default);
         Task Restart(PrinterClientRestartFlags type, CancellationToken cancel = default);
         Task<PrinterResponse> Send(CodeCommand cmd, bool hidden, bool throwOnError = true, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-        Task Stream(PrinterStream script, bool synchronousScriptExecution, bool hidden, IPrinterClientCommandContext? context = default, CancellationToken cancel = default);
+        Task Stream(PrinterStream script, bool hidden, IPrinterClientCommandContext? context = default, CancellationToken cancel = default);
         void Shutdown(string reason, Exception? ex, IPrinterClientCommandContext? context = default);
         (string Key, string Message)[] GetConnectionStatus();
+        Task EnterPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        Task ExitPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
     }
 }

@@ -62,6 +62,10 @@ namespace SLS4All.Compact.McuClient.Helpers
         /// Completely disables compression (development only!)
         /// </summary>
         public bool DisableCompression { get; set; } = false;
+        /// <summary>
+        /// Diagnostic timeout for XYL flushing
+        /// </summary>
+        public TimeSpan FlushTimeout { get; set; } = TimeSpan.FromSeconds(30);
     }
 
     public sealed class XYLMovementQueue
@@ -176,7 +180,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                 _flushingData = new();
             }
 
-            public bool GetIsFull(TimeSpan compressFlushPeriod)
+            public bool GetIsFull(double flushSeconds)
             {
                 var source = Source;
                 if (source.Count == 0)
@@ -185,12 +189,12 @@ namespace SLS4All.Compact.McuClient.Helpers
                 ref var first = ref source[0];
                 elapsed = source[^1].Time - first.Time;
                 Debug.Assert(elapsed >= 0);
-                if (elapsed >= compressFlushPeriod.TotalSeconds)
+                if (elapsed >= flushSeconds)
                     return true;
                 if (!first.IsReset)
                 {
                     elapsed = first.Time - LastFlushStartTime;
-                    if (elapsed >= compressFlushPeriod.TotalSeconds)
+                    if (elapsed >= flushSeconds)
                         return true;
                 }
                 return false;
@@ -226,6 +230,47 @@ namespace SLS4All.Compact.McuClient.Helpers
                         fallbackTime = value;
                 }
             }
+
+            public bool ShouldTimeoutFlush(double timeNow, double flushSeconds, ref double flushAfterResult)
+            {
+                if (IsEmpty)
+                    return false;
+                var timeLast = Source[^1].Time;
+                var flushAfter = timeLast < timeNow
+                    ? 0
+                    : Math.Max(flushSeconds - (timeLast - timeNow), 0);
+                if (flushAfter < flushAfterResult)
+                    flushAfterResult = flushAfter;
+                return flushAfterResult <= 0;
+            }
+
+            public void Dump(ILogger logger, LogLevel level, double time)
+            {
+                var buf = new StringBuilder();
+                buf.Append($"Dump StepperState({Type}): time={time}, LastFlushStartTime={LastFlushStartTime}, Source={{");
+                foreach (var item in Source)
+                {
+                    buf.Append(item);
+                    buf.Append("; ");
+                }
+                buf.Append($"}}");
+                logger.Log(level, buf.ToString());
+            }
+        }
+
+        public struct FlushLockDisposable(XYLMovementQueue? queue) : IDisposable
+        {
+            private XYLMovementQueue? _queue = queue;
+
+            public void Dispose()
+            {
+                var queue = _queue;
+                if (queue != null)
+                {
+                    _queue = null;
+                    queue._flushLock.Exit();
+                }
+            }
         }
 
         private static readonly object _trueBox = true;
@@ -234,27 +279,25 @@ namespace SLS4All.Compact.McuClient.Helpers
         private readonly IOptionsMonitor<XYLMovementQueueOptions> _options;
         private readonly McuPrinterClient _printerClient;
         private readonly McuMovementClient _movementClient;
+        private readonly IThreadStackTraceDumper _stackTraceDumper;
         private readonly Lock _flushLock = new();
         private readonly Timer _flushTimer;
         private readonly PriorityScheduler _flushScheduler1;
         private readonly PriorityScheduler _flushScheduler2;
         private readonly Action<object?> _flushXYLOnlyOnDedicatedThread;
         private IPrinterClientCommandContext? _timerFlushContext;
-        private TimeSpan _flushAfterNeedsLocks;
+        private TimeSpan _flushAfterNeedsFlushLock;
         private StepperState _stateX;
         private StepperState _stateY;
         private StepperState _stateL;
+        private Timer _flushGuardTimer;
+        private volatile Thread? _flushGuardThread;
 
-        /// <summary>
-        /// Gets synchronization object acquired while flushing. Master lock cannot be held when locking <see cref="FlushLock"/>!
-        /// While in flush lock, the XYL steppers timestamps might be updated.
-        /// </summary>
-        public Lock FlushLock => _flushLock;
         /// <summary>
         /// If flush is scheduled, this is maxiumum time after it will happen. Otherwise set to <see cref="TimeSpan.MaxValue"/>.
         /// Read in flush and then master lock.
         /// </summary>
-        public TimeSpan FlushAfterNeedsLocks => _flushAfterNeedsLocks;
+        public TimeSpan FlushAfterNeedsLocks => _flushAfterNeedsFlushLock;
 
         /// <remarks>
         /// Must be accesed only in master lock.
@@ -272,17 +315,19 @@ namespace SLS4All.Compact.McuClient.Helpers
             ILogger logger,
             IOptionsMonitor<XYLMovementQueueOptions> options,
             McuPrinterClient printerClient,
-            McuMovementClient movementClient)
+            McuMovementClient movementClient,
+            IThreadStackTraceDumper stackTraceDumper)
         {
             _logger = logger;
             _options = options;
             _printerClient = printerClient;
             _movementClient = movementClient;
+            _stackTraceDumper = stackTraceDumper;
             _stateX = new(StepperType.X);
             _stateY = new(StepperType.Y);
             _stateL = new(StepperType.L);
             _flushTimer = new(OnFlushTimer);
-            _flushAfterNeedsLocks = TimeSpan.MaxValue;
+            _flushAfterNeedsFlushLock = TimeSpan.MaxValue;
             _flushXYLOnlyOnDedicatedThread = state =>
             {
                 if (state == null)
@@ -304,11 +349,14 @@ namespace SLS4All.Compact.McuClient.Helpers
                 $"{nameof(XYLMovementQueue)} XYL [_XYLFlushing_], thread {{0}}",
                 ThreadPriority.AboveNormal,
                 3 /* x + y + l */);
+            _flushGuardTimer = new Timer(OnFlushTimeout);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddXY(double time, double x, double y)
         {
+            Debug.Assert(_stateX.IsEmpty || _stateX.Source[^1].Time <= time);
+            Debug.Assert(_stateY.IsEmpty || _stateY.Source[^1].Time <= time);
             _stateX.AddSource(new XYLMovementPoint(time, x));
             _stateY.AddSource(new XYLMovementPoint(time, y));
         }
@@ -316,6 +364,7 @@ namespace SLS4All.Compact.McuClient.Helpers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddL(double time, double pwm)
         {
+            Debug.Assert(_stateL.IsEmpty || _stateL.Source[^1].Time <= time);
             _stateL.AddSource(new XYLMovementPoint(time, pwm));
         }
 
@@ -335,23 +384,33 @@ namespace SLS4All.Compact.McuClient.Helpers
             }
         }
 
-        private bool ScheduleFlushInner(
+        private bool ScheduleFlushInFlushLock(
             McuManager manager,
-            bool forceImmediateFlushAll, 
+            IMcu mcu,
+            bool forceImmediateFlushAll,
             bool noImmediateInsteadReturnTrue,
             XYLMovementQueueOptions options,
             IPrinterClientCommandContext? context)
         {
-            if (_flushAfterNeedsLocks != TimeSpan.Zero) // not already immediate
+            Debug.Assert(_flushLock.IsHeldByCurrentThread);
+            var flushSeconds = options.CompressFlushPeriod.TotalSeconds;
+            var flushAfterResult = flushSeconds;
+            if (_flushAfterNeedsFlushLock != TimeSpan.Zero || // not already immediate
+                noImmediateInsteadReturnTrue || // or we want true instead
+                forceImmediateFlushAll) // or we are force flushing
             {
                 var immediateFlushAll = forceImmediateFlushAll;
                 if (!immediateFlushAll)
                 {
-                    using (var master = manager.LockMasterQueue())
+                    var now = SystemTimestamp.Now;
+                    var time = ToTime(mcu, now);
+                    using (var master = manager.EnterMasterQueueLock())
                     {
-                        if (_stateX.GetIsFull(options.CompressFlushPeriod) ||
-                            _stateY.GetIsFull(options.CompressFlushPeriod) ||
-                            _stateL.GetIsFull(options.CompressFlushPeriod))
+                        if (_stateX.ShouldTimeoutFlush(time, flushSeconds, ref flushAfterResult) | // USE | NOT || here!
+                            _stateX.ShouldTimeoutFlush(time, flushSeconds, ref flushAfterResult) | // USE | NOT || here!
+                            _stateX.ShouldTimeoutFlush(time, flushSeconds, ref flushAfterResult))
+                            immediateFlushAll = true;
+                        else if (_stateX.GetIsFull(flushSeconds) || _stateY.GetIsFull(flushSeconds) || _stateL.GetIsFull(flushSeconds))
                             immediateFlushAll = true;
                     }
                 }
@@ -360,33 +419,38 @@ namespace SLS4All.Compact.McuClient.Helpers
                 {
                     if (noImmediateInsteadReturnTrue)
                     {
+                        // immediate flush will be handled directly outside of this method
                         _timerFlushContext = context;
-                        if (_flushAfterNeedsLocks != TimeSpan.MaxValue)
+                        if (_flushAfterNeedsFlushLock != TimeSpan.MaxValue)
                         {
-                            _flushAfterNeedsLocks = TimeSpan.MaxValue;
+                            _flushAfterNeedsFlushLock = TimeSpan.MaxValue;
                             _flushTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                         }
-                        return true;
+                    }
+                    else if (_flushAfterNeedsFlushLock != TimeSpan.Zero)
+                    {
+                        // schedule immediate flush
+                        if (_flushAfterNeedsFlushLock != TimeSpan.MaxValue) // timer not needed
+                            _flushTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                        _flushAfterNeedsFlushLock = TimeSpan.Zero;
+                        _timerFlushContext = null; // context passed in argument below
+                        ScheduleCompressFlushImmediately(forceImmediateFlushAll, context);
                     }
                     else
                     {
-                        _flushAfterNeedsLocks = TimeSpan.Zero;
-                        _timerFlushContext = null;
-                        ScheduleCompressFlushImmediately(forceImmediateFlushAll, context);
+                        // immediate flush is already scheduled
                     }
-                    return false;
+                    return true;
                 }
             }
 
-            if (_flushAfterNeedsLocks == TimeSpan.MaxValue) // not yet scheduled
+            if (_flushAfterNeedsFlushLock == TimeSpan.MaxValue) // flush not yet scheduled
             {
-                if (_stateX.HasSources ||
-                    _stateY.HasSources ||
-                    _stateL.HasSources)
+                if (_stateX.HasSources || _stateY.HasSources || _stateL.HasSources)
                 {
-                    _flushAfterNeedsLocks = options.CompressFlushPeriod;
+                    _flushAfterNeedsFlushLock = TimeSpan.FromSeconds(flushAfterResult);
                     _timerFlushContext = context;
-                    _flushTimer.Change(_flushAfterNeedsLocks, Timeout.InfiniteTimeSpan);
+                    _flushTimer.Change(_flushAfterNeedsFlushLock, Timeout.InfiniteTimeSpan);
                     return false;
                 }
             }
@@ -396,23 +460,23 @@ namespace SLS4All.Compact.McuClient.Helpers
         /// <remarks>
         /// Needs to be called outside master lock to prevent deadlock (master lock / flushLock)
         /// </remarks>
-        public void SynchronousFlushOutsideMasterLock(IPrinterClientCommandContext? context)
+        public void FlushAllAndWaitOutsideMasterLock(IPrinterClientCommandContext? context, CancellationToken cancel = default)
         {
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
-            Debug.Assert(!manager.IsMasterQueueLocked());
-            lock (_flushLock)
+            (_, _, _, var mcu) = _movementClient.GetXYL(manager, null);
+            using (EnterFlushLock())
             {
                 var options = _options.CurrentValue;
-                ScheduleFlushInner(manager, true, false, options, context);
+                ScheduleFlushInFlushLock(manager, mcu, forceImmediateFlushAll: true, noImmediateInsteadReturnTrue: false, options, context);
             }
             // NOTE: following call ensures that the flush scheduler has finished running all preceding tasks (since it is for exactly one parallel task)
             Task.Factory.StartNew(
-                _ => { },
+                static _ => { },
                 null,
                 default,
                 TaskCreationOptions.None,
                 _flushScheduler1)
-                .Wait();
+                .Wait(cancel);
         }
 
         /// <remarks>
@@ -421,17 +485,14 @@ namespace SLS4All.Compact.McuClient.Helpers
         public void ScheduleFlushOutsideMasterLock(IPrinterClientCommandContext? context)
         {
             var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
-            Debug.Assert(!manager.IsMasterQueueLocked());
-            if (!_flushLock.TryEnter()) // if we are currently flushing, the flush method will automatically reschedule/process any sources remainder
-                return;
-            try
+            using (TryEnterFlushLock(out var entered))
             {
-                var options = _options.CurrentValue;
-                ScheduleFlushInner(manager, false, false, options, context);
-            }
-            finally
-            {
-                _flushLock.Exit();
+                if (entered) // if not, it will be automatically scheduled once the flush lock ends
+                {
+                    var options = _options.CurrentValue;
+                    (_, _, _, var mcu) = _movementClient.GetXYL(manager, null);
+                    ScheduleFlushInFlushLock(manager, mcu, forceImmediateFlushAll: false, noImmediateInsteadReturnTrue: false, options, context);
+                }
             }
         }
 
@@ -443,9 +504,9 @@ namespace SLS4All.Compact.McuClient.Helpers
                     ? null
                     : (flushAll == false && context != null
                        ? context
-                       : new FlushArgs(flushAll, context)), 
-                default, 
-                TaskCreationOptions.None, 
+                       : new FlushArgs(flushAll, context)),
+                default,
+                TaskCreationOptions.None,
                 _flushScheduler1);
         }
 
@@ -492,40 +553,43 @@ namespace SLS4All.Compact.McuClient.Helpers
             var timeStart = state.FlushingData.Time;
             var elapsed = timeEnd - timeStart;
             var posStart = state.FlushingData.Value;
-            Debug.Assert(elapsed >= 0);
 
-            if (elapsed > 0)
+            Debug.Assert(elapsed >= 0);
+            if (elapsed >= 0)
             {
-                if (posStart == posEnd)
+                if (elapsed > 0)
                 {
-                    QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
-                }
-                else
-                {
-                    var velocity = Math.Abs(posEnd - posStart) / elapsed;
-                    var steps = stepper.GetSteps(velocity, posStart, posEnd, state.FlushingData.PrecisionRemainder);
-                    if (steps.Count == 0)
+                    if (posStart == posEnd)
                     {
                         QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
                     }
                     else
                     {
-                        var positive = posEnd > posStart;
-                        timestamp = stepper.QueueStep(
-                            positive,
-                            steps.PrecisionInterval,
-                            steps.Count,
-                            0,
-                            timestamp,
-                            now: now,
-                            minClock: minClock,
-                            dryRun: dryRun);
-                        state.FlushingData.PrecisionRemainder = steps.PrecisionRemainder;
+                        var velocity = Math.Abs(posEnd - posStart) / elapsed;
+                        var steps = stepper.GetSteps(velocity, posStart, posEnd, state.FlushingData.PrecisionRemainder);
+                        if (steps.Count == 0)
+                        {
+                            QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                        }
+                        else
+                        {
+                            var positive = posEnd > posStart;
+                            timestamp = stepper.QueueStep(
+                                positive,
+                                steps.PrecisionInterval,
+                                steps.Count,
+                                0,
+                                timestamp,
+                                now: now,
+                                minClock: minClock,
+                                dryRun: dryRun);
+                            state.FlushingData.PrecisionRemainder = steps.PrecisionRemainder;
+                        }
                     }
                 }
+                state.FlushingData.Time = timeEnd;
+                state.FlushingData.Value = posEnd;
             }
-            state.FlushingData.Time = timeEnd;
-            state.FlushingData.Value = posEnd;
         }
 
         private void SetLaserFlushingInner(
@@ -539,24 +603,28 @@ namespace SLS4All.Compact.McuClient.Helpers
             bool dryRun)
         {
             var elapsed = time - state.FlushingData.Time;
+
             Debug.Assert(elapsed >= 0);
+            if (elapsed >= 0)
+            {
+                QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
 
-            QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                Debug.Assert(value != double.MaxValue);
+                timestamp = stepper.QueuePwm(
+                    (float)value,
+                    timestamp,
+                    now: now,
+                    minClock: minClock,
+                    dryRun: dryRun);
 
-            Debug.Assert(value != double.MaxValue);
-            timestamp = stepper.QueuePwm(
-                (float)value,
-                timestamp,
-                now: now,
-                minClock: minClock,
-                dryRun: dryRun);
-
-            state.FlushingData.Time = time;
+                state.FlushingData.Time = time;
+            }
         }
 
         private void PrepareCompressXYLFlushingInner(
             StepperState state,
-            XYLMovementQueueOptions options)
+            bool forceFlush,
+            double flushSeconds)
         {
             var source = state.Source.Span;
             state.FlushingData.Intermediate.Clear();
@@ -569,24 +637,25 @@ namespace SLS4All.Compact.McuClient.Helpers
             if (source.Length >= 2) // check if data is not too long, if at least two points (including possible reset)
             {
                 ref var last = ref source[^1];
-                var maxSeconds = options.CompressFlushPeriod.TotalSeconds;
-                if (last.Time - first.Time > maxSeconds) // data is too long and might cause performance issues when compressing
+                if (last.Time - first.Time > flushSeconds) // data is too long and might cause performance issues when compressing
                 {
                     // get a chunk of data that has at most CompressFlushPeriod of duration
                     for (int i = source.Length - 2; i >= 1; i--)
                     {
                         ref var item = ref source[i];
-                        if (item.Time - first.Time <= maxSeconds)
+                        if (item.Time - first.Time < flushSeconds)
                         {
                             var consumedCount = i + 1;
                             state.FlushingData.Intermediate.AddRange(source.Slice(0, consumedCount));
                             state.Source.RemoveFromBeginning(consumedCount);
-                            Debug.Assert(!state.IsPseudoEmpty);
                             return;
                         }
                     }
                 }
             }
+
+            if (!forceFlush)
+                return;
 
             // fallback, copy all
             state.FlushingData.Intermediate.AddRange(source);
@@ -780,16 +849,32 @@ namespace SLS4All.Compact.McuClient.Helpers
 
         private void FlushXYLOnlyOnDedicatedThread(bool flushAll, IPrinterClientCommandContext? context)
         {
+            var options = _options.CurrentValue;
             try
             {
-                var options = _options.CurrentValue;
                 var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
                 (var stepperX, var stepperY, var stepperL, var mcu) = _movementClient.GetXYL(manager, null);
 
                 var parallelFlush = options.ParallelFlush;
+                var prevSourceCount = (-1, -1, -1);
+                var sourceCountSame = 0;
+                const int maxSaneSourceCountSame = 100; // sanity check!
+
+                // NOTE: can do outside of _flushLock (intentionaly), since this method runs on thread pool with single thread!
+                if (options.FlushTimeout != TimeSpan.Zero)
+                {
+                    _flushGuardThread = Thread.CurrentThread;
+                    _flushGuardTimer.Change(options.FlushTimeout, Timeout.InfiniteTimeSpan);
+                }
 
                 lock (_flushLock)
                 {
+                    if (_flushAfterNeedsFlushLock != TimeSpan.MaxValue) // disable timer, we will reschedule at the end
+                    {
+                        _flushAfterNeedsFlushLock = TimeSpan.MaxValue;
+                        _flushTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                    }
+
                     while (true)
                     {
                         // copy data to compress (in master lock)
@@ -798,6 +883,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                         McuTimestamp timestampL, oldTimestampL;
 
                         var startTimestamp = SystemTimestamp.Now;
+                        var startTime = ToTime(mcu, startTimestamp);
                         var intermediateTimestamp = startTimestamp;
                         var copyTimestamp = startTimestamp;
                         var executeTimestamp = startTimestamp;
@@ -806,22 +892,44 @@ namespace SLS4All.Compact.McuClient.Helpers
                         var lduration = TimeSpan.Zero;
                         var immediateRetry = false;
 
-                        using (var master = manager.LockMasterQueue())
+                        using (var master = manager.EnterMasterQueueLock())
                         {
-                            if (_flushAfterNeedsLocks == TimeSpan.MaxValue && !flushAll) // not scheduled and not "flush all" -> this might be a "missed" timer
-                                break;
-                            if (_flushAfterNeedsLocks != TimeSpan.MaxValue)
-                            {
-                                _flushAfterNeedsLocks = TimeSpan.MaxValue;
-                                _flushTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                            }
-
                             oldTimestampX = timestampX = master[stepperX];
                             oldTimestampY = timestampY = master[stepperY];
                             oldTimestampL = timestampL = master[stepperL];
-                            PrepareCompressXYLFlushingInner(_stateX, options);
-                            PrepareCompressXYLFlushingInner(_stateY, options);
-                            PrepareCompressXYLFlushingInner(_stateL, options);
+
+                            var sourceCount = (_stateX.Source.Count, _stateY.Source.Count, _stateL.Source.Count);
+                            if (prevSourceCount == sourceCount) // sanity check
+                            {
+                                if (sourceCountSame++ > maxSaneSourceCountSame)
+                                {
+                                    _logger.LogError($"XYLFlush is looping without source count change. FlushAll={flushAll}, SourceCount={sourceCount}, FlushAfterNeedsLocks={_flushAfterNeedsFlushLock}, TimestampX={timestampX}, TimestampY={timestampY}, TimestampL={timestampL}, ImmediateRetry={immediateRetry}");
+                                    _stateX.Dump(_logger, LogLevel.Error, startTime);
+                                    _stateY.Dump(_logger, LogLevel.Error, startTime);
+                                    _stateL.Dump(_logger, LogLevel.Error, startTime);
+                                    throw new InvalidOperationException($"XYLFlush is looping without source count change, this is probably a bug");
+                                }
+                            }
+                            else
+                            {
+                                sourceCountSame = 0;
+                                prevSourceCount = sourceCount;
+                            }
+
+                            var forceFlush = flushAll;
+                            var flushSeconds = options.CompressFlushPeriod.TotalSeconds;
+                            if (!forceFlush)
+                            {
+                                double dummy = double.MaxValue;
+                                if (_stateX.ShouldTimeoutFlush(startTime, flushSeconds, ref dummy) ||
+                                    _stateY.ShouldTimeoutFlush(startTime, flushSeconds, ref dummy) ||
+                                    _stateL.ShouldTimeoutFlush(startTime, flushSeconds, ref dummy))
+                                    forceFlush = true;
+                            }
+
+                            PrepareCompressXYLFlushingInner(_stateX, forceFlush, flushSeconds);
+                            PrepareCompressXYLFlushingInner(_stateY, forceFlush, flushSeconds);
+                            PrepareCompressXYLFlushingInner(_stateL, forceFlush, flushSeconds);
                         }
                         copyTimestamp = SystemTimestamp.Now;
 
@@ -870,8 +978,7 @@ namespace SLS4All.Compact.McuClient.Helpers
 
                             if (parallelFlush)
                             {
-                                var parallelTasks = new Task[]
-                                {
+                                Task.WaitAll(
                                     Task.Factory.StartNew(() =>
                                     {
                                         Thread.MemoryBarrier();
@@ -889,9 +996,8 @@ namespace SLS4All.Compact.McuClient.Helpers
                                         Thread.MemoryBarrier();
                                         FlushL();
                                         Thread.MemoryBarrier();
-                                    }, default, TaskCreationOptions.None, _flushScheduler2),
-                                };
-                                Task.WaitAll(parallelTasks);
+                                    }, default, TaskCreationOptions.None, _flushScheduler2)
+                                );
                                 Thread.MemoryBarrier();
                             }
                             else
@@ -902,7 +1008,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                             }
 
                             // update timestamps, reschedule flush (important!)
-                            using (var master = manager.LockMasterQueue())
+                            using (var master = manager.EnterMasterQueueLock())
                             {
                                 Debug.Assert(master[stepperX] == oldTimestampX);
                                 Debug.Assert(master[stepperY] == oldTimestampY);
@@ -917,18 +1023,11 @@ namespace SLS4All.Compact.McuClient.Helpers
                                     if (_stateX.HasSources || _stateY.HasSources || _stateL.HasSources)
                                         immediateRetry = true;
                                 }
-                                else if (ScheduleFlushInner(manager, false, true, options, context))
+                                else if (ScheduleFlushInFlushLock(manager, mcu, forceImmediateFlushAll: false, noImmediateInsteadReturnTrue: true, options, context))
                                 {
                                     immediateRetry = true;
                                 }
                             }
-                        }
-                        else
-                        {
-                            Debug.Assert(!immediateRetry);
-                            stepperX.QueueFlush();
-                            stepperY.QueueFlush();
-                            stepperL.QueueFlush();
                         }
 
                         var endTimestamp = SystemTimestamp.Now;
@@ -941,7 +1040,15 @@ namespace SLS4All.Compact.McuClient.Helpers
                         }
 
                         if (!immediateRetry)
+                        {
+                            if (flushAll)
+                            {
+                                stepperX.QueueFlush();
+                                stepperY.QueueFlush();
+                                stepperL.QueueFlush();
+                            }
                             break;
+                        }
                     }
                 }
 
@@ -951,8 +1058,56 @@ namespace SLS4All.Compact.McuClient.Helpers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in XYL flush");
+                _logger.LogError(ex, "Exception in XYL flush, shutting down firmware");
+                _printerClient.Shutdown("Exception in XYL flush, shutting down firmware", ex, context);
             }
+            finally
+            {
+                if (options.FlushTimeout != TimeSpan.Zero)
+                {
+                    _flushGuardTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                    _flushGuardThread = null;
+                }
+            }
+        }
+
+        private void OnFlushTimeout(object? state)
+        {
+            var thread = _flushGuardThread;
+            _logger.LogError($"XYL flush has timed out. Shutting down firmware. {(thread != null ? $"StackTrace={_stackTraceDumper.DumpThreads(thread.ManagedThreadId)}" : "")}");
+            if (!Debugger.IsAttached)
+                _printerClient.Shutdown("XYL flush has timed out. Shutting down firmware.", null);
+        }
+
+        public double ToTime(IMcu mcu, SystemTimestamp timestamp)
+            => ToTime(McuTimestamp.FromSystem(mcu, timestamp));
+
+        public double ToTime(McuTimestamp timestamp)
+            => timestamp.ToRelativeSeconds();
+
+        public FlushLockDisposable EnterFlushLock()
+        {
+            var manager = _printerClient.ManagerEvenInShutdown;
+            if (manager.IsMasterQueueLocked())
+                throw new InvalidOperationException($"Flush lock cannot be called in Master lock. This is probably indication of a bug.");
+            if (_flushLock.IsHeldByCurrentThread)
+                throw new InvalidOperationException($"Flush lock is already entered. This is probably indication of a bug.");
+            _flushLock.Enter();
+            return new FlushLockDisposable(this);
+        }
+
+        public FlushLockDisposable TryEnterFlushLock(out bool hasEntered)
+        {
+            var manager = _printerClient.ManagerEvenInShutdown;
+            if (manager.IsMasterQueueLocked())
+                throw new InvalidOperationException($"Flush lock cannot be called in Master lock. This is probably indication of a bug.");
+            if (_flushLock.IsHeldByCurrentThread)
+                throw new InvalidOperationException($"Flush lock is already entered. This is probably indication of a bug.");
+            hasEntered = _flushLock.TryEnter();
+            if (hasEntered)
+                return new FlushLockDisposable(this);
+            else
+                return new FlushLockDisposable(null);
         }
     }
 }

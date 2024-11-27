@@ -62,6 +62,7 @@ namespace SLS4All.Compact.Movement
         public int LaserOffMinDurationSteps { get; set; } = 15;
         public bool CollectGarbageOnFinishMovement { get; set; } = false;
         public TimeSpan CollectGarbageOnFinishMovementMinPeriod { get; set; } = TimeSpan.FromMinutes(1);
+        public TimeSpan XYLResetTimeoutWarning { get; set; } = TimeSpan.FromMinutes(1);
     }
 
     public sealed class McuMovementClient : MovementClientBase
@@ -99,7 +100,8 @@ namespace SLS4All.Compact.Movement
             ILogger<McuMovementClient> logger,
             IOptionsMonitor<McuMovementClientOptions> options,
             McuPrinterClient printerClient,
-            McuPowerClient powerClient)
+            McuPowerClient powerClient,
+            IThreadStackTraceDumper stackTraceDumper)
             : base(logger, options)
         {
             var o = options.CurrentValue;
@@ -112,7 +114,8 @@ namespace SLS4All.Compact.Movement
                 logger,
                 TransformOptionsMonitor.Create(options, x => x.XYLQueue),
                 printerClient,
-                this);
+                this,
+                stackTraceDumper);
             _sinceFinishMovementCollect = new();
             _finishMovementLock = new();
         }
@@ -152,7 +155,7 @@ namespace SLS4All.Compact.Movement
             (_, _, _, var mcu) = GetXYL(manager, options);
 
             cancel.ThrowIfCancellationRequested();
-            var master = manager.LockMasterQueue();
+            var master = manager.EnterMasterQueueLock();
             try
             {
                 MoveResetXYLInner(options, mcu, ref master, manager, context, out var startTime, out _, cancel);
@@ -201,7 +204,7 @@ namespace SLS4All.Compact.Movement
 
             var duration = TimeSpan.Zero;
             var timestamp = SystemTimestamp.Now;
-            using (var master = manager.LockMasterQueue())
+            using (var master = manager.EnterMasterQueueLock())
             {
                 (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, this, duration, timestamp, TimeSpan.Zero, out _);
                 (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperX, duration, timestamp, TimeSpan.Zero, out _);
@@ -214,10 +217,9 @@ namespace SLS4All.Compact.Movement
         public override async Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
+            _logger.LogDebug($"Finish movement - begin");
             using (await _finishMovementLock.LockAsync(cancel))
             {
-                _logger.LogDebug($"Finish movement - begin");
-
                 var options = _options.CurrentValue;
                 var manager = McuInitializeCommandContext.GetManager(_printerClient, context);
                 (var stepperX, var stepperY, var stepperL, _) = GetXYL(manager, options);
@@ -230,14 +232,14 @@ namespace SLS4All.Compact.Movement
                 for (; ; loops++)
                 {
                     // flush all moves synchronously
-                    _xylQueue.ScheduleFlushOutsideMasterLock(context);
+                    _xylQueue.FlushAllAndWaitOutsideMasterLock(context, cancel: cancel);
 
                     // get duration from all possible steppers to ensure all movement will be stopped after wait
                     var duration = TimeSpan.Zero;
                     var timestamp = SystemTimestamp.Now;
-                    lock (_xylQueue.FlushLock) // ensure we are not currently flusing, timestamps would be changing
+                    using (_xylQueue.EnterFlushLock()) // ensure we are not currently flusing, timestamps would be changing
                     {
-                        using (var master = manager.LockMasterQueue())
+                        using (var master = manager.EnterMasterQueueLock())
                         {
                             if (options.CollectGarbageOnFinishMovement &&
                                 (!_sinceFinishMovementCollect.IsRunning ||
@@ -250,12 +252,6 @@ namespace SLS4All.Compact.Movement
                             (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperX, duration, timestamp, TimeSpan.Zero, out _);
                             (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperY, duration, timestamp, TimeSpan.Zero, out _);
                             (duration, timestamp) = GetRemainingPrintTimeOfKeyInner(master, stepperL, duration, timestamp, TimeSpan.Zero, out _);
-
-                            // NOTE: commented out, since we add FinishMovementDelay below anyway and try again
-                            //// if a flush is scheduled, wait after it completes
-                            //var flushAfter = _xylQueue.FlushAfterNeedsLocks;
-                            //if (flushAfter != TimeSpan.MaxValue)
-                            //    duration += flushAfter;
 
                             var queuesEmpty = _xylQueue.IsPseudoEmpty;
 
@@ -272,14 +268,6 @@ namespace SLS4All.Compact.Movement
                             }
                         }
                     }
-
-                    // NOTE: commented out, since we add FinishMovementDelay below anyway and try again
-                    //foreach (var stepper in manager.Steppers.Values)
-                    //{
-                    //    var candidate = stepper.SendAheadDuration;
-                    //    if (duration < candidate)
-                    //        duration = candidate;
-                    //}
 
                     // wait
                     duration += options.FinishMovementDelay;
@@ -333,7 +321,7 @@ namespace SLS4All.Compact.Movement
                 }
 
                 double startPos, endPos;
-                using (var master = manager.LockMasterQueue())
+                using (var master = manager.EnterMasterQueueLock())
                 {
                     switch (axis)
                     {
@@ -371,7 +359,7 @@ namespace SLS4All.Compact.Movement
                 var homingApproxEndPos = endPos > startPos
                     ? Math.Min(startPos + homingElapsed.TotalSeconds * velocity, endPos)
                     : Math.Max(startPos - homingElapsed.TotalSeconds * velocity, endPos);
-                using (var master = manager.LockMasterQueue())
+                using (var master = manager.EnterMasterQueueLock())
                 {
                     switch (axis)
                     {
@@ -408,7 +396,7 @@ namespace SLS4All.Compact.Movement
                 }
 
                 // reset homed position to zero
-                using (var master = manager.LockMasterQueue())
+                using (var master = manager.EnterMasterQueueLock())
                 {
                     switch (axis)
                     {
@@ -433,9 +421,9 @@ namespace SLS4All.Compact.Movement
 
                 await FinishMovement(context: context, cancel: cancel); // flushes, waits
 
-                lock (_xylQueue.FlushLock) // ensure we are not currently flushing, timestamps would be changing
+                using (_xylQueue.EnterFlushLock()) // ensure we are not currently flushing, timestamps would be changing
                 {
-                    using (var master = manager.LockMasterQueue())
+                    using (var master = manager.EnterMasterQueueLock())
                     {
                         // NOTE: Reset DACs in case something went wrong in SPI communication.
                         //       This will not save the print if that happened, but it is mainly a safety feature to ensure the galvos work in future layers
@@ -471,7 +459,7 @@ namespace SLS4All.Compact.Movement
                 MovementAxis.R => options.RStepperName,
                 _ => throw new ArgumentException($"Invalid aux axis {axis}", nameof(axis)),
             }];
-            using (var master = manager.LockMasterQueue())
+            using (var master = manager.EnterMasterQueueLock())
             {
                 double startPos, endPos;
                 switch (axis)
@@ -537,7 +525,7 @@ namespace SLS4All.Compact.Movement
                 var positions = new (double StartPos, double EndPos, double Velocity, double InitialSpeed, double FinalSpeed, double Acceleration, double Decceleration)[items.Count];
                 var maxVelocity = 0.0;
                 bool res;
-                using (var master = manager.LockMasterQueue())
+                using (var master = manager.EnterMasterQueueLock())
                 {
                     for (int i = 0; i < items.Count; i++)
                     {
@@ -605,44 +593,46 @@ namespace SLS4All.Compact.Movement
             CancellationToken cancel)
         {
             var now = SystemTimestamp.Now;
-            var hasReset = false;
-
             var xylTimestamp = master[_xylQueue];
             timestamp = master[this];
 
             var lowNow = now + manager.StepperQueueLow;
-            var dwelled = 0.0;
             if (timestamp.IsEmpty || timestamp.ToSystem() < lowNow ||
                 xylTimestamp.IsEmpty || xylTimestamp.ToSystem() < lowNow)
             {
-                var newTimestamp = McuTimestamp.FromSystem(mcu, now + manager.StepperQueueHigh);
-                if (!timestamp.IsEmpty && newTimestamp < timestamp)
-                {
-                    dwelled = timestamp.ToRelativeSeconds() - newTimestamp.ToRelativeSeconds();
-                    newTimestamp = timestamp;
-                }
                 _logger.LogInformation(
-                    $"Resetting X/Y/L to {newTimestamp.Clock}, flushing existing data. " +
+                    $"Resetting X/Y/L, flushing existing data. " +
                     $"This should happen only when a batch is starting, otherwise it is an indication that feeding or processing is too slow at times. " +
-                    $"Was Timestamp={timestamp.Clock}, Now={McuTimestamp.FromSystem(mcu, now).Clock}, QueueLow={manager.StepperQueueLow}, QueueHigh={manager.StepperQueueHigh}, Dwelled={dwelled}");
-                hasReset = true;
-                timestamp = newTimestamp;
-            }
-            offset = timestamp.ToRelativeSeconds();
-            if (hasReset)
-            {
+                    $"Was Timestamp={timestamp.Clock}, Now={McuTimestamp.FromSystem(mcu, now).Clock}, QueueLow={manager.StepperQueueLow}, QueueHigh={manager.StepperQueueHigh}");
+
                 var xySteps = XYToSteps(_posX, _posY);
                 var posX = xySteps.x * options.StepXYDistance;
                 var posY = xySteps.y * options.StepXYDistance;
 
                 // loop until master queue is empty
+                var loopStartTimestamp = SystemTimestamp.Now;
                 while (!_xylQueue.IsPseudoEmpty)
                 {
                     master.Dispose();
                     cancel.ThrowIfCancellationRequested();
-                    _xylQueue.ScheduleFlushOutsideMasterLock(context); // NOTE: need to flush right now on this thread to empty the Source collections, reset needs to be first
-                    master = manager.LockMasterQueue();
+                    _xylQueue.FlushAllAndWaitOutsideMasterLock(context, cancel: cancel); // NOTE: need to flush right now on this thread to empty the Source collections, reset needs to be first
+                    master = manager.EnterMasterQueueLock();
+                    if (!loopStartTimestamp.IsEmpty && loopStartTimestamp.ElapsedFromNow > options.XYLResetTimeoutWarning)
+                    {
+                        loopStartTimestamp = default;
+                        _logger.LogWarning("Resetting X/Y/L, reset loop is taking longer than expected");
+                    }
                 }
+
+                // set new timestamp
+                now = SystemTimestamp.Now;
+                var newTimestamp = McuTimestamp.FromSystem(mcu, now + manager.StepperQueueHigh);
+                var dwelled = !timestamp.IsEmpty ? _xylQueue.ToTime(timestamp) - _xylQueue.ToTime(newTimestamp) : 0;
+                _logger.LogInformation(
+                    $"Resetting X/Y/L to {newTimestamp.Clock}, flushed existing data. " +
+                    $"Was Timestamp={timestamp.Clock}, Now={McuTimestamp.FromSystem(mcu, now).Clock}, QueueLow={manager.StepperQueueLow}, QueueHigh={manager.StepperQueueHigh}, Dwelled={dwelled}");
+                timestamp = newTimestamp;
+                offset = _xylQueue.ToTime(timestamp);
 
                 _xylQueue.AddReset(offset, posX, posY, dwelled: dwelled);
                 _lastLaserOnFactor = double.MinValue;
@@ -656,12 +646,16 @@ namespace SLS4All.Compact.Movement
                 if (options.CompensatePwmLatency && stepperL.MinPwmCycleTime != null)
                 {
                     timestamp += stepperL.MinPwmCycleTime.Value * 2;
-                    offset = timestamp.ToRelativeSeconds();
+                    offset = _xylQueue.ToTime(timestamp);
                 }
 
                 master[this] = timestamp;
                 master[_xylQueue] = timestamp;
+
+                _logger.LogDebug($"X/Y/L reset complete");
             }
+            else
+                offset = _xylQueue.ToTime(timestamp);
         }
 
         public override TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext ? context = null)
@@ -704,7 +698,7 @@ namespace SLS4All.Compact.Movement
             if (velocity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(speed));
 
-            var master = manager.LockMasterQueue();
+            var master = manager.EnterMasterQueueLock();
             try
             {
                 var rawStartX = _posX;
@@ -742,7 +736,7 @@ namespace SLS4All.Compact.Movement
                             duration = minDuration;
                     }
                     var endTime = startTime + duration;
-                    var endTimeOffset = endTime.ToRelativeSeconds();
+                    var endTimeOffset = _xylQueue.ToTime(endTime);
 
                     if (endTime == startTime || startTimeOffset == endTimeOffset) // may happen, if we are moving by some microscopic distance that happens to be at one step threshold
                     {
@@ -763,10 +757,16 @@ namespace SLS4All.Compact.Movement
 
                     // keep the laser queue alive
                     // NOTE: just put a point in laser queue somewhere where it wont hurt, compression will remove them later
-                    var oneLaserCycle = stepperL.MinPwmCycleTime ?? 0; // NOTE: more that almostOneLaserCycsle
-                    var laserKeepTime = endTimeOffset - oneLaserCycle;
-                    if (laserKeepTime > _lastLaserTimeOffset && _lastLaserOnFactor >= 0)
-                        _xylQueue.AddL(laserKeepTime, _lastLaserOnFactor);
+                    if (_lastLaserOnFactor >= 0)
+                    {
+                        var oneLaserCycle = stepperL.MinPwmCycleTime ?? 0; // NOTE: more that almostOneLaserCycsle
+                        var laserKeepTime = endTimeOffset - oneLaserCycle;
+                        if (laserKeepTime > _lastLaserTimeOffset)
+                        {
+                            _lastLaserTimeOffset = laserKeepTime;
+                            _xylQueue.AddL(laserKeepTime, _lastLaserOnFactor);
+                        }
+                    }
                 }
 
                 // update as the last thing, reset needs to have the original value
@@ -792,30 +792,28 @@ namespace SLS4All.Compact.Movement
 
             McuTimestamp endTime;
             ValueTask result;
-            var master = manager.LockMasterQueue();
+            var master = manager.EnterMasterQueueLock();
             try
             {
                 MoveResetXYLInner(options, mcu, ref master, manager, context, out endTime, out var endTimeOffset, cancel);
 
+                double nextLaserTimeOffset;
                 if (value > 0) // turning on
                 {
                     _lastLaserOnFactor = value;
-                    var almostOneCycle = stepperL.MinPwmCycleTime * 0.999999;
+                    var almostOneCycle = stepperL.MinPwmCycleTime * 0.999;
                     if (!noCompensation && options.CompensatePwmLatency && almostOneCycle != null) // move to the past a bit to combat latency
-                    {
-                        _xylQueue.AddL(Math.Max(endTimeOffset - almostOneCycle.Value, _lastLaserTimeOffset), value);
-                    }
+                        nextLaserTimeOffset = Math.Max(endTimeOffset - almostOneCycle.Value, _lastLaserTimeOffset);
                     else
-                    {
-                        _xylQueue.AddL(endTimeOffset, value);
-                    }
+                        nextLaserTimeOffset = Math.Max(endTimeOffset, _lastLaserTimeOffset);
                 }
                 else // turning off
                 {
                     _lastLaserOnFactor = 0;
-                    _xylQueue.AddL(endTimeOffset, value);
+                    nextLaserTimeOffset = Math.Max(endTimeOffset, _lastLaserTimeOffset);
                 }
-                _lastLaserTimeOffset = endTimeOffset;
+                _xylQueue.AddL(nextLaserTimeOffset, value);
+                _lastLaserTimeOffset = nextLaserTimeOffset;
                 _lastLaserTime = endTime.ToSystem();
 
                 master[this] = endTime;
@@ -838,7 +836,7 @@ namespace SLS4All.Compact.Movement
             var manager = _printerClient.ManagerIfReady;
             if (manager == null)
                 return null;
-            using (manager.LockMasterQueue())
+            using (manager.EnterMasterQueueLock())
             {
                 return new Position(_posX, _posY, _posZ1, _posZ2, _posR);
             }

@@ -26,9 +26,12 @@ namespace SLS4All.Compact.Configuration
             _options = options;
             var baseDirectory = GetBaseDirectory();
             Directory.CreateDirectory(baseDirectory);
-            var tempDirectory = GetNonMemoryTempDirectory();
-            if (Directory.Exists(tempDirectory))
-                Directory.Delete(tempDirectory, true);
+            var nonMemoryTempDirectory = GetNonMemoryTempDirectory();
+            if (Directory.Exists(nonMemoryTempDirectory))
+                Directory.Delete(nonMemoryTempDirectory, true);
+            Directory.CreateDirectory(nonMemoryTempDirectory);
+            var persistentTempDirectory = GetPersistentTempDirectory();
+            Directory.CreateDirectory(persistentTempDirectory);
         }
 
         public string GetBaseDirectory()

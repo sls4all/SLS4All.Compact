@@ -50,6 +50,7 @@ namespace SLS4All.Compact.Printer
         private Task?[] _firmwareRunnerTasks;
         private CancellationTokenSource?[] _firmwareRunnerCancelSources;
 
+        public override bool SupportsSustainedLowLatencyGCMode => true;
         public override bool IsShutdown => _manager.IsShutdown == true;
         public override string? ShutdownReason => _manager.ShutdownReason?.ToString();
         public override bool HasLostCommunication => _manager.HasLostCommunication == true;
@@ -278,5 +279,21 @@ namespace SLS4All.Compact.Printer
 
         public override (string Key, string Message)[] GetConnectionStatus()
             => _manager.GetConnectionStatus();
+
+        public override Task EnterPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            cancel.ThrowIfCancellationRequested();
+            var manager = McuInitializeCommandContext.GetManagerEvenInShutdown(this, context);
+            manager.EnterPrintingMode();
+            return Task.CompletedTask;
+        }
+
+        public override Task ExitPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            // NOTE: do not cancel
+            var manager = McuInitializeCommandContext.GetManagerEvenInShutdown(this, context);
+            manager.ExitPrintingMode();
+            return Task.CompletedTask;
+        }
     }
 }

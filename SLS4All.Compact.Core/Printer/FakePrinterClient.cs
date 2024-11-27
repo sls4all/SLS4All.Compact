@@ -33,6 +33,7 @@ namespace SLS4All.Compact.Printer
         private readonly ILogger _logger;
         private readonly IEnumerable<IObjectFactory<IPrinterClientInitializer, object>> _initalizers;
 
+        public override bool SupportsSustainedLowLatencyGCMode => false;
         public override bool IsConnected => true;
         public override long ConnectionIndex => 0;
         public override bool ShouldSendSafeCheckpoints => false;
@@ -91,5 +92,10 @@ namespace SLS4All.Compact.Printer
 
         public override (string Key, string Message)[] GetConnectionStatus()
             => [];
+
+        public override Task EnterPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+            => Task.CompletedTask;
+        public override Task ExitPrintingMode(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+            => Task.CompletedTask;
     }
 }

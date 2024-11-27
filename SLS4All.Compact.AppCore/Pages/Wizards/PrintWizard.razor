@@ -904,7 +904,7 @@
             {
                 _completedPreview = true;
                 _sinteredVolume = _preview.LayerWeights!
-            .Sum(x => x.FillTotalRelative)
+                .Sum(x => x.FillTotalRelative)
                     * Projection.Size.x * Projection.Size.y
                     * ((double)_params.Profile.LayerThickness!.Value / 1_000);
                 _sinteredVolumeMax = _preview.LayerWeights!
@@ -914,14 +914,19 @@
                 CalcPrintJobVolumeTotals();
                 if (_volumeTotals!.ReduceDepth == null) // no too large volume
                     StepIndex++;
-                _addPowderIteration = 0;
-                _addPowderIterationCount = _params.Profile.AddPowderDepth > 0
-                    ? (int)Math.Ceiling(_volumeTotals.Total.Depth / (double)_params.Profile.AddPowderDepth!.Value)
-                    : _volumeTotals.Total.Depth > 0 ? 1 : 0;
             }
             else
                 StepIndex++;
         }
+
+        if (StepIndex is Step.PowderFill && _params != null && _volumeTotals != null)
+        {
+            _addPowderIteration = 0;
+            _addPowderIterationCount = _params.Profile.AddPowderDepth > 0
+                ? (int)Math.Ceiling(_volumeTotals.Total.Depth / (double)_params.Profile.AddPowderDepth!.Value)
+                : _volumeTotals.Total.Depth > 0 ? 1 : 0;
+        }
+
         return Task.CompletedTask;
     }
 
@@ -1251,7 +1256,7 @@
             titleText: "Please wait",
             bodyText: "Chamber heater check in progress...",
             cancelText: "Interrupt chamber heater check",
-            errorToastHeaderText: "Error when checking halogen heaters");
+            errorToastHeaderText: "Error when checking chamber heaters");
     }
 
     private async Task RecoatLayer()

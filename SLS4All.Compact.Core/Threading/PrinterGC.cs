@@ -20,6 +20,8 @@ namespace SLS4All.Compact.Threading
 {
     public static class PrinterGC
     {
+        private static readonly GCLatencyMode _defaultGCMode;
+
         [DllImport("libc", SetLastError = true, EntryPoint = "mlockall")]
         private static extern int mlockall(int flags);
 
@@ -31,6 +33,11 @@ namespace SLS4All.Compact.Threading
         /// lock all future mapping
         /// </summary>
         private const int MCL_FUTURE = 2;
+
+        static PrinterGC()
+        {
+            _defaultGCMode = GCSettings.LatencyMode;
+        }
 
         public static bool TryDisableProcessPaging()
         {
@@ -64,6 +71,19 @@ namespace SLS4All.Compact.Threading
             var gc2 = maxGeneration >= 2 ? GC.CollectionCount(2) : 0;
             var gcLatencyMode = GCSettings.LatencyMode;
             logger.LogDebug($"Garbage collection count: GC(0)={gc0}, GC(1)={gc1}, GC(2)={gc2}, LatencyMode={gcLatencyMode}");
+        }
+
+        public static void EnterSustainedLowLatency()
+        {
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+        }
+
+        public static void ExitSustainedLowLatency()
+        {
+            GCSettings.LatencyMode = _defaultGCMode;
         }
     }
 }

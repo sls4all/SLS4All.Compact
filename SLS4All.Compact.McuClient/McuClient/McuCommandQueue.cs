@@ -4,8 +4,9 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿//#define COMMAND_QUEUE_TRACING // Uncomment for debug tracing of command queue operations
+//#define COMMAND_QUEUE_TRACING // Uncomment for debug tracing of command queue operations
 
+using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
 using SLS4All.Compact.Collections;
 using SLS4All.Compact.Diagnostics;
@@ -111,6 +112,7 @@ namespace SLS4All.Compact.McuClient
         }
 
         private const long _maxFutureReqClockDuration = int.MaxValue / 2;
+        private readonly ILogger _logger;
         private readonly ArenaAllocator<byte> _arena;
         private readonly McuCodec _encoder;
         private readonly McuAbstract _mcu;
@@ -167,8 +169,12 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        public McuCommandQueue(McuAbstract mcu, McuOptions options)
+        public McuCommandQueue(
+            ILogger<McuCommandQueue> logger,
+            McuAbstract mcu, 
+            McuOptions options)
         {
+            _logger = logger;
             _mcu = mcu;
             _arena = new ArenaAllocator<byte>(ArenaAllocator<byte>.BestArenaLength);
             _encoder = new();
@@ -275,17 +281,23 @@ namespace SLS4All.Compact.McuClient
 
         public McuSendResult Enqueue(McuCommand command, int priority, long minClock, long reqClock)
         {
-#if DEBUG
             if (!_mcu.ClockSync.IsReady)
             {
                 Debug.Assert(minClock == 0 && reqClock == 0);
             }
             else
             {
-                var clockAt = _mcu.ClockSync.GetClock(SystemTimestamp.Now);
-                Debug.Assert(reqClock == 0 || reqClock >= clockAt, "Requested clock is behind current time. This typically happens when the program execution is paused at breakpoint or stepped trough. That can't be done since the program requires precise timing.");
+                var now = SystemTimestamp.Now;
+                var nowClock = _mcu.ClockSync.GetClock(SystemTimestamp.Now);
+                if (!(reqClock == 0 || reqClock >= nowClock))
+                {
+                    var message = 
+                        $"Requested clock is behind current time. This typically happens when the program execution is paused at breakpoint or stepped trough. That can't be done while sending some commands since that requires precise timing. " +
+                        $"Mcu={_mcu}, MinClock={minClock}, ReqClock={reqClock}, NowClock={nowClock}, Now={now}, Priority={priority}, Command={command}";
+                    _logger.LogError(message);
+                    Debug.Assert(false, message);
+                }
             }
-#endif
             var span = Encode(command);
             var data = CreateBuffer(span.Length);
             span.CopyTo(data.Span);

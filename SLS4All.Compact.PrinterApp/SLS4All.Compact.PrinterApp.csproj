@@ -13,14 +13,15 @@
 		<RootNamespace>SLS4All.Compact</RootNamespace>
 		<PublishReadyToRun>true</PublishReadyToRun>
 		<RuntimeIdentifiers>linux-arm64;linux-arm;linux-x64;win-x64</RuntimeIdentifiers>
-
-    <!-- https://github.com/dotnet/sdk/issues/43470 -->
-    <StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
-    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
-    <EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
-  </PropertyGroup>
+		<!-- https://github.com/dotnet/sdk/issues/43470 -->
+		<StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
+		<StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
+		<EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
+	  </PropertyGroup>
 
 	<ItemGroup>
+		<!-- Cannot be loaded when R2R for version 4.0.0-beta.24360.3 -->
+		<PublishReadyToRunExclude Include="Microsoft.Diagnostics.Runtime.dll" />
 		<Compile Remove="GeneratedFiles\**" />
 		<Compile Remove="logs\**" />
 	</ItemGroup>
@@ -91,14 +92,14 @@
 		<ProjectReference Include="..\SLS4All.Compact.AppCore\SLS4All.Compact.AppCore.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.McuApp\SLS4All.Compact.McuApp.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.182.0.562"/>
-		<PackageReference Include="SLS4All.Compact.Platform" Version="1.182.0.562"/>
-		<PackageReference Include="SLS4All.Compact.Printing" Version="1.182.0.562"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.182.0.562"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Platform" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Printing" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.191.0.608"/>
 		<ProjectReference Include="..\SLS4All.Compact.McuClient\SLS4All.Compact.McuClient.csproj" />
 		<ProjectReference Include="..\SLS4All.Compact.Telegram\SLS4All.Compact.Telegram.csproj" />
-		<PackageReference Include="SLS4All.Compact.Temperature" Version="1.182.0.562"/>
+		<PackageReference Include="SLS4All.Compact.Temperature" Version="1.191.0.608"/>
 		<ProjectReference Include="..\SLS4All.Compact.Tomlet\SLS4All.Compact.Tomlet.csproj" />
 	</ItemGroup>
 

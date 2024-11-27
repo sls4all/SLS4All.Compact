@@ -621,5 +621,27 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             helper.Send(message);
             return helper.ReadBoolean();
         }
+
+        public bool TryEnterPrintingMode()
+        {
+            using var helper = SendHelper();
+            Span<byte> write = stackalloc byte[MinMessageLength];
+            var writeSpan = write;
+            Initialize(ref writeSpan, MessageType.EnterPrintingModeCommand);
+            var message = Finish(write, writeSpan);
+            helper.Send(message);
+            return helper.ReadBoolean();
+        }
+
+        public bool TryExitPrintingMode()
+        {
+            using var helper = SendHelper();
+            Span<byte> write = stackalloc byte[MinMessageLength];
+            var writeSpan = write;
+            Initialize(ref writeSpan, MessageType.ExitPrintingModeCommand);
+            var message = Finish(write, writeSpan);
+            helper.Send(message);
+            return helper.ReadBoolean();
+        }
     }
 }

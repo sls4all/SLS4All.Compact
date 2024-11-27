@@ -8,11 +8,13 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SLS4All.Compact.Configuration;
+using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Helpers;
 using SLS4All.Compact.McuClient.Devices;
 using SLS4All.Compact.McuClient.Messages;
 using SLS4All.Compact.McuClient.Pins;
 using SLS4All.Compact.McuClient.Sensors;
+using SLS4All.Compact.Printer;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Frozen;
@@ -21,37 +23,39 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Linq;
+using System.Runtime;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SLS4All.Compact.McuClient
 {
     public abstract class McuManager
     {
-        public readonly struct LockMasterQueueDisposable : IDisposable
+        public struct LockMasterQueueDisposable(McuManager? manager) : IDisposable
         {
-            public McuManager Manager { get; }
+            private McuManager? _manager = manager;
 
-            public McuTimestamp this[object key]
+            public readonly McuTimestamp this[object key]
             {
                 get
                 {
-                    if (Manager._masterTimestamp.TryGetValue(key, out var res))
+                    if ((_manager ?? throw new ObjectDisposedException(null))._masterTimestamp.TryGetValue(key, out var res))
                         return res;
                     else
                         return default;
                 }
-                set => Manager._masterTimestamp[key] = value;
-            }
-
-            public LockMasterQueueDisposable(McuManager manager)
-            {
-                Manager = manager;
+                set => (_manager ?? throw new ObjectDisposedException(null))._masterTimestamp[key] = value;
             }
 
             public void Dispose()
             {
-                Manager.QueueMasterEnd();
+                var manager = _manager;
+                if (manager != null)
+                {
+                    _manager = null;
+                    manager.ExitMasterQueueLock();
+                }
             }
         }
 
@@ -90,13 +94,17 @@ namespace SLS4All.Compact.McuClient
         protected readonly IAppDataWriter _appDataWriter;
         protected readonly IEnumerable<IMcuDeviceFactory> _deviceFactories;
         protected readonly IPrinterSettings _settingsStorage;
+        private readonly IThreadStackTraceDumper _stackTraceDumper;
         protected readonly FrozenDictionary<string, McuItem> _mcuItems;
         private readonly CancellationTokenSource _runningCancelSource;
         private volatile McuShutdownMessage? _managerShutdownReason;
         private readonly List<(IMcu? Mcu, Delegate Delegate)> _setupHandlers;
         private readonly TaskCompletionSource _hasStartedSource;
         private readonly Lock _queueMasterLock = new();
+        private readonly Timer _queueMasterLockTimer;
+        private readonly TimeSpan _queueMasterLockTimeout;
         private readonly Dictionary<object, McuTimestamp> _masterTimestamp;
+        private volatile Thread? _queueMasterLockThread;
 
         public AsyncEvent<McuShutdownMessage> ShutdownEvent { get; } = new();
         public CancellationToken RunningCancel => _runningCancelSource.Token;
@@ -192,7 +200,8 @@ namespace SLS4All.Compact.McuClient
             IOptionsMonitor<McuManagerOptions> options,
             IAppDataWriter appDataWriter,
             IEnumerable<IMcuDeviceFactory> deviceFactories,
-            IPrinterSettings settingsStorage)
+            IPrinterSettings settingsStorage,
+            IThreadStackTraceDumper stackTraceDumper)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
@@ -200,7 +209,11 @@ namespace SLS4All.Compact.McuClient
             _appDataWriter = appDataWriter;
             _deviceFactories = deviceFactories;
             _settingsStorage = settingsStorage;
+            _stackTraceDumper = stackTraceDumper;
 
+            var o = options.CurrentValue;
+            _queueMasterLockTimeout = o.QueueMasterLockTimeout;
+            _queueMasterLockTimer = new Timer(OnQueueMasterTimer, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _masterTimestamp = new Dictionary<object, McuTimestamp>();
             _hasStartedSource = new();
             _setupHandlers = new();
@@ -430,7 +443,7 @@ namespace SLS4All.Compact.McuClient
                 };
             if (Interlocked.CompareExchange(ref _managerShutdownReason, message, null) != null)
                 return;
-            _logger.LogInformation(message.Exception, $"Manager shutdown called: {message}. MCU = {message.Mcu}. Stack trace: {new StackTrace(true)}");
+            _logger.LogInformation(message.Exception, $"Manager shutdown called: {message}. MCU = {message.Mcu}. Stack trace: {new StackTrace(true)}. Threads: {_stackTraceDumper.DumpThreads()}");
             Task.Run(async () =>
             {
                 try
@@ -514,27 +527,62 @@ namespace SLS4All.Compact.McuClient
 
         public abstract McuBusDescription ClaimBus(string description, string? shareType = null);
 
-        public LockMasterQueueDisposable LockMasterQueue()
+        private void OnQueueMasterTimer(object? state)
+        {
+            var thread = _queueMasterLockThread;
+            _logger.LogError($"Master queue lock was held for too long, this is mostly caused by system being unresponsive. {(thread != null ? $"StackTrace={_stackTraceDumper.DumpThreads(thread.ManagedThreadId)}" : "")}");
+            if (!Debugger.IsAttached)
+                Shutdown(new McuShutdownMessage
+                {
+                    Mcu = null,
+                    Reason = "Master queue lock was held for too long, this is mostly caused by system being unresponsive.",
+                });
+        }
+
+        public LockMasterQueueDisposable EnterMasterQueueLock()
         {
             _queueMasterLock.Enter();
+            if (_queueMasterLockTimeout != TimeSpan.Zero)
+            {
+                _queueMasterLockThread = Thread.CurrentThread;
+                _queueMasterLockTimer.Change(_queueMasterLockTimeout, Timeout.InfiniteTimeSpan);
+            }
             return new LockMasterQueueDisposable(this);
+        }
+
+        private void ExitMasterQueueLock()
+        {
+            if (_queueMasterLockTimeout != TimeSpan.Zero)
+            {
+                _queueMasterLockTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _queueMasterLockThread = null;
+            }
+            _queueMasterLock.Exit();
         }
 
         public bool IsMasterQueueLocked()
             => _queueMasterLock.IsHeldByCurrentThread;
-
-        private void QueueMasterEnd()
-        {
-            _queueMasterLock.Exit();
-        }
 
         public virtual bool TryCollectGarbageBlocking(bool performMajorCleanup)
         {
             if (performMajorCleanup)
                 PrinterGC.CollectGarbageBlockingAggressive();
             else
-            PrinterGC.CollectGarbageBlocking();
+                PrinterGC.CollectGarbageBlocking();
             return true;
+        }
+
+        public virtual void EnterPrintingMode()
+        {
+            // NOTE: disabled for now, seems that this .NET feature is not yet stable enough for our purposes
+            //_logger.LogInformation("Entering GC sustained low latency mode");
+            //PrinterGC.EnterSustainedLowLatency();
+        }
+
+        public virtual void ExitPrintingMode()
+        {
+            //_logger.LogInformation("Exiting GC sustained low latency mode");
+            //PrinterGC.ExitSustainedLowLatency();
         }
     }
 }

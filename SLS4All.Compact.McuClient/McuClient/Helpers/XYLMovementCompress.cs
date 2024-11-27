@@ -164,8 +164,15 @@ namespace SLS4All.Compact.McuClient.Helpers
             if (source.Length > 0)
             {
                 ref var lastSource = ref source[^1];
-                if (final[^1] != lastSource) // add even if Value is the same, only if pair equals skip (to keep the queue alive)
+                if (final.Count == 0)
                     final.Add() = lastSource;
+                else
+                {
+                    ref var lastFinal = ref final[^1];
+                    Debug.Assert(lastFinal.Time <= lastSource.Time);
+                    if (lastFinal != lastSource) // add even if Value is the same, only if pair equals skip (to keep the queue alive)
+                        final.Add() = lastSource;
+                }
             }
         }
 

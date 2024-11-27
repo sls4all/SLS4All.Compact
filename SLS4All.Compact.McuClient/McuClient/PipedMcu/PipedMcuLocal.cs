@@ -232,6 +232,12 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 case MessageType.CollectGarbageCommand:
                     CollectGarbageCommand(body, streamToDevice, cancel);
                     break;
+                case MessageType.EnterPrintingModeCommand:
+                    EnterPrintingModeCommand(streamToDevice, cancel);
+                    break;
+                case MessageType.ExitPrintingModeCommand:
+                    ExitPrintingModeCommand(streamToDevice, cancel);
+                    break;
                 default:
                     throw new InvalidOperationException($"Invalid command received for MCU {Name}: {message.Type}");
             }
@@ -253,6 +259,18 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 _logger.LogDebug($"Collect garbage - critical commands scheduled.");
             PrinterGC.LogCollectionCount(_logger);
             streamToDevice.WriteByte(hasCollected ? (byte)1 : (byte)0);
+        }
+
+        private void EnterPrintingModeCommand(Stream streamToDevice, CancellationToken cancel)
+        {
+            Manager.EnterPrintingMode();
+            streamToDevice.WriteByte(1);
+        }
+
+        private void ExitPrintingModeCommand(Stream streamToDevice, CancellationToken cancel)
+        {
+            Manager.ExitPrintingMode();
+            streamToDevice.WriteByte(1);
         }
 
         private void HasTimingCriticalCommandsScheduleCommand(Stream streamToDevice, CancellationToken cancel)
