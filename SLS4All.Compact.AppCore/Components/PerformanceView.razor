@@ -39,7 +39,7 @@
             CPU Load <small>Total, SLS4All</small>
         </div>
         <div class="w-100 percentage" style="background: linear-gradient(to right, @totalCpuLoadColor.ToRgbaB(opacity1).CssString @(totalCpuLoadInt - selfCpuLoadInt)%, @totalCpuLoadColor.ToRgbaB(opacity2).CssString @(totalCpuLoadInt - selfCpuLoadInt)%, @totalCpuLoadColor.ToRgbaB(opacity2).CssString @totalCpuLoadInt%, @totalCpuLoadColor.ToRgbaB(opacity3).CssString @totalCpuLoadInt%)">
-            @(values.TotalCpuLoad.RoundToDecimal(1, true))% <small>@(values.SelfCpuLoad.RoundToDecimal(1, true))%</small>
+            @(values.TotalCpuLoad.RoundToDecimal(1, zeroes: true))% <small>@(values.SelfCpuLoad.RoundToDecimal(1, zeroes: true))%</small>
         </div>
     </div>
 </a>
@@ -49,10 +49,10 @@
 
     <div class="listview__content">
         <div class="listview__heading">
-            Memory Load <span>@(((values.TotalAvaialableMemory - values.TotalUsedMemory) / (double)(1024 * 1024 * 1024)).RoundToDecimal(1, true)) GB free</span> <small>Total, SLS4All</small>
+            Memory Load <span>@(((values.TotalAvaialableMemory - values.TotalUsedMemory) / (double)(1024 * 1024 * 1024)).RoundToDecimal(1, zeroes: true)) GB free</span> <small>Total, SLS4All</small>
         </div>
         <div class="w-100 percentage" style="background: linear-gradient(to right, @totalMemoryLoadColor.ToRgbaB(opacity1).CssString @(totalMemoryLoadInt - selfMemoryLoadInt)%, @totalMemoryLoadColor.ToRgbaB(opacity2).CssString @(totalMemoryLoadInt - selfMemoryLoadInt)%, @totalMemoryLoadColor.ToRgbaB(opacity2).CssString @totalMemoryLoadInt%, @totalMemoryLoadColor.ToRgbaB(opacity3).CssString @totalMemoryLoadInt%)">
-            @(values.TotalMemoryLoad.RoundToDecimal(1, true))% <small>@(values.SelfMemoryLoad.RoundToDecimal(1, true))%</small>
+            @(values.TotalMemoryLoad.RoundToDecimal(1, zeroes: true))% <small>@(values.SelfMemoryLoad.RoundToDecimal(1, zeroes: true))%</small>
         </div>
     </div>
 </a>
@@ -65,7 +65,7 @@
             IO Load <small>Total</small>
         </div>
         <div class="w-100 percentage" style="background: linear-gradient(to right, @totalIOLoadColor.ToRgbaB(opacity1).CssString @totalIOLoadInt%, @totalIOLoadColor.ToRgbaB(opacity3).CssString @totalIOLoadInt%)">
-            @(values.TotalIOLoad.RoundToDecimal(1, true))%
+            @(values.TotalIOLoad.RoundToDecimal(1, zeroes: true))%
         </div>
     </div>
 </a>
@@ -75,10 +75,10 @@
 
     <div class="listview__content">
         <div class="listview__heading">
-            Storage Use <span>@(((values.StorageTotal - values.StorageUsed) / (double)(1024 * 1024 * 1024)).RoundToDecimal(1, true)) GB free</span> <small>Total</small>
+            Storage Use <span>@(((values.StorageTotal - values.StorageUsed) / (double)(1024 * 1024 * 1024)).RoundToDecimal(1, zeroes: true)) GB free</span> <small>Total</small>
         </div>
         <div class="w-100 percentage" style="background: linear-gradient(to right, @storageLoadColor.ToRgbaB(opacity1).CssString @storageLoadInt%, @storageLoadColor.ToRgbaB(opacity3).CssString @storageLoadInt%)">
-            @(values.StorageLoad.RoundToDecimal(1, true))%
+            @(values.StorageLoad.RoundToDecimal(1, zeroes: true))%
         </div>
     </div>
 </a>
@@ -97,7 +97,7 @@
                 <div class="temperature">
                     CPU: 
                     <span style="color: @cpuTemperatureColor!.Value.CssString">
-                        @(value.Value.RoundToDecimal(1, true))@value.Unit
+                        @(value.Value.RoundToDecimal(1, zeroes: true))@value.Unit
                     </span>
                 </div>
             }
@@ -107,7 +107,7 @@
                 <div class="temperature">
                     GPU: 
                     <span style="color: @gpuTemperatureColor!.Value.CssString">
-                        @(value.Value.RoundToDecimal(1, true))@value.Unit
+                        @(value.Value.RoundToDecimal(1, zeroes: true))@value.Unit
                     </span>
                 </div>
             }

@@ -23,6 +23,10 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using SLS4All.Compact.Diagnostics;
+using static SLS4All.Compact.IO.FatFs.FatFsBase;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using SLS4All.Compact.IO.FatFs;
+using System.IO;
 
 namespace SLS4All.Compact.McuClient
 {
@@ -31,6 +35,11 @@ namespace SLS4All.Compact.McuClient
     {
         public class SdCardOptions : McuManagerOptions.ManagerMcuSdCardSpi
         {
+            public string LoadedFilename { get; set; } = "firmware.cur";
+            public string NewFilename { get; set; } = "firmware.bin";
+            public string OldFilename { get; set; } = "firmware.old";
+            public string OldVersion { get; set; } = "version.old";
+            public string NewVersion { get; set; } = "version.txt";
         }
 
         public class ShellCommandOptions : LoggedScriptRunnerOptions
@@ -51,6 +60,8 @@ namespace SLS4All.Compact.McuClient
         public Dictionary<string, AliasOptions> Aliases { get; set; } = new();
         public TimeSpan DeviceCloseGrace { get; set; } = TimeSpan.FromSeconds(1);
         public TimeSpan UpdateTimeout { get; set; } = TimeSpan.FromMinutes(5);
+        public long RequiredSpaceAddition { get; set; } = 65536;
+        public double RequiredSpaceMultiplier { get; set; } = 2;
     }
 
     /// <summary>
@@ -60,7 +71,7 @@ namespace SLS4All.Compact.McuClient
     {
     }
 
-    public class McuFirmwareUpdater
+    public class McuFirmwareUpdater : IMcuFirmwareUpdater
     {
         private sealed class ScriptRunner : LoggedScriptRunner<McuFirmwareUpdaterOutput>
         {
@@ -105,7 +116,6 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-
         private readonly ILogger _logger;
         private readonly ILoggerFactory _loggerFactory;
         private readonly IOptionsMonitor<McuFirmwareUpdaterOptions> _options;
@@ -127,7 +137,7 @@ namespace SLS4All.Compact.McuClient
             _mcu = mcu;
         }
 
-        public async Task CheckFirmwareUpdate(IMcuDevice device, CancellationToken cancel)
+        public virtual async Task CheckFirmwareUpdate(IMcuDevice device, CancellationToken cancel)
         {
             cancel.ThrowIfCancellationRequested();
 
@@ -139,12 +149,9 @@ namespace SLS4All.Compact.McuClient
             var firmwareMetadataFilename = firmwareFilename + ".json";
             if (!File.Exists(firmwareFilename) || !File.Exists(firmwareMetadataFilename))
                 return;
-            McuFirmwareMetadata firmwareMetadata;
-            using (var stream = File.OpenRead(firmwareMetadataFilename))
-            {
-                firmwareMetadata = await JsonSerializer.DeserializeAsync<McuFirmwareMetadata>(stream, cancellationToken: cancel)
-                    ?? throw new FormatException($"Invalid firmware metadata for MCU {_mcu}");
-            }
+            var firmwareMetadataBytes = await File.ReadAllBytesAsync(firmwareMetadataFilename, cancel);
+            var firmwareMetadata = JsonSerializer.Deserialize<McuFirmwareMetadata>(firmwareMetadataBytes)
+               ?? throw new FormatException($"Invalid firmware metadata for MCU {_mcu}");
 
             if (firmwareMetadata.Version == _mcu.Config.Version)
             {
@@ -157,18 +164,20 @@ namespace SLS4All.Compact.McuClient
                 return;
             }
             _logger.LogInformation($"MCU {_mcu} reports firmware version {_mcu.Config.Version} and current is {firmwareMetadata.Version}, will update");
+            
 
             // update
             if (alias.SdCard != null)
-                await UploadFirmwareSdCard(alias.SdCard, device, firmwareFilename, cancel);
+                await UploadFirmwareSdCard(alias.SdCard, device, firmwareFilename, firmwareMetadataBytes, cancel);
             else if (alias.ShellCommand != null)
-                await UploadFirmwareShellCommand(alias.ShellCommand, device, firmwareFilename, cancel);
+                await UploadFirmwareShellCommand(alias.ShellCommand, device, firmwareFilename, firmwareMetadataBytes, cancel);
         }
 
-        private async Task UploadFirmwareShellCommand(
+        protected virtual async Task UploadFirmwareShellCommand(
             McuFirmwareUpdaterOptions.ShellCommandOptions command,
             IMcuDevice device, 
-            string firmwareFilename, 
+            string firmwareFilename,
+            byte[] firmwareMetadata,
             CancellationToken cancel)
         {
             var options = _options.CurrentValue;
@@ -180,7 +189,7 @@ namespace SLS4All.Compact.McuClient
                 var runner = new ScriptRunner(
                     _logger,
                     _loggerFactory.CreateLogger<McuFirmwareUpdaterOutput>(),
-                    TransformOptionsMonitor.Create(_options, options =>
+                    _options.Transform(options =>
                     {
                         if (options.Aliases.TryGetValue(device.Info.Alias, out var alias) && alias.ShellCommand != null)
                             return alias.ShellCommand;
@@ -198,10 +207,11 @@ namespace SLS4All.Compact.McuClient
             }, cancel);
         }
 
-        private async Task UploadFirmwareSdCard(
+        protected virtual async Task UploadFirmwareSdCard(
             McuFirmwareUpdaterOptions.SdCardOptions sdOptions, 
             IMcuDevice device, 
             string firmwareFilename, 
+            byte[] firmwareMetadata,
             CancellationToken cancel)
         {
             var options = _options.CurrentValue;
@@ -213,7 +223,6 @@ namespace SLS4All.Compact.McuClient
             await RunProtectedUpdate(device, async protectedCancel =>
             {
                 using (var source = File.OpenRead(firmwareFilename))
-                using (var image = FatFirmwareImageBuilder.CreateImage(source))
                 {
                     // NOTE: mage a local McuManager that is unaffected by external cancellation and application shutdown
                     const string sdCardName = "sdCard";
@@ -223,14 +232,14 @@ namespace SLS4All.Compact.McuClient
                         {
                             Mcus =
                             {
-                                { info.Name, new()
+                            { info.Name, new()
+                                {
+                                    Device = new()
                                     {
-                                        Device = new()
-                                        {
-                                            Path = McuAliasesOptions.FormatDeviceName(info.Endpoint, info.Baud),
-                                        },
-                                    } 
+                                        Path = McuAliasesOptions.FormatDeviceName(info.Endpoint, info.Baud),
+                                    },
                                 }
+                            }
                             },
                             SdCardSpi =
                             {
@@ -238,7 +247,7 @@ namespace SLS4All.Compact.McuClient
                             }
                         }),
                         _appDataWriter,
-                        [ factory ],
+                        [factory],
                         NullPrinterSettings.Instance,
                         NullThreadStackTraceDumper.Instance);
 
@@ -250,19 +259,43 @@ namespace SLS4All.Compact.McuClient
                         await finishedTask;
                         if (finishedTask != manager.HasStartedTask)
                             throw new ApplicationException("Failed to start update manager");
+
+                        _logger.LogInformation($"Initializing SD card for {_mcu}");
                         var sdCard = manager.SdCards[sdCardName];
-                        await sdCard.WriteSectors(
-                            0,
-                            (int)((image.Length + sdCard.SectorSize - 1) / sdCard.SectorSize),
-                            image,
-                            managerCancel);
+                        var sdSize = sdCard.SectorSize * sdCard.TotalSectors;
+                        var fat = new McuSdFatFs(sdCard, managerCancel);
+                        fat.CheckResult(fat.f_getfree(fat.Drive, out var freeClusters, out var fs));
+                        var requiredBytesRaw =
+                            fs.RoundToClusterLength(source.Length) +
+                            fs.RoundToClusterLength(firmwareMetadata.Length);
+                        var fsFreeSpace = (long)(freeClusters * fs.csize * fs.ssize);
+                        var fsRequiredSpace = (long)Math.Ceiling(requiredBytesRaw * options.RequiredSpaceMultiplier + options.RequiredSpaceAddition);
+                        _logger.LogInformation($"SD card initialized for {_mcu}. FSFreeSpace = {fsFreeSpace}, FSRequiredSpace = {fsRequiredSpace}, SDSize = {sdSize}");
+                        if (fsFreeSpace < fsRequiredSpace)
+                        {
+                            _logger.LogInformation($"Not enough free space on SD card for {_mcu}, recreating filesystem. FSFreeSpace = {fsFreeSpace}, FSRequiredSpace = {fsRequiredSpace}, SDSize = {sdSize}");
+                            fat.Unmount();
+                            fat.MakeFS();
+                            fat.Mount();
+                        }
+
+                        _logger.LogInformation($"Writing firmware to SD filesystem for {_mcu}");
+                        fat.f_unlink($"{fat.Drive}/{sdOptions.NewFilename}"); // ignore failure
+                        fat.f_unlink($"{fat.Drive}/{sdOptions.OldFilename}"); // ignore failure
+                        fat.f_unlink($"{fat.Drive}/{sdOptions.OldVersion}"); // ignore failure
+                        fat.f_rename($"{fat.Drive}/{sdOptions.LoadedFilename}", $"{fat.Drive}/{sdOptions.OldFilename}"); // ignore failure
+                        fat.f_rename($"{fat.Drive}/{sdOptions.NewVersion}", $"{fat.Drive}/{sdOptions.OldVersion}"); // ignore failure
+                        fat.CreateFileSafe(_logger, $"{fat.Drive}/{sdOptions.NewFilename}", source, doThrow: true);
+                        fat.CreateFileSafe(_logger, $"{fat.Drive}/{sdOptions.NewVersion}", new MemoryStream(firmwareMetadata, false), doThrow: false /* version not important */); 
+                        _logger.LogInformation($"Done writing firmware to SD filesystem for {_mcu}");
+
                         managerCancelSource.Cancel();
                         await runTask;
                         // wait a bit for any continuations to finish after cancellation
                         await Task.Delay(options.DeviceCloseGrace, protectedCancel);
                     }
-                    _logger.LogInformation($"Firmware update for MCU {_mcu} succeeded");
                 }
+                _logger.LogInformation($"Firmware update for MCU {_mcu} succeeded");
             }, cancel);
         }
 

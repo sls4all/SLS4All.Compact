@@ -226,8 +226,12 @@ namespace SLS4All.Compact.McuClient.Pins
                         while (toSend.Count > 0)
                         {
                             var size = Math.Min(32, toSend.Count);
-                            _spi.Send(toSend.Slice(0, size), McuCommandPriority.Default, McuOccasion.Now);
+                            var sending = toSend.Slice(0, size);
                             toSend = toSend.Slice(size);
+                            if (i + 1 == count && toSend.Count == 0) // last message
+                                await _spi.SendWait(sending, McuCommandPriority.Default, McuOccasion.Now, cancel);
+                            else
+                                _spi.Send(sending, McuCommandPriority.Default, McuOccasion.Now);
                         }
 
                         var resp = await FindSdResponse(cancel: cancel);

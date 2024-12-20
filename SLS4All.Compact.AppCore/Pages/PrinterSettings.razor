@@ -10,6 +10,7 @@
 @using SLS4All.Compact.Pages.Wizards
 @using SLS4All.Compact.Printer
 @using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Security
 @using SLS4All.Compact.Slicing
 @using SLS4All.Compact.Storage.PrintJobs
 @using SLS4All.Compact.Storage.PrintProfiles
@@ -28,7 +29,8 @@
 @inject IToastProvider ToastProvider
 @inject INetworkManager NetworkManager
 @inject IMemberManager MemberManager
-@inject IPrinterAuthentication PrinterAuthentication
+@inject ISystemAuthentication SystemAuthentication
+@inject ISignInManager SignInManager
 @inject IPrinterClient PrinterClient
 @inject ILogger<PrinterSettings> Logger
 @inject IPrintingService PrintingGlobal
@@ -37,7 +39,7 @@
     var isPrinting = PrintingGlobal.IsPrinting;
 }
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" IsFullPage="true" />
 
 <ModalWrapper @ref="_updateModal" class="fade app-modal" Context="modal">
     <div class="modal-content">
@@ -46,7 +48,7 @@
                 Update printer software
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             Do you really want to update this printer software to version <b>@_updateSelected?.Identity.VersionString</b> in channel <b>@_updateSelected?.Identity.Channel</b>?
             @if (!string.IsNullOrEmpty(_updateSelected?.ReleaseNotesUrl))
             {
@@ -103,7 +105,7 @@
                 }
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             @if (_networkSelected != null)
             {
                 <table class="table table-sm">
@@ -199,19 +201,19 @@
                 Set Member Id
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             <p>
                 Please set a Member Id. It can be freely obtained by registering at <a class="link-primary" href="@(!MainLayout!.IsLocalSession ? "https://sls4all.com" : "javascript:void(0)")">sls4all.com</a>. We use the Member Ids to track how many SLS4All printers are in the world. It is the only thing we ask of you for using our software. No other data is being collected.
             </p>
             <p>
                 Current Member Id: <ValueEditor 
-                    Title="Member Id" 
-                    Subtitle="Enter a Member Id in format XXXXX-XXXXX-XXXXX-XXXXX" 
-                    @bind-Value="_currentMemberId" 
-                    Traits="MemberIdTraits.Instance" 
-                    Placeholder="not set" 
-                    Validator="@(() => MemberManager.ValidateMemberId(_currentMemberId ?? "") ? Task.FromResult<string?>(null) : Task.FromResult<string?>("Value appears to be invalid or mistyped"))"
-                    ValueEntered="() => SetMemberId(true)" />
+                Title="Member Id" 
+                Subtitle="Enter a Member Id in format XXXXX-XXXXX-XXXXX-XXXXX" 
+                @bind-Value="_currentMemberId" 
+                Traits="MemberIdTraits.Instance" 
+                Placeholder="not set" 
+                Validator="@(() => MemberManager.ValidateMemberId(_currentMemberId ?? "") ? Task.FromResult<string?>(null) : Task.FromResult<string?>("Value appears to be invalid or mistyped"))"
+                ValueEntered="() => SetMemberId(true)" />
             </p>
         </div>
         <div class="modal-footer">
@@ -228,16 +230,39 @@
                 Set system passwords
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             <p>
                 Please set the system passwords for SSH, VNC and possibly other access. 
             </p>
             <p>
-                Password: <ValueEditor Title="System password" @bind-Value="_currentPassword" Placeholder="unchanged" />
+                Password: <ValueEditor Title="System password" @bind-Value="_currentSystemPassword" Placeholder="unchanged" ValueEntered="() => SetSystemPassword(true)" />
             </p>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-primary" @onclick="() => SetSystemPassword(true)">Set system passwords</button>
+            <button class="btn btn-primary @(string.IsNullOrEmpty(_currentSystemPassword) ? "disabled" : "")" @onclick="() => SetSystemPassword(true)" disabled="@(string.IsNullOrEmpty(_currentSystemPassword))">Set system passwords</button>
+            <button class="btn btn-secondary" @onclick="() => modal.Close()">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_webPasswordModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Set web password
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                Please set the SLS4All Compact remote web interface password. If you click <b>Clear password</b>, no password will be required for remote web access (not recommended).
+            </p>
+            <p>
+                Password: <ValueEditor Title="Web password" @bind-Value="_currentWebPassword" Placeholder="unchanged" ValueEntered="() => SetWebPassword(false, true)" />
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary @(string.IsNullOrEmpty(_currentWebPassword) ? "disabled" : "")" @onclick="() => SetWebPassword(false, true)" disabled="@(string.IsNullOrEmpty(_currentWebPassword))">Set web password</button>
+            <button class="btn btn-primary" @onclick="() => SetWebPassword(true, true)">Clear password</button>
             <button class="btn btn-secondary" @onclick="() => modal.Close()">Do nothing</button>
         </div>
     </div>
@@ -250,7 +275,7 @@
                 Reset printing firmware
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             @if (isPrinting)
             {
                 <span class="text-danger">Printing is in progress, printer firmware cannot be reset at this time.</span>
@@ -285,7 +310,7 @@
                 Enable developer mode
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             <p>
                 Displays additional menus and pages that are useful for development and debugging. Please note that these features were not designed with touch controls in mind and require 
                 mouse and keyboard controls. 
@@ -370,7 +395,7 @@
                                 <tr>
                                     <td colspan="4">
                                         <p class="list-header">
-                                            SYSTEM PASSWORDS
+                                            PASSWORDS
                                         </p>
                                     </td>
                                 </tr>
@@ -381,6 +406,16 @@
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
                                             Sets the system passwords for SSH, VNC and possibly other access. 
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr class="hide-top-line">
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" @onclick="() => SetWebPassword()">Set remote web password</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Sets the SLS4All Compact remote web interface password.
                                         </p>
                                     </td>
                                 </tr>
@@ -809,13 +844,13 @@
                                     </td>
                                 </tr>
                                 @RenderValues(
-                                    power,
-                                    powerDefaults,
-                                    valueEntered: EventCallback.Factory.Create(this, SaveSettings),
-                                    nameof(power.LaserWattage),
-                                    nameof(power.HalogenMaxPercent),
-                                    nameof(power.MaxWattage)
-                                )
+                                                               power,
+                                                               powerDefaults,
+                                                               valueEntered: EventCallback.Factory.Create(this, SaveSettings),
+                                                               nameof(power.LaserWattage),
+                                                               nameof(power.HalogenMaxPercent),
+                                                               nameof(power.MaxWattage)
+                                                           )
                                 <tr>
                                     <td colspan="4">
                                         <p class="list-header">
@@ -824,16 +859,16 @@
                                     </td>
                                 </tr>
                                 @RenderValues(
-                                    temperature,
-                                    temperatureDefaults,
-                                    valueEntered: EventCallback.Factory.Create(this, SaveSettings),
-                                    nameof(temperature.SurfaceTemperature1),
-                                    nameof(temperature.SurfaceOffset1),
-                                    nameof(temperature.ThermoCameraOffsetX),
-                                    nameof(temperature.SurfaceTemperature2),
-                                    nameof(temperature.SurfaceOffset2),
-                                    nameof(temperature.ThermoCameraOffsetY)
-                                )
+                                                               temperature,
+                                                               temperatureDefaults,
+                                                               valueEntered: EventCallback.Factory.Create(this, SaveSettings),
+                                                               nameof(temperature.SurfaceTemperature1),
+                                                               nameof(temperature.SurfaceOffset1),
+                                                               nameof(temperature.ThermoCameraOffsetX),
+                                                               nameof(temperature.SurfaceTemperature2),
+                                                               nameof(temperature.SurfaceOffset2),
+                                                               nameof(temperature.ThermoCameraOffsetY)
+                                                           )
                                 <tr>
                                     <td colspan="4">
                                         <p class="list-header">
@@ -842,11 +877,11 @@
                                     </td>
                                 </tr>
                                 @RenderValues(
-                                    watchDog,
-                                    watchDog,
-                                    valueEntered: EventCallback.Factory.Create(this, () => WatchDogSaveSettings(false)),
-                                    nameof(watchDog.IsWatchDogEnabled)
-                                )
+                                                               watchDog,
+                                                               watchDog,
+                                                               valueEntered: EventCallback.Factory.Create(this, () => WatchDogSaveSettings(false)),
+                                                               nameof(watchDog.IsWatchDogEnabled)
+                                                           )
                             }
                             else if (_tabIndex is TabIndex.Testing)
                             {
@@ -859,7 +894,7 @@
                                 </tr>
                                 <tr class="hide-top-line">
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@GetReloadUri()">Homing and motor check</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.Homing?ReturnAddress=@GetReloadUri(false)">Homing and motor check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -869,7 +904,7 @@
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@OpticalSetupWizard.SelfPath?ReturnAddress=@GetReloadUri()">Optical setup</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@OpticalSetupWizard.SelfPath?ReturnAddress=@GetReloadUri(false)">Optical setup</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -879,7 +914,7 @@
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@ThermoSetupWizard.SelfPath?ReturnAddress=@GetReloadUri()">Thermo camera setup</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@ThermoSetupWizard.SelfPath?ReturnAddress=@GetReloadUri(false)">Thermo camera setup</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -889,7 +924,7 @@
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@ChamberHeaterCheckWizard.SelfPath?ReturnAddress=@GetReloadUri()">Chamber heaters check</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@ChamberHeaterCheckWizard.SelfPath?ReturnAddress=@GetReloadUri(false)">Chamber heaters check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -899,7 +934,7 @@
                                 </tr>
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@GalvoCalibrationWizard.SelfPath?ReturnAddress=@GetReloadUri()">Galvo calibration</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@GalvoCalibrationWizard.SelfPath?ReturnAddress=@GetReloadUri(false)">Galvo calibration</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -909,7 +944,7 @@
                                 </tr>                                
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@GetReloadUri()">Halogen heater check</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PrintWizard.SelfPath/@PrintWizard.Step.HalogenCheck?ReturnAddress=@GetReloadUri(false)">Halogen heater check</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
@@ -919,11 +954,21 @@
                                 </tr>                                
                                 <tr>
                                     <td class="col-4 align-middle">
-                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@AnalyseHeatingWizard.SelfPath?ReturnAddress=@GetReloadUri()">Analyse surface heating</a>
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@AnalyseHeatingWizard.SelfPath?ReturnAddress=@GetReloadUri(false)">Analyse surface heating</a>
                                     </td>
                                     <td class="col pl-3 align-middle" colspan="3">
                                         <p class="m-0">
                                             This will calibrate the surface heating process. Resulting file may be assigned to the profile for precise surface heating.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-4 align-middle">
+                                        <a class="btn btn-theme btn-lg w-100" role="button" href="@PowderTuningWizard.SelfPath?ReturnAddress=@GetReloadUri(false)">Powder tuning wizard</a>
+                                    </td>
+                                    <td class="col pl-3 align-middle" colspan="3">
+                                        <p class="m-0">
+                                            Helps you to experiment with new powders. For advanced users.
                                         </p>
                                     </td>
                                 </tr>
@@ -1264,7 +1309,7 @@
             => ValueToString(value);
     }
 
-    public const string SelfPath = "/printer-settings";
+    public const string SelfPath = "printer-settings";
     private const string CssScope = "b-printer-settings";
     private const int _minRows = 1;
 
@@ -1283,6 +1328,7 @@
     private ModalWrapper? _watchdogDisableModal;
     private ModalWrapper? _memberIdModal;
     private ModalWrapper? _systemPasswordModal;
+    private ModalWrapper? _webPasswordModal;
     private ModalWrapper? _resetPrinterFirmwareModal;
     private ModalWrapper? _networkModal;
     private ModalWrapper? _enableDeveloperModeModal;
@@ -1294,7 +1340,8 @@
     private DateTime? _dateTime;
     private readonly IInputValueTraits _dateTimeTraits;
     private string? _currentMemberId;
-    private string? _currentPassword;
+    private string? _currentSystemPassword;
+    private string? _currentWebPassword;
     private bool _doubleConfirmed;
 
     [Parameter]
@@ -1376,8 +1423,7 @@
         TryInvokeStateHasChanged(async () =>
         {
             await ReloadSettings();
-            StateHasChanged();
-        }, cancel);
+        }, cancel: cancel);
         return Task.CompletedTask;
     }
 
@@ -1878,7 +1924,7 @@
         {
             await PrinterCulture.SetPrinterCulture(_culture.Culture, default);
             if (MainLayout!.IsLocalSession)
-                NavigationManager.Reload(MainLayout!);
+                NavigationManager.NavigateTo(MainLayout.GetReloadUri(true), true, true);
         }
         catch (Exception ex)
         {
@@ -1981,7 +2027,7 @@
     {
         if (!fromModal)
         {
-            _currentPassword = "";
+            _currentSystemPassword = "";
             await _systemPasswordModal!.Show();
         }
         else
@@ -1989,15 +2035,15 @@
             await _systemPasswordModal!.Close();
             try
             {
-                if (_currentPassword != null)
+                if (!string.IsNullOrEmpty(_currentSystemPassword))
                 {
-                    await PrinterAuthentication.SetSystemPasswords(_currentPassword);
+                    await SystemAuthentication.SetSystemPasswords(_currentSystemPassword);
                     ToastProvider.Show(new ToastMessage
                         {
                             Type = ToastMessageType.Information,
                             Key = this,
-                            HeaderText = "Passwords set",
-                            BodyText = "System passwords have been successfully set, some changes might require printer restart to take an effect.",
+                            HeaderText = "Passwords updated",
+                            BodyText = "System passwords have been successfully updated, some changes might require printer restart to take an effect.",
                             TargetUri = ShutdownPage.SelfPath,
                             Silent = true, // user is interacting, no need for beeping
                         });
@@ -2009,7 +2055,47 @@
                 {
                     Type = ToastMessageType.Error,
                     Key = this,
-                    HeaderText = "Failed to set system passwords",
+                    HeaderText = "Failed to update system passwords",
+                    BodyText = ex.Message,
+                    Exception = ex,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            }
+        }
+    }
+
+    private async Task SetWebPassword(bool clear = false, bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            _currentWebPassword = "";
+            await _webPasswordModal!.Show();
+        }
+        else
+        {
+            await _webPasswordModal!.Close();
+            try
+            {
+                if (!string.IsNullOrEmpty(_currentWebPassword) || clear)
+                {
+                    await SignInManager.SetPassword(clear ? null : _currentWebPassword);
+                    ToastProvider.Show(new ToastMessage
+                        {
+                            Type = ToastMessageType.Information,
+                            Key = this,
+                            HeaderText = "Password updated",
+                            BodyText = "Web password has been successfully updated.",
+                            Silent = true, // user is interacting, no need for beeping
+                        });
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastProvider.Show(new ToastMessage
+                {
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    HeaderText = "Failed to update web password",
                     BodyText = ex.Message,
                     Exception = ex,
                     Silent = true, // user is interacting, no need for beeping

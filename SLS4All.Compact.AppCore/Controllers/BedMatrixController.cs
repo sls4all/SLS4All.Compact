@@ -31,10 +31,11 @@ using Microsoft.AspNetCore.Hosting;
 using SLS4All.Compact.Camera;
 using System.Buffers;
 using SLS4All.Compact.Numerics;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SLS4All.Compact.Controllers
 {
-    public class BedMatrixControllerBox : TemperatureBoxOptions, IOptionsItemEnable
+    public class BedMatrixControllerBox : BoundaryRectangleOptions, IOptionsItemEnable
     {
         public bool IsEnabled { get; set; } = true;
     }
@@ -53,6 +54,7 @@ namespace SLS4All.Compact.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class BedMatrixController : ControllerBase
     {
         private readonly static ConcurrentDictionary<(double Average, double RefreshRate, bool Cropped, UnitConverterFlags Units, Type Type), BedMatrixImageGenerator> _generators = new();
@@ -77,7 +79,7 @@ namespace SLS4All.Compact.Controllers
         public Task Image(string id, double seconds, [FromQuery] BedMatrixControllerQuery query, CancellationToken cancel)
         {
             var generator = GetGenerator(query.Average ?? 0, query);
-            return _streamingHelper.PullImage(
+            return _streamingHelper.Pull(
                 id,
                 generator,
                 Response,
@@ -88,7 +90,7 @@ namespace SLS4All.Compact.Controllers
         public Task Average(string id, double seconds, [FromQuery] BedMatrixControllerQuery query, CancellationToken cancel)
         {
             var generator = GetGenerator(query.Average ?? seconds, query);
-            return _streamingHelper.PullImage(
+            return _streamingHelper.Pull(
                 id,
                 generator,
                 Response,

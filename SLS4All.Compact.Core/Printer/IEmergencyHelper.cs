@@ -8,9 +8,9 @@
 {
     public interface IEmergencyHelper
     {
-        Task EmergencyPowerOffAutomatedPrinting();
+        Task EmergencyPowerOffAutomatedPrinting(bool stopMovement);
         Task EmergencyPowerOffHeaters();
-        Task EmergencyPowerOffLaser();
+        Task EmergencyPowerOffLaser(bool stopMovement);
         Task EmergencyPowerOffLightsAndHalogens();
     }
 }

@@ -75,7 +75,7 @@ namespace SLS4All.Compact.McuClient
                     if (minInflightSeq == null || (int)(currentSeq - minInflightSeq.Value + 1) <= _mcu._maxInflightBlocks)
                     {
                         _dequeuedItems.Clear();
-                        var nextClock = _mcu._commandQueueNeedsLock.DequeueToInflight(clock, codec, _dequeuedItems);
+                        var nextClock = _mcu._commandQueueNeedsLock.Dequeue(clock, codec, _dequeuedItems);
                         if (nextClock != long.MaxValue)
                         {
                             var clockDuration = nextClock - clock;
@@ -100,7 +100,7 @@ namespace SLS4All.Compact.McuClient
                 {
                     var now = SystemTimestamp.Now;
                     var clock = _mcu._clockSync.IsReady ? _mcu._clockSync.GetClock(now) : 0;
-                    var nextClock = _mcu._commandQueueNeedsLock.PeekNextClock(clock);
+                    var nextClock = _mcu._commandQueueNeedsLock.Dequeue(clock, null, null);
                     if (nextClock <= clock) // nextClock might be 0 for immediate commands
                         return (now, now);
                     var maxTimestamp = now + _maxSendWaitPeriod;

@@ -23,6 +23,7 @@ namespace SLS4All.Compact.ComponentModel
         NotSet = 0,
         UserClosed,
         KeyOverlay,
+        Request,
     }
 
     public sealed class ToastMessage
@@ -76,6 +77,6 @@ namespace SLS4All.Compact.ComponentModel
         IEnumerable<ToastMessage> Messages { get; }
         AsyncEvent MessagesChanged { get; }
         void Show(ToastMessage message);
-        void Dismiss(ToastMessage message, ToastDismissReason reason);
+        void Dismiss(ToastMessage message, ToastDismissReason reason = ToastDismissReason.Request);
     }
 }

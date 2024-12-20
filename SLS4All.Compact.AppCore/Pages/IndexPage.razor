@@ -1,37 +1,38 @@
 ﻿@page "/"
+@page "/home"
 @inherits AppPage
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-home.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-home.png" IsFullPage="true" />
 
 <div class="container pt-5">
     <div class="row justify-content-center">
         <div class="col-6 col-lg-3 py-3">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" ImageClass="main-button-image" Title="Printer Status" Target="@PrinterStatus.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" ImageClass="main-button-image" Title="Printer Status" Target="@PrinterStatus.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3 d-none d-lg-block">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-job-manager.png" ImageClass="main-button-image" Title="Jobs" Target="@Jobs.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-job-manager.png" ImageClass="main-button-image" Title="Jobs" Target="@Jobs.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3 d-none d-lg-block">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" ImageClass="main-button-image" Title="Print Profiles" Target="@PrintProfiles.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-print-profiles.png" ImageClass="main-button-image" Title="Print Profiles" Target="@PrintProfiles.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3 d-none d-lg-block">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-settings.png" ImageClass="main-button-image" Title="Printer Settings" Target="@PrinterSettings.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-settings.png" ImageClass="main-button-image" Title="Printer Settings" Target="@PrinterSettings.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" ImageClass="main-button-image" Title="Live! View" Target="@VideoCamera.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" ImageClass="main-button-image" Title="Live! View" Target="@VideoCamera.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" ImageClass="main-button-image" Title="Thermo Camera" Target="@ThermoCamera.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" ImageClass="main-button-image" Title="Thermo Camera" Target="@ThermoCamera.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3 d-none d-lg-block">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-maintenance.png" ImageClass="main-button-image" Title="Maintenance" Target="@MaintenancePage.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-maintenance.png" ImageClass="main-button-image" Title="Maintenance" Target="@MaintenancePage.SelfPath" />
         </div>
         <div class="col-6 col-lg-3 py-3">
-            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-shutdown.png" ImageClass="main-button-image" Title="Shutdown" Target="@ShutdownPage.SelfPath" />
+            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-shutdown.png" ImageClass="main-button-image" Title="Shutdown" Target="@ShutdownPage.SelfPath" />
         </div>
     </div>
 </div>
 
 @code {
-    public const string SelfPath = "/";
+    public const string SelfPath = "home";
 }

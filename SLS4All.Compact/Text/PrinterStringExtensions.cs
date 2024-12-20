@@ -5,16 +5,20 @@
 // file located in the root directory of the repository.
 
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Text
 {
     public static class PrinterStringExtensions
     {
+        private static ConcurrentDictionary<string, Regex> s_cleanupRegexes = new();
+
         public ref struct LineSplitEnumerator
         {
             private ReadOnlySpan<char> _str;
@@ -96,23 +100,53 @@ namespace SLS4All.Compact.Text
         public static LineSplitEnumerator SplitLines(this ReadOnlySpan<char> str)
             => new LineSplitEnumerator(str);
 
+        private static Regex GetQueryStringCleanupRegex(string key)
+        {
+            if (!s_cleanupRegexes.TryGetValue(key, out var res))
+            {
+                res = new Regex("(?:\\?|&)" + Regex.Escape(key) + "(?:=[^&]*&?|$)|(?:\\?|&)" + Regex.Escape(key) + "(?:=[^&]*|$)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+                if (!s_cleanupRegexes.TryAdd(key, res))
+                    res = s_cleanupRegexes[key];
+            }
+            return res;
+        }
+
         public static string AppendQueryString(string url, string? key, object? value, bool doNotEncode = false, bool add = true)
         {
             if (add && key != null)
             {
-                if (url.IndexOf('?') != -1)
-                    url += "&";
-                else
-                    url += "?";
                 if (!doNotEncode)
                 {
-                    var valueRaw = Convert.ToString(value, CultureInfo.InvariantCulture);
                     key = Uri.EscapeDataString(key);
-                    value = valueRaw != null ? Uri.EscapeDataString(valueRaw) : null;
+                    if (value != null)
+                    {
+                        var valueRaw = Convert.ToString(value, CultureInfo.InvariantCulture);
+                        value = valueRaw != null ? Uri.EscapeDataString(valueRaw) : null;
+                    }
                 }
-                url += key;
+                var cleanupRegex = GetQueryStringCleanupRegex(key);
+                while (true)
+                {
+                    var urlNew = cleanupRegex.Replace(url, static match => match.Value[0] == '?' ? "?" : "", 1);
+                    if (urlNew == url)
+                        break;
+                    url = urlNew;
+                }
                 if (value != null)
-                    url += "=" + value;
+                {
+                    if (!url.EndsWith('&') && !url.EndsWith('?'))
+                    {
+                        if (url.IndexOf('?') != -1)
+                            url += "&";
+                        else
+                            url += "?";
+                    }
+                    url += key + "=" + value;
+                }
+                while (url.EndsWith('?'))
+                    url = url.Substring(0, url.Length - 1);
+                while (url.EndsWith('&'))
+                    url = url.Substring(0, url.Length - 1);
             }
             return url;
         }

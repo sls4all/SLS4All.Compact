@@ -6,6 +6,7 @@
 
 using SLS4All.Compact.Collections;
 using SLS4All.Compact.Printing;
+using SLS4All.Compact.PrintSessions;
 using SLS4All.Compact.Slicing;
 using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Storage.PrintJobs;

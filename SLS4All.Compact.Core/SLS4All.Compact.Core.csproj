@@ -15,12 +15,11 @@
     <ItemGroup>
         <None Remove="Camera\FakeCameraImage.jpg" />
         <None Remove="Camera\FakeCameraImage2.jpg" />
-        <None Remove="IO\FatFirmwareImageTemplate.img.gz" />
     </ItemGroup>
     <ItemGroup>
         <EmbeddedResource Include="Camera\FakeCameraImage.jpg" />
         <EmbeddedResource Include="Camera\FakeCameraImage2.jpg" />
-        <EmbeddedResource Include="IO\FatFirmwareImageTemplate.img.gz" />
+        <EmbeddedResource Include="IO\SimpleFatFirmwareImageTemplate.img.gz" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\SLS4All.Compact\SLS4All.Compact.csproj" />

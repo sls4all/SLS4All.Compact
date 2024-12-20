@@ -17,7 +17,10 @@ namespace SLS4All.Compact.Temperature
     {
         double? TargetTemperature { get; }
         bool TargetReached { get; }
+
+        double? GetInternalBaseTemperature();
         Task SetTarget(double? value, CancellationToken cancel = default);
         Task<bool> TryIncreaseTarget(double offset, CancellationToken cancel);
+        Task<IAsyncDisposable> ForceConstantLights(CancellationToken cancel);
     }
 }

@@ -25,12 +25,12 @@ namespace SLS4All.Compact.McuClient.Pins
         private readonly McuBusDescription _busDesc;
         private readonly McuPinDescription? _csDesc;
         private int _oid;
-        private (McuCommand Cmd, int Oid, int SpiBus, int Mode, int Rate) _setBusCmd = (McuCommand.PlaceholderCommand, 0, 0, 0, 0);
-        private (McuCommand Cmd, int Data) _sendCmd = (McuCommand.PlaceholderCommand, 0);
-        private (McuCommand Cmd, int Data) _sendContinuousCmd = (McuCommand.PlaceholderCommand, 0);
-        private (McuCommand Cmd, int Data) _transferCmd = (McuCommand.PlaceholderCommand, 0);
-        private (McuCommand Cmd, int Data) _transferContinuousCmd = (McuCommand.PlaceholderCommand, 0);
-        private (McuCommand Cmd, int Oid, int Response) _transferCmdResponse = (McuCommand.PlaceholderCommand, 0, 0);
+        private (McuCommand Cmd, McuCommandArgument SpiBus, McuCommandArgument Mode, McuCommandArgument Rate) _setBusCmd = (McuCommand.PlaceholderCommand, default, default, default);
+        private (McuCommand Cmd, McuCommandArgument Data) _sendCmd = (McuCommand.PlaceholderCommand, default);
+        private (McuCommand Cmd, McuCommandArgument Data) _sendContinuousCmd = (McuCommand.PlaceholderCommand, default);
+        private (McuCommand Cmd, McuCommandArgument Data) _transferCmd = (McuCommand.PlaceholderCommand, default);
+        private (McuCommand Cmd, McuCommandArgument Data) _transferContinuousCmd = (McuCommand.PlaceholderCommand, default);
+        private (McuCommand Cmd, McuCommandArgument Oid, McuCommandArgument Response) _transferCmdResponse = (McuCommand.PlaceholderCommand, default, default);
         private Func<McuCommand, bool> _transferCmdResponseFilter;
         private int _lastPriority;
         private bool _isContinuous;
@@ -75,9 +75,22 @@ namespace SLS4All.Compact.McuClient.Pins
             var cmd = _isContinuous ? _sendContinuousCmd : _sendCmd;
             lock (cmd.Cmd)
             {
-                cmd.Cmd[cmd.Data] = new McuCommandArgumentValue(0, data, default);
+                cmd.Data.Value = new McuCommandArgumentValue(0, data, default);
                 Mcu.Send(cmd.Cmd, priority, clock);
             }
+        }
+
+        public Task SendWait(ArraySegment<byte> data, int priority, McuOccasion clock, CancellationToken cancel)
+        {
+            _lastPriority = priority;
+            var cmd = _isContinuous ? _sendContinuousCmd : _sendCmd;
+            Task task;
+            lock (cmd.Cmd)
+            {
+                cmd.Data.Value = new McuCommandArgumentValue(0, data, default);
+                task = Mcu.SendWait(cmd.Cmd, priority, clock, cancel);
+            }
+            return task;
         }
 
         public async Task<ArraySegment<byte>> Transfer(ArraySegment<byte> data, int priority, McuOccasion clock, CancellationToken cancel)
@@ -87,7 +100,7 @@ namespace SLS4All.Compact.McuClient.Pins
             var cmd = _isContinuous ? _transferContinuousCmd : _transferCmd;
             lock (cmd.Cmd)
             {
-                cmd.Cmd[cmd.Data] = data;
+                cmd.Data.Value = data;
                 responseTask = Mcu.SendWithResponse(cmd.Cmd, _transferCmdResponse.Cmd, _transferCmdResponseFilter, priority, clock, cancel: cancel);
             }
             var response = await responseTask;
@@ -98,7 +111,7 @@ namespace SLS4All.Compact.McuClient.Pins
         {
             _oid = commands.CreateOid();
 
-            _setBusCmd = Mcu.LookupCommand("spi_set_bus oid=%c spi_bus=%u mode=%u rate=%u", "oid", "spi_bus", "mode", "rate").Bind(
+            _setBusCmd = Mcu.LookupCommand("spi_set_bus oid=%c spi_bus=%u mode=%u rate=%u", "spi_bus", "mode", "rate").Bind(
                 _oid,
                 Mcu.Config.GetBus(_busDesc.Bus),
                 _mode,
@@ -131,13 +144,13 @@ namespace SLS4All.Compact.McuClient.Pins
             Task task;
             lock (_setBusCmd.Cmd)
             {
-                _setBusCmd.Cmd[_setBusCmd.Rate] = rate;
+                _setBusCmd.Rate.Value = rate;
                 task = Mcu.SendWait(_setBusCmd.Cmd, McuCommandPriority.Default, McuOccasion.Now, cancel);
             }
             return task;
         }
 
         private bool TransferCmdResponseFilter(McuCommand cmd)
-            => cmd[_transferCmdResponse.Oid].Int32 == _oid;
+            => _transferCmdResponse.Oid.Value.Int32 == _oid;
     }
 }

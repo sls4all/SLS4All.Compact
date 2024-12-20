@@ -100,7 +100,7 @@
     private ModalWrapper? _targetModal;
 
     private string StreamUri =>
-        string.Create(CultureInfo.InvariantCulture, $"/api/{(PrimaryCamera ? "bedmatrix" : "bedmatrix2")}/image/{_id}?cropped=true&units={(int)UnitConverterFlags}&c={_streamCounter}&refreshRate={RefreshRate}&average={Average}");
+        string.Create(CultureInfo.InvariantCulture, $"api/{(PrimaryCamera ? "bedmatrix" : "bedmatrix2")}/image/{_id}?cropped=true&units={(int)UnitConverterFlags}&c={_streamCounter}&refreshRate={RefreshRate}&average={Average}");
 
     [Parameter]
     public bool BedControlsEnabled { get; set; } = true;

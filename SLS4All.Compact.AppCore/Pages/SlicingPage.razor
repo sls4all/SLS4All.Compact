@@ -201,7 +201,7 @@
                     var profile = __profile;
                     <a class="list-group-item list-group-item-action print-profile"
                         @onclick="() => DoPrintProfiles(profile)">
-                        <img src="/_content/SLS4All.Compact.AppCore/ui/img/print-profile-default.png" width="40" height="40" />
+                        <img src="_content/SLS4All.Compact.AppCore/ui/img/print-profile-default.png" width="40" height="40" />
                         @profile.Name
                     </a>
                 }
@@ -250,7 +250,7 @@
         </span>
     </div>
 
-    <img class="pt-3" style="@(_fit ? "height:0px; flex-grow: 1; object-fit: contain": "")" src="/api/SlicingImage/@Printing.PreviewVersion/@_layerIndex" />
+    <img class="pt-3" style="@(_fit ? "height:0px; flex-grow: 1; object-fit: contain": "")" src="api/SlicingImage/@Printing.PreviewVersion/@_layerIndex" />
 </div>
 
 @code {

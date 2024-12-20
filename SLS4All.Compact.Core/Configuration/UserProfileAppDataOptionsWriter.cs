@@ -117,5 +117,12 @@ namespace SLS4All.Compact.Configuration
             var stry = JsonSerializer.Serialize(y, s_serializerOptions);
             return strx == stry;
         }
+
+        public override T Clone(T obj)
+        {
+            var str = JsonSerializer.Serialize(obj, s_serializerOptions);
+            var clone = JsonSerializer.Deserialize<T>(str, s_serializerOptions)!;
+            return clone;
+        }
     }
 }

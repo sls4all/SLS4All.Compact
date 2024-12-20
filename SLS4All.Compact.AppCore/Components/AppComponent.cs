@@ -36,41 +36,15 @@ namespace SLS4All.Compact.Components
         protected string? StyleNames { get; private set; }
 
         public void TryInvokeStateHasChanged(CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(cancel);
+            => _ = TryInvokeStateHasChangedAsync((Func<ValueTask>?)null, null, cancel);
 
         public Task TryInvokeStateHasChangedAsync(CancellationToken cancel = default)
-        {
-            try
-            {
-                return InvokeAsync(() =>
-                {
-                    try
-                    {
-                        StateHasChanged();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, $"Failed to update state");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, $"Failed to update state");
-                return Task.CompletedTask;
-            }
-        }
+            => TryInvokeStateHasChangedAsync((Func<ValueTask>?)null, null, cancel);
 
-        public void TryInvokeStateHasChanged(Func<ValueTask>? action, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, cancel);
+        public void TryInvokeStateHasChanged(Func<ValueTask>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
+            => _ = TryInvokeStateHasChangedAsync(action, postAction, cancel);
 
-        public void TryInvokeStateHasChanged(Func<ValueTask>? action, Func<ValueTask>? postAction, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, postAction, cancel);
-
-        public Task TryInvokeStateHasChangedAsync(Func<ValueTask>? action, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, null, cancel);
-
-        public Task TryInvokeStateHasChangedAsync(Func<ValueTask>? action, Func<ValueTask>? postAction, CancellationToken cancel = default)
+        public Task TryInvokeStateHasChangedAsync(Func<ValueTask>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
         {
             try
             {
@@ -97,16 +71,10 @@ namespace SLS4All.Compact.Components
             }
         }
 
-        public void TryInvokeStateHasChanged(Func<ValueTask<bool>>? action, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, cancel);
+        public void TryInvokeStateHasChanged(Func<ValueTask<bool>>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
+            => _ = TryInvokeStateHasChangedAsync(action, postAction, cancel);
 
-        public void TryInvokeStateHasChanged(Func<ValueTask<bool>>? action, Func<ValueTask>? postAction, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, postAction, cancel);
-
-        public Task TryInvokeStateHasChangedAsync(Func<ValueTask<bool>>? action, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, null, cancel);
-
-        public Task TryInvokeStateHasChangedAsync(Func<ValueTask<bool>>? action, Func<ValueTask>? postAction, CancellationToken cancel = default)
+        public Task TryInvokeStateHasChangedAsync(Func<ValueTask<bool>>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
         {
             try
             {

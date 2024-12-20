@@ -22,11 +22,13 @@ using SLS4All.Compact.ComponentModel;
 using SLS4All.Compact.Helpers;
 using SLS4All.Compact.IO;
 using SLS4All.Compact.Printing;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SLS4All.Compact.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class SlicingImageController : ControllerBase
     {
         private readonly IPrintingService _printing;

@@ -1,0 +1,93 @@
+﻿@page "/print-tuning/report"
+@using Markdig
+@using Markdig.Renderers
+@using Markdig.Syntax
+@using Markdig.Syntax.Inlines
+@using Markdig.Renderers.Html
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Pages.Wizards
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Storage.PrintSessions
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@inherits AppPage
+@inject IToastProvider ToastProvider
+@inject IPrintAutoTuner PrintAutoTuner
+@implements IDisposable
+
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
+
+<div class="report">
+    @_markup
+</div>
+
+@code {
+    private sealed class LinkUrlExtension : IMarkdownExtension
+    {
+        public void Setup(MarkdownPipelineBuilder pipeline)
+        {
+            pipeline.DocumentProcessed += ChangeImgPath;
+        }
+
+        public void ChangeImgPath(MarkdownDocument document)
+        {
+            foreach (var link in document.Descendants<LinkInline>())
+            {
+                link.Url = $"{SelfPath}/{link.Url}";
+            }
+        }
+
+        public void Setup(MarkdownPipeline pipeline, IMarkdownRenderer renderer)
+        {
+        }
+    }
+
+    public const string SelfPath = "print-tuning/report";
+    private const string CssScope = "b-print-tuning-report";
+    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private string? _report;
+    private MarkupString _markup;
+    private Timer? _timer;
+    private MarkdownPipeline _markdownPipeline = default!;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _markdownPipeline = new MarkdownPipelineBuilder()
+            .UseAdvancedExtensions()
+            .UseGenericAttributes()
+            .Use<LinkUrlExtension>()
+            .Build();
+        UpdateMarkdown();
+        _timer = new Timer(OnTimer, null, s_period, s_period);
+    }
+
+    private void OnTimer(object? state)
+        => TryInvokeStateHasChanged(() =>
+        {
+            return ValueTask.FromResult(UpdateMarkdown());
+        });
+
+    private bool UpdateMarkdown()
+    {
+        var report = PrintAutoTuner.ReportMarkdown;
+        if (Equals(_report, report))
+            return false;
+        if (string.IsNullOrEmpty(report))
+            _markup = (MarkupString)"No report available. Are reports enabled in configuration? Is tuning running?";
+        else
+            _markup = (MarkupString)Markdown.ToHtml(report, _markdownPipeline);
+        _report = report;
+        return true;
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

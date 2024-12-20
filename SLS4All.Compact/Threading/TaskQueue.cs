@@ -26,7 +26,16 @@ namespace SLS4All.Compact.Threading
         /// <summary>
         /// Gets task that completes when all current and possibly subsequent items have been completed
         /// </summary>
-        public Task CurrentTask => _currentTask;
+        public Task CurrentTask
+        {
+            get
+            {
+                lock (_queue)
+                {
+                    return _currentTask;
+                }
+            }
+        }
 
         /// <summary>
         /// Queues new task on thread pool. Throws exception if preceding task failed. Does not wait or block.

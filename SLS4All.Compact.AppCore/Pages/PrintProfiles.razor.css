@@ -12,8 +12,8 @@
 
     .properties-panel .nav-link {
         font-size: 20px;
-        padding-left: 15px;
-        padding-right: 15px;
+        padding-left: 20px;
+        padding-right: 20px;
     }
 
     .properties-panel .nav-tabs {
@@ -56,6 +56,10 @@
     position: relative;
     top: 0px;
 }
+
+    .property-table .hide-top-line td, .property-table .hide-top-line th {
+        border-top: none;
+    }
 
     .property-table .property-name {
         white-space: nowrap;
@@ -100,6 +104,14 @@
     }
 
     .property-table .property-separator {
+    }
+
+.property-table-shorter-rows {
+}
+
+    .property-table-shorter-rows td {
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
     }
 
 .table-advanced-shrinkage {
@@ -153,3 +165,18 @@
         background-color: #0001;
         border-radius: 5px;
     }
+
+.has-defaults-row {
+}
+
+    .has-defaults-row .btn {
+        padding-top: 1px;
+        padding-bottom: 1px;
+    }
+
+    .has-defaults-row .new-defaults {
+        font-size: 15px;
+        padding: 6px;
+        margin-left: 4px;
+    }
+ 

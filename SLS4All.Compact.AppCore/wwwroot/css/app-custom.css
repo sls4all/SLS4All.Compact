@@ -23,20 +23,6 @@ body {
     border: transparent;
 }
 
-@font-face {
-    font-family: 'AurulentSans';
-    font-style: normal;
-    font-weight: normal;
-    src: url("../ui/fonts/AurulentSans-Regular.otf") format("opentype");
-}
-
-@font-face {
-    font-family: 'Audiowide';
-    font-style: normal;
-    font-weight: normal;
-    src: url("../ui/fonts/Audiowide-Regular.ttf") format("opentype");
-}
-
 .app-component {
     position: absolute;
     left: 0;

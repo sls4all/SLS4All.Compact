@@ -189,6 +189,16 @@
                     height: 100%;
                 }
 
+        .status-plot-camera-container .status-any-view.print-time-view {
+        }
+
+            .status-plot-camera-container .status-any-view.print-time-view .video-style {
+                position: absolute;
+                bottom: 0px;
+                left: 0px;
+                right: 0px;
+            }
+
 .stop-modal > .modal-dialog {
     max-width: 600px;
 }
@@ -207,3 +217,12 @@
         width: 100%;
         white-space: nowrap;
     }
+
+.powder-tuning-link {
+    text-decoration: underline;
+}
+
+.print-overrides-link {
+    margin-left: 5px;
+    text-decoration: underline;
+}

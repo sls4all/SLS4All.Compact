@@ -115,6 +115,8 @@ namespace SLS4All.Compact.McuClient.Pins
 
         private async ValueTask OnSetup(CancellationToken cancel)
         {
+            if (Mcu.IsFake)
+                return;
             await InitRegisters(cancel);
         }
 
@@ -195,6 +197,9 @@ namespace SLS4All.Compact.McuClient.Pins
 
         public async ValueTask BeginEndstopMove(EndstopSensitivity sensitivity, CancellationToken cancel)
         {
+            if (Mcu.IsFake)
+                return;
+
             // set endstop move values
             _lastEndstopSensitivity = sensitivity;
             if (_endstopMoveFields.TryGetValue(sensitivity, out var fields))
@@ -206,6 +211,9 @@ namespace SLS4All.Compact.McuClient.Pins
 
         public async ValueTask FinishEndstopMove(CancellationToken cancel)
         {
+            if (Mcu.IsFake)
+                return;
+
             // set original values
             if (_endstopMoveFields.TryGetValue(_lastEndstopSensitivity, out var fields))
             {

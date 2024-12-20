@@ -43,6 +43,8 @@ namespace SLS4All.Compact.Movement
 
         public double StepXYDistance => _stepXYDistance;
 
+        public TimeSpan MicroDwellDuration => TimeSpan.FromSeconds(0.100);
+
         public ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
@@ -50,6 +52,9 @@ namespace SLS4All.Compact.Movement
             => ValueTask.CompletedTask;
 
         public Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+            => Task.CompletedTask;
+
+        public Task StopAndFinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false,IPrinterClientCommandContext ? context = null, CancellationToken cancel = default)
@@ -73,7 +78,7 @@ namespace SLS4All.Compact.Movement
         public TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext ? context = null)
             => TimeSpan.Zero;
 
-        public ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool clamp = false, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
             => ValueTask.CompletedTask;
 
         public ValueTask MoveXYCode(ChannelWriter<CodeCommand> channel, double x, double y, bool relative, double? speed = null, CancellationToken cancel = default)
@@ -114,13 +119,18 @@ namespace SLS4All.Compact.Movement
             return false;
         }
 
-        public ValueTask<(TimeSpan, SystemTimestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
-            => new ValueTask<(TimeSpan, SystemTimestamp)>((TimeSpan.Zero, SystemTimestamp.Now));
+        public ValueTask<RemainingPrintTime> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+            => new ValueTask<RemainingPrintTime>(new RemainingPrintTime(TimeSpan.Zero, TimeSpan.Zero, SystemTimestamp.Now, RemainingPrintTimeFlags.NotSet));
 
         public double? TryGetMinLaserPwmCycleTime(IPrinterClientCommandContext? context = null)
             => null;
 
         public TimeSpan GetQueueAheadDuration(IPrinterClientCommandContext? context = null)
             => TimeSpan.Zero;
+
+        public ValueTask Dwell(TimeSpan delay, bool includeAux, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

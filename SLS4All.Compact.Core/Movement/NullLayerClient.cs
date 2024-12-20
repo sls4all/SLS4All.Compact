@@ -4,7 +4,8 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using SLS4All.Compact.Temperature;
+using Microsoft.Extensions.Options;
+using SLS4All.Compact.Temperature;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Generic;
@@ -18,13 +19,18 @@ namespace SLS4All.Compact.Movement
     {
         public static NullLayerClient Instance { get; } = new();
 
+        public AsyncEvent LayerMovesSafeForPrintBedEvent { get; } = new();
+
+        public double GetBedLevelingTotalDepth(BedLevelingSetup? setup)
+            => 0;
+
         public Task BedLeveling(BedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public Task FinishBedLeveling(FinishBedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
+        public Task BedPreparation(IOptionsMonitor<BedPreparationSetup> setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public Task BeginLayer(BeginLayerSetup setup, CancellationToken cancel = default)
@@ -48,10 +54,13 @@ namespace SLS4All.Compact.Movement
         public Task HomeBedsAndRecoater(HomeBedsAndRecoaterSetup setup, StatusUpdater? status = null, CancellationToken cancel = default)
             => Task.CompletedTask;
 
-        public Task PrintCap(PrintCapSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
+        public Task PrintCap(IOptionsMonitor<PrintCapSetup> setup, StatusUpdater? onStatus, CancellationToken cancel = default)
             => Task.CompletedTask;
 
         public Task SetPowderDepth(SetPowderDepthSetup setup, CancellationToken cancel = default)
+            => Task.CompletedTask;
+
+        public Task MoveForDryPrint(MoveForDryPrintSetup setup, CancellationToken cancel = default)
             => Task.CompletedTask;
     }
 }

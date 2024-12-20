@@ -7,6 +7,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -94,12 +95,22 @@ namespace SLS4All.Compact.Collections
 
         public Enumerator GetEnumerator() => new Enumerator(this);
 
-        public StrideSpan<T> Slice(int start, int length)
+        public StrideSpan<T> Slice(int start)
         {
-            if (start < 0 || start + length > _length) 
+            if ((uint)start > (uint)_length)
                 ThrowIndexOutOfRangeException();
             return new StrideSpan<T>(
-                ref this[start],
+                ref Unsafe.AddByteOffset(ref _reference, (nint)(uint)start * _stride),
+                _stride,
+                _length - start);
+        }
+
+        public StrideSpan<T> Slice(int start, int length)
+        {
+            if ((ulong)(uint)start + (ulong)(uint)length > (ulong)(uint)_length)
+                ThrowIndexOutOfRangeException();
+            return new StrideSpan<T>(
+                ref Unsafe.AddByteOffset(ref _reference, (nint)(uint)start * _stride),
                 _stride,
                 length);
         }

@@ -117,8 +117,12 @@ namespace SLS4All.Compact.McuClient
                         if (poweredOnDesc.Length != 0)
                             poweredOnDesc.Append("; ");
                         poweredOnDesc.Append(info.Pin.Name);
+                        poweredOnDesc.Append('[');
+                        poweredOnDesc.Append(info.Priority);
+                        poweredOnDesc.Append(']');
                         poweredOnDesc.Append('=');
                         poweredOnDesc.Append(GetWatts(info.PowerConsumption));
+                        poweredOnDesc.Append('W');
                     }
                 }
                 var requiredPower = GetWatts(required + _baseConsumption);

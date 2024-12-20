@@ -1,0 +1,121 @@
+﻿.dummy {
+}
+
+.status-plot-camera-container {
+    display: grid;
+}
+
+    .status-plot-camera-container .status-any-view {
+        grid-area: 1 / 1;
+        width: 100%;
+        height: 100%;
+        transition: opacity 0.2s linear;
+    }
+
+        .status-plot-camera-container .status-any-view.status-plot-view {
+            border: 1px solid #fff1;
+            float: right;
+            -webkit-box-shadow: 0 0 15px #0007;
+            box-shadow: 0 0 15px #0007;
+        }
+
+        .status-plot-camera-container .status-any-view.status-thermo-view {
+        }
+
+            .status-plot-camera-container .status-any-view.status-thermo-view .video-image-container {
+            }
+
+                .status-plot-camera-container .status-any-view.status-thermo-view .video-image-container img {
+                    border: 1px solid #fff1;
+                    width: 100%;
+                    height: 100%;
+                }
+
+        .status-plot-camera-container .status-any-view.status-camera-view {
+        }
+
+            .status-plot-camera-container .status-any-view.status-camera-view .video-image-container {
+            }
+
+                .status-plot-camera-container .status-any-view.status-camera-view .video-image-container img {
+                    border: 1px solid #fff1;
+                    width: 100%;
+                    height: 100%;
+                }
+
+.print-controls {
+    padding-bottom: 10px;
+}
+
+.badge {
+    font-size: 15px;
+}
+
+.dropdown-item {
+    font-size: 17px;
+}
+
+.property-table {
+    position: relative;
+    top: 0px;
+    width: 100%;
+}
+
+    .property-table .property-name {
+        white-space: nowrap;
+        color: #ffffff;
+        font-size: 20px;
+        vertical-align: middle;
+        vertical-align: middle;
+        padding-top: 3px;
+        padding-bottom: 3px;
+    }
+
+    .property-table .property-value {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: right;
+        vertical-align: middle;
+        padding-top: 3px;
+        padding-bottom: 3px;
+    }
+
+        .property-table .property-value .property-value-set {
+            /*font-weight: bold;*/
+        }
+
+        .property-table .property-value .property-value-set-parent {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+        .property-table .property-value .property-value-not-set {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+    .property-table .property-suffix {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .property-table .property-separator {
+    }
+
+.hide-top-line td {
+    border-top: none;
+}
+
+.printing-notification {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+}
+
+    .printing-notification .btn {
+        font-size: 17px;
+    }

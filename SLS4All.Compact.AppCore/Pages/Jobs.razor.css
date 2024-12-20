@@ -251,3 +251,9 @@
                 .property-table .jobs-job-name-row td:nth-child(2) .dropdown-menu .dropdown-item {
                     font-size: 20px;
                 }
+
+.new-defaults {
+    font-size: 15px;
+    padding: 6px;
+    margin-left: 4px;
+}

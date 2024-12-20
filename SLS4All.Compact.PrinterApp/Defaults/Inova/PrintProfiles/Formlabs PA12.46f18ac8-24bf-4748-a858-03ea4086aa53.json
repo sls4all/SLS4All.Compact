@@ -54,7 +54,7 @@
   "LaserOnPercent": 100,
   "LaserFirstOutlineEnergyDensity": 28,
   "LaserOtherOutlineEnergyDensity": 18,
-  "LaserFillEnergyDensity": 13,
+  "LaserFillEnergyDensity": 15,
   "TotalIncreasedEnergyDensity": 0,
   "OutlineCount": 2,
   "FillOutlineSkipCount": 1,
@@ -75,6 +75,11 @@
     "ZScalePercent": 102
   },
   "UseSoftHeater": true,
-  "SoftHeaterFilename": "/surface/Formlabs_PA12_2024-10-14_14-47-52.s4a-sha",
-  "NestingSpacing": null
+  "SoftHeaterFilename": "/surface/Formlabs_PA12_2024-12-01_23-10-21.s4a-sha",
+  "NestingSpacing": null,
+  "AutoTuningEnabled": false,
+  "AutoTuningMaxTemperature": 187,
+  "AutoTuningSensitivityPercent": 1.5,
+  "AutoTuningFinalTemperatureOffset": 6.5,
+  "CreatedAt": "2024-12-20T17:01:32+01:00"
 }

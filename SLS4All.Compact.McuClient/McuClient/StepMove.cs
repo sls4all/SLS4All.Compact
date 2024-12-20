@@ -43,6 +43,25 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
+        public long Duration
+        {
+            get
+            {
+                if (Interval == uint.MaxValue) // pwm
+                    return 0;
+                else if (Count == 0) // dwell
+                    return Interval;
+                else // step
+                {
+                    var count = Math.Abs(Count);
+                    if (Add == 0)
+                        return (long)Interval * count;
+                    else
+                        return (long)Add * count * (count - 1) / 2 + (long)Interval * count;
+                }
+            }
+        }
+
         public ushort Power
         {
             get

@@ -23,7 +23,7 @@
                 Bed preparation setup
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             <table class="table table-sm">
                 <tbody>
                     <tr>
@@ -67,7 +67,7 @@
                 Print cap setup
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             <table class="table table-sm">
                 <tbody>
                     <tr>
@@ -111,7 +111,7 @@
                 Begin layer setup
             </h5>
         </div>
-         <div class="modal-body">
+        <div class="modal-body">
             <table class="table table-sm">
                 <tbody>
                     <tr>
@@ -185,17 +185,40 @@
 
 @if (isPrinting)
 {
-    <div class="printing-notification">
-        <p>
-            <span class="badge badge-dark text-wrap">
-                <i class="bi bi-play" /> Printing is in progress, movement cannot be controlled at this time.
-            </span>
-        </p>
-        <p>
-            <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
-        </p>
-    </div>
-    return;
+    if (MainLayout!.IsDeveloperMode)
+    {
+        if (!Force)
+        {
+            <div class="printing-notification">
+                <p>
+                    <span class="badge badge-dark text-wrap">
+                        <i class="bi bi-play" /> Printing is in progress, movement should be controlled only if you know what you are doing.
+                    </span>
+                </p>
+                <p>
+                    <a class="btn btn-danger" href="@MovementPage.SelfPath?@nameof(Force)=true">Allow movement control</a>
+                </p>
+                <p>
+                    <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+                </p>
+            </div>
+            return;
+        }
+    }
+    else
+    {
+        <div class="printing-notification">
+            <p>
+                <span class="badge badge-dark text-wrap">
+                    <i class="bi bi-play" /> Printing is in progress, movement cannot be controlled at this time.
+                </span>
+            </p>
+            <p>
+                <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+            </p>
+        </div>
+        return;
+    }
 }
 
 <div @key="this" class="container movement-container">
@@ -224,11 +247,11 @@
                                     </div>
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-primary btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveXY(0, -Values.StepXY)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.Y, false, (double)Values.SpeedXY, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-primary btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveXY(0, -Values.StepXY)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.Y, false, (double)Values.SpeedXY, cancel)">
                                             <i class="zwicon-arrow-up"></i>
                                         </MovementKey>
                                     </div>
@@ -238,11 +261,11 @@
                                 <div class="row justify-content-center">
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-primary btn--icon"
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveXY(-Values.StepXY, 0)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.X, false, (double)Values.SpeedXY, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-primary btn--icon"
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveXY(-Values.StepXY, 0)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.X, false, (double)Values.SpeedXY, cancel)">
                                             <i class="zwicon-arrow-left"></i>
                                         </MovementKey>
                                     </div>
@@ -251,11 +274,11 @@
                                     </div>
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-primary btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveXY(+Values.StepXY, 0)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.X, true, (double)Values.SpeedXY, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-primary btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveXY(+Values.StepXY, 0)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.X, true, (double)Values.SpeedXY, cancel)">
                                             <i class="zwicon-arrow-right"></i>
                                         </MovementKey>
                                     </div>
@@ -265,11 +288,11 @@
                                     </div>
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-primary btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveXY(0, +Values.StepXY)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.Y, true, (double)Values.SpeedXY, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-primary btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveXY(0, +Values.StepXY)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.Y, true, (double)Values.SpeedXY, cancel)">
                                             <i class="zwicon-arrow-down"></i>
                                         </MovementKey>
                                     </div>
@@ -304,13 +327,42 @@
                         </td>
                     </tr>
                     <tr>
-                        <td colspan="2">
-                            <a class="btn btn-sm btn-theme btn--icon-text w-100" @onclick="MoveXYPos"><i class="zwicon-checkmark"></i> Go</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2">
-                            <a class="btn btn-sm btn-theme btn--icon-text w-100" @onclick="MeasureXYPos"><i class="zwicon-clock"></i> Time</a>
+                        <td colspan="2" rowspan="2">
+                            <table class="table table-sm table-borderless">
+                                <tbody>
+                                    <tr style="height: 1px">
+                                        <td rowspan="2" style="height: inherit">
+                                            <a class="col btn btn-sm btn-theme btn--icon-text h-100 w-100 d-flex" style="align-items: center" @onclick="MoveXYPos"><i class="zwicon-checkmark"></i> Go</a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(0, 0.5)"><i class="bi bi-arrow-left-square"></i></a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(0, 0)"><i class="bi bi-arrow-up-left-square"></i></a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(0.5, 0)"><i class="bi bi-arrow-up-square"></i></a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(1, 0)"><i class="bi bi-arrow-up-right-square"></i></a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(1, 0.5)"><i class="bi bi-arrow-right-square"></i></a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(1, 1)"><i class="bi bi-arrow-down-right-square"></i></a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(0.5, 1)"><i class="bi bi-arrow-down-square"></i></a>
+                                        </td>
+                                        <td>
+                                            <a class="col-auto btn btn-sm btn-theme btn--icon-text w-100" @onclick="() => MoveXYAbs(0, 1)"><i class="bi bi-arrow-down-left-square"></i></a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </td>
                     </tr>
                 </tbody>
@@ -338,21 +390,21 @@
                                 <div class="row justify-content-center">
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-success btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveAux(MovementAxis.Z1, -Values.StepZ, Values.SpeedZ, 0)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.Z1, false, (double)Values.SpeedZ, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-success btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveAux(MovementAxis.Z1, -Values.StepZ, Values.SpeedZ, 0)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.Z1, false, (double)Values.SpeedZ, cancel)">
                                             <i class="zwicon-arrow-up"></i>
                                         </MovementKey>
                                     </div>
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-warning btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveAux(MovementAxis.Z2, -Values.StepZ, Values.SpeedZ, 0)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.Z2, false, (double)Values.SpeedZ, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-warning btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveAux(MovementAxis.Z2, -Values.StepZ, Values.SpeedZ, 0)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.Z2, false, (double)Values.SpeedZ, cancel)">
                                             <i class="zwicon-arrow-up"></i>
                                         </MovementKey>
                                     </div>
@@ -368,21 +420,21 @@
                                 <div class="row justify-content-center">
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-success btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveAux(MovementAxis.Z1, +Values.StepZ, Values.SpeedZ, 0)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.Z1, true, (double)Values.SpeedZ, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-success btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveAux(MovementAxis.Z1, +Values.StepZ, Values.SpeedZ, 0)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.Z1, true, (double)Values.SpeedZ, cancel)">
                                             <i class="zwicon-arrow-down"></i>
                                         </MovementKey>
                                     </div>
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-warning btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveAux(MovementAxis.Z2, +Values.StepZ, Values.SpeedZ, 0)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.Z2, true, (double)Values.SpeedZ, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-warning btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveAux(MovementAxis.Z2, +Values.StepZ, Values.SpeedZ, 0)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.Z2, true, (double)Values.SpeedZ, cancel)">
                                             <i class="zwicon-arrow-down"></i>
                                         </MovementKey>
                                     </div>
@@ -457,11 +509,11 @@
                                 <div class="row justify-content-center">
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-danger btn--icon" 
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveAux(MovementAxis.R, -Values.StepR, Values.SpeedR, Values.AccelR)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.R, false, (double)Values.SpeedR, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-danger btn--icon" 
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveAux(MovementAxis.R, -Values.StepR, Values.SpeedR, Values.AccelR)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.R, false, (double)Values.SpeedR, cancel)">
                                             <i class="zwicon-arrow-left"></i>
                                         </MovementKey>
                                     </div>
@@ -470,11 +522,11 @@
                                     </div>
                                     <div class="col-auto text-center p-1">
                                         <MovementKey
-                                            b-movement="b-movement"
-                                            class="btn btn-danger btn--icon"
-                                            ClickedEnabled="!Values.DirectMovement"
-                                            Clicked="() => MoveAux(MovementAxis.R, +Values.StepR, Values.SpeedR, Values.AccelR)"
-                                            Clicking="cancel => MoveContinuous(MovementAxis.R, true, (double)Values.SpeedR, cancel)">
+                                        b-movement="b-movement"
+                                        class="btn btn-danger btn--icon"
+                                        ClickedEnabled="!Values.DirectMovement"
+                                        Clicked="() => MoveAux(MovementAxis.R, +Values.StepR, Values.SpeedR, Values.AccelR)"
+                                        Clicking="cancel => MoveContinuous(MovementAxis.R, true, (double)Values.SpeedR, cancel)">
                                             <i class="zwicon-arrow-right"></i>
                                         </MovementKey>
                                     </div>
@@ -564,14 +616,9 @@
                 </div>
             </div>
         </div>
-        @if (_info != null)
-        {
-            <div class="col-auto p-1">
-                <div class="badge badge-info text-wrap">
-                    @_info
-                </div>
-            </div>
-        }
+        <div class="col-auto p-1">
+            <span class="badge badge-pill badge-dark"><i class="bi bi-stopwatch"></i> <RemainingPrintTimeText/></span>
+        </div>
     </div>
 </div>
 
@@ -609,14 +656,15 @@
             => LastPosition = null;
     }
     private const string CssScope = "b-movement";
-    public const string SelfPath = "/movement";
-    private string? _info = null;
+    public const string SelfPath = "movement";
     private int _backgroundCount = 0;
     private Modal? _beginLayerModal;
     private Modal? _bedPreparationModal;
     private Modal? _printCapModal;
     private Modal? _recoatLayerModal;
 
+    [SupplyParameterFromQuery]
+    private bool Force { get; set; } = false;
     private bool IsPrinting => PrintingGlobal.BackgroundTask.Status?.IsCompleted == false;
 
     protected override void OnInitialized()
@@ -713,15 +761,14 @@
         });
     }
 
-    private async Task MeasureXYPos()
+    private async Task MoveXYAbs(double rx, double ry)
     {
         await BackgroundTask(async cancel =>
         {
-            var watch = System.Diagnostics.Stopwatch.StartNew();
             Values.InvalidateLastPosition();
+            Values.MoveXPos = (decimal)(rx * MovementClient.MaxXY);
+            Values.MoveYPos = (decimal)(ry * MovementClient.MaxXY);
             await MovementClient.MoveXY((double)Values.MoveXPos, (double)Values.MoveYPos, false, speed: (double)Values.SpeedXY, cancel: cancel);
-            await MovementClient.FinishMovement(cancel: cancel);
-            _info = watch.Elapsed.ToString();
         });
     }
 
@@ -849,7 +896,6 @@
             _backgroundCount++;
             try
             {
-                _info = null;
                 StateHasChanged();
                 await func(cancel);
             }

@@ -30,6 +30,7 @@ namespace SLS4All.Compact.McuClient
         Dequeued = 1,
         Retransmit = 2,
         TimingCritical = 4,
+        Movement = 8,
     }
 
     public delegate ValueTask McuResponseHandler(Exception? exception, McuCommand? command, CancellationToken cancel);
@@ -41,6 +42,7 @@ namespace SLS4All.Compact.McuClient
         public ulong Id;
         public long MinClock;
         public long ReqClock;
+        public long MaxClock;
         public int RefCount;
         public ArenaBuffer<byte> Data;
         public McuCommand CommandTemplate;
@@ -111,7 +113,6 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private const long _maxFutureReqClockDuration = int.MaxValue / 2;
         private readonly ILogger _logger;
         private readonly ArenaAllocator<byte> _arena;
         private readonly McuCodec _encoder;
@@ -130,6 +131,7 @@ namespace SLS4All.Compact.McuClient
         private int _inflightCount;
         private long _inflightBytes;
         private int _timingCriticalCount;
+        private long _maxDequeuedMovementMaxClock;
 
         private readonly TaskQueue? _dumpQueue;
         private readonly TextWriter? _dumpWriter;
@@ -233,7 +235,7 @@ namespace SLS4All.Compact.McuClient
             _encoder.WriteVLQ(command.CommandId);
             for (int i = 0; i < command.ArgumentCount; i++)
             {
-                var arg = command.Arguments[i];
+                var arg = command.ArgumentInfos[i];
                 switch (arg.Type)
                 {
                     case McuCommandArgumentType.Number:
@@ -254,12 +256,19 @@ namespace SLS4All.Compact.McuClient
             return _encoder.FinalizeCommand().Span;
         }
 
-        public bool TryReplace(McuSendResult id, McuCommand command)
+        public bool TryReplace(McuSendResult id, McuOccasion occasion, McuCommand command)
         {
             ref var item = ref _items[id.Index];
             if (item.Id == id.Id &&
                 (item.Flags & McuCommandQueueItemFlags.Dequeued) == 0)
             {
+                if (occasion.MinClock < item.MinClock ||
+                    occasion.ReqClock < item.ReqClock ||
+                    occasion.MaxClock < item.MaxClock)
+                {
+                    throw new InvalidOperationException($"Command can be replaced only by same or later than intended.");
+                }
+
                 _stalledCount--;
                 _stalledBytes -= item.Data.Length;
                 Debug.Assert(item.RefCount > 0);
@@ -270,6 +279,8 @@ namespace SLS4All.Compact.McuClient
 
                 FreeBuffer(ref item.Data);
                 item.Data = data;
+                if (occasion.MaxClock > item.MaxClock)
+                    item.MaxClock = occasion.MaxClock;
                 item.CommandTemplate = ShouldCloneCommands ? command.Clone() : command;
                 _stalledCount++;
                 _stalledBytes += data.Length;
@@ -279,13 +290,14 @@ namespace SLS4All.Compact.McuClient
                 return false;
         }
 
-        public McuSendResult Enqueue(McuCommand command, int priority, long minClock, long reqClock)
+        public McuSendResult Enqueue(McuCommand command, int priority, long minClock, long reqClock, long maxClock, bool ignoreLate)
         {
+            Debug.Assert(maxClock >= reqClock);
             if (!_mcu.ClockSync.IsReady)
             {
                 Debug.Assert(minClock == 0 && reqClock == 0);
             }
-            else
+            else if (!ignoreLate)
             {
                 var now = SystemTimestamp.Now;
                 var nowClock = _mcu.ClockSync.GetClock(SystemTimestamp.Now);
@@ -310,6 +322,7 @@ namespace SLS4All.Compact.McuClient
             item.Id = id;
             item.MinClock = minClock;
             item.ReqClock = reqClock;
+            item.MaxClock = maxClock;
             item.Data = data;
             item.CommandTemplate = ShouldCloneCommands ? command.Clone() : command;
             item.Flags = McuCommandQueueItemFlags.None;
@@ -318,6 +331,8 @@ namespace SLS4All.Compact.McuClient
                 item.Flags |= McuCommandQueueItemFlags.TimingCritical;
                 _timingCriticalCount++;
             }
+            if (command.IsMovement)
+                item.Flags |= McuCommandQueueItemFlags.Movement;
 
             EnqueueToPriority(ref item);
             return new McuSendResult(id, index);
@@ -392,12 +407,34 @@ namespace SLS4All.Compact.McuClient
             if (item.Id == id.Id && 
                 (item.Flags & McuCommandQueueItemFlags.Dequeued) == 0)
             {
-                item.Flags |= McuCommandQueueItemFlags.Dequeued;
-                _stalledCount--;
-                _stalledBytes -= item.Data.Length;
-                Debug.Assert(item.RefCount > 0);
-                // NOTE: do not add to free items, will be added when RefCount reaches zero
+                DequeuedItemPrematurely(ref item);
             }
+        }
+
+        public McuTimestamp RemoveMovement()
+        {
+            foreach (var pair in _priorityMin.UnorderedItems)
+            {
+                ref var item = ref _items[pair.Element];
+                if ((item.Flags & McuCommandQueueItemFlags.Dequeued) == 0 &&
+                    (item.Flags & McuCommandQueueItemFlags.Movement) != 0)
+                {
+                    DequeuedItemPrematurely(ref item);
+                }
+            }
+            return _maxDequeuedMovementMaxClock != 0 
+                ? new McuTimestamp(_mcu, _maxDequeuedMovementMaxClock) 
+                : default;
+        }
+
+        private void DequeuedItemPrematurely(ref McuCommandQueueItem item)
+        {
+            Debug.Assert((item.Flags & McuCommandQueueItemFlags.Dequeued) == 0);
+            item.Flags |= McuCommandQueueItemFlags.Dequeued;
+            _stalledCount--;
+            _stalledBytes -= item.Data.Length;
+            Debug.Assert(item.RefCount > 0);
+            // NOTE: do not add to free items, will be added when RefCount reaches zero
         }
 
         private void DequeuedItem(ref McuCommandQueueItem item)
@@ -420,7 +457,7 @@ namespace SLS4All.Compact.McuClient
                 FreeItem(ref item);
         }
 
-        public long DequeueToInflight(long minClock, McuCodec encoder, PrimitiveList<int> newInflightIndexes)
+        public long Dequeue(long minClock, IMcuCodecWriter? dequeuedWriter, PrimitiveList<int>? dequeuedIndexes)
         {
             Debug.Assert(minClock >= 0);
             var nextClock = long.MaxValue;
@@ -437,18 +474,21 @@ namespace SLS4All.Compact.McuClient
                         _priorityReq.Dequeue();
                         continue;
                     }
-                    else if (item.ReqClock - minClock > _maxFutureReqClockDuration)
-                        break;
                     else if (item.MinClock <= minClock)
                     {
-                        if (encoder.TryWrite(item.Data.Span))
+                        if (dequeuedWriter != null && dequeuedWriter.TryWrite(item.Data.Span))
                         {
                             if (_dumpWriter != null)
                                 Dump(ref item);
 
+                            if ((item.Flags & McuCommandQueueItemFlags.Movement) != 0)
+                            {
+                                if (_maxDequeuedMovementMaxClock < item.MaxClock)
+                                    _maxDequeuedMovementMaxClock = item.MaxClock;
+                            }
                             _priorityReq.Dequeue();
                             item.RefCount++; // +inflight
-                            newInflightIndexes.Add(index);
+                            dequeuedIndexes?.Add(index);
                             DequeuedItem(ref item);
                             continue;
                         }
@@ -473,24 +513,29 @@ namespace SLS4All.Compact.McuClient
                         _priorityMin.Dequeue();
                         continue;
                     }
-                    else if (item.ReqClock - minClock > _maxFutureReqClockDuration)
-                        break;
                     else if (item.MinClock <= minClock)
                     {
-                        if (encoder.TryWrite(item.Data.Span))
+                        if (dequeuedWriter != null && dequeuedWriter.TryWrite(item.Data.Span))
                         {
                             if (_dumpWriter != null)
                                 Dump(ref item);
 
+                            if ((item.Flags & McuCommandQueueItemFlags.Movement) != 0)
+                            {
+                                if (_maxDequeuedMovementMaxClock < item.MaxClock)
+                                    _maxDequeuedMovementMaxClock = item.MaxClock;
+                            }
                             _priorityMin.Dequeue();
                             item.RefCount++; // +inflight
-                            newInflightIndexes.Add(index);
+                            dequeuedIndexes?.Add(index);
                             DequeuedItem(ref item);
                             continue;
                         }
                     }
                     if (item.MinClock < nextClock)
                         nextClock = item.MinClock;
+                    if (item.ReqClock < nextClock)
+                        nextClock = item.ReqClock;
                 }
                 break;
             }
@@ -501,55 +546,6 @@ namespace SLS4All.Compact.McuClient
             return nextClock;
         }
 
-        public long PeekNextClock(long minClock)
-        {
-            Debug.Assert(minClock >= 0);
-            var nextClock = long.MaxValue;
-            // smallest ReqClock first, terminate at item that has MinClock past now
-            while (true)
-            {
-                if (_priorityReq.TryPeek(out var index, out _))
-                {
-                    ref var item = ref _items[index];
-                    Debug.Assert(item.Index == index);
-                    if ((item.Flags & McuCommandQueueItemFlags.Dequeued) != 0)
-                    {
-                        DequeuedItem(ref item);
-                        _priorityReq.Dequeue();
-                        continue;
-                    }
-                    else if (item.ReqClock - minClock > _maxFutureReqClockDuration)
-                        break;
-                    if (item.MinClock < nextClock)
-                        nextClock = item.MinClock;
-                    if (item.ReqClock < nextClock)
-                        nextClock = item.ReqClock;
-                }
-                break;
-            }
-            // than try to cram in items with smallest MinClock, terminate at item that has MinClock past now
-            while (true)
-            {
-                if (_priorityMin.TryPeek(out var index, out _))
-                {
-                    ref var item = ref _items[index];
-                    Debug.Assert(item.Index == index);
-                    if ((item.Flags & McuCommandQueueItemFlags.Dequeued) != 0)
-                    {
-                        DequeuedItem(ref item);
-                        _priorityMin.Dequeue();
-                        continue;
-                    }
-                    else if (item.ReqClock - minClock > _maxFutureReqClockDuration)
-                        break;
-                    if (item.MinClock < nextClock)
-                        nextClock = item.MinClock;
-                }
-                break;
-            }
-            return nextClock;
-        }
-
         private void Dump(ref McuCommandQueueItem item)
         {
             Debug.Assert(_dumpQueue != null);
@@ -557,10 +553,11 @@ namespace SLS4All.Compact.McuClient
             var id = item.Id;
             var minClock = item.MinClock;
             var reqClock = item.ReqClock;
+            var maxClock = item.MaxClock;
             var cmd = item.CommandTemplate;
             _dumpQueue.EnqueueValue(async () =>
             {
-                await _dumpWriter.WriteLineAsync($"#{id}, min={minClock}, req={reqClock}: {cmd}");
+                await _dumpWriter.WriteLineAsync($"#{id}, min={minClock}, req={reqClock}, max={maxClock}: {cmd}");
                 await _dumpWriter.FlushAsync();
             }, null);
         }
@@ -595,6 +592,7 @@ namespace SLS4All.Compact.McuClient
             _stalledBytes = 0;
             _inflightCount = 0;
             _inflightBytes = 0;
+            _maxDequeuedMovementMaxClock = 0;
             Array.Clear(_items);
             for (int i = _items.Length - 1; i >= 0; i--)
                 _freeItems.Push(i);

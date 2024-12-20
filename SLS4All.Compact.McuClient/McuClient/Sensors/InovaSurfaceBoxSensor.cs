@@ -23,6 +23,7 @@ using System.Xml.Linq;
 using SLS4All.Compact.Helpers;
 using System.Reflection.Metadata.Ecma335;
 using SLS4All.Compact.Collections;
+using SLS4All.Compact.Graphics;
 
 namespace SLS4All.Compact.McuClient.Sensors
 {
@@ -32,7 +33,7 @@ namespace SLS4All.Compact.McuClient.Sensors
         public required int MaxX { get; set; }
         public required int MinY { get; set; }
         public required int MaxY { get; set; }
-        public TemperatureBox Box => new TemperatureBox(MinX, MinY, MaxX, MaxY);
+        public BoundaryRectangle Box => new BoundaryRectangle(MinX, MinY, MaxX, MaxY);
         public required InovaSurfaceHeaterMode Mode { get; set; }
     }
 

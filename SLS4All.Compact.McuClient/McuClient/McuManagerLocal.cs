@@ -466,7 +466,15 @@ namespace SLS4All.Compact.McuClient
         protected override IMcuClockSync CreateClockSync(ILoggerFactory loggerFactory)
             => new McuClockSync(loggerFactory.CreateLogger<McuClockSync>(), this);
 
-        protected override IMcu CreateMcu(ILoggerFactory loggerFactory, IAppDataWriter appDataWriter, McuManager mcuManagerBase, IOptions<McuManagerOptions.ManagerMcuOptions> options, IMcuClockSync clockSync, IEnumerable<IMcuDeviceFactory> deviceFactories)
-            => new Mcu(loggerFactory, appDataWriter, this, options, clockSync, _deviceFactories);
+        protected override IMcu CreateMcu(
+            ILoggerFactory loggerFactory, 
+            IAppDataWriter appDataWriter, 
+            McuManager mcuManagerBase, 
+            IOptions<McuManagerOptions.ManagerMcuOptions> options, 
+            IMcuClockSync clockSync, 
+            IEnumerable<IMcuDeviceFactory> deviceFactories)
+        {
+            return new Mcu(loggerFactory, appDataWriter, this, options, clockSync, _deviceFactories);
+        }
     }
 }

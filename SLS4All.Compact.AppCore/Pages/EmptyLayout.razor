@@ -28,7 +28,7 @@
     public Task BrowseFiles()
         => Task.CompletedTask;
 
-    public string GetReloadUri(string? relative = null)
+    public string GetReloadUri(bool forceReload, string? relative = null)
     {
         string queryString = Navigation.Uri;
         return queryString;

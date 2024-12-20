@@ -27,7 +27,8 @@ namespace SLS4All.Compact.McuClient.Pins
         private int _oid;
         private int _lastButton;
         private int _ackCount;
-        private (McuCommand cmd, int countIndex, McuSendResult? result) _ackCmd;
+        private (McuCommand Cmd, McuCommandArgument Count) _ackCmd = (McuCommand.PlaceholderCommand, default);
+        private McuSendResult? _ackResult;
         private static readonly TimeSpan _queryTime = TimeSpan.FromSeconds(0.002);
         private const int _retransmitCount = 50;
 
@@ -78,9 +79,8 @@ namespace SLS4All.Compact.McuClient.Pins
                     pin.Pullup),
                     onInit: true);
             }
-            _ackCmd.cmd = Mcu.LookupCommand("buttons_ack oid=%c count=%c")
+            _ackCmd = Mcu.LookupCommand("buttons_ack oid=%c count=%c", "count")
                 .Bind("oid", _oid);
-            _ackCmd.countIndex = _ackCmd.cmd.GetArgumentIndex("count");
 
             commands.Add(Mcu.LookupCommand("buttons_query oid=%c clock=%u rest_ticks=%u retransmit_count=%c invert=%c").Bind(
                 _oid,
@@ -115,8 +115,8 @@ namespace SLS4All.Compact.McuClient.Pins
                 {
                     var newButtons = buttons[^newCount..];
                     // Send ack to MCU
-                    _ackCmd.cmd[_ackCmd.countIndex] = newCount;
-                    _ackCmd.result = _mcu.Send(_ackCmd.cmd, McuCommandPriority.Default, McuOccasion.Now, _ackCmd.result);
+                    _ackCmd.Count.Value = newCount;
+                    _ackResult = _mcu.Send(_ackCmd.Cmd, McuCommandPriority.Default, McuOccasion.Now, _ackResult);
                     _ackCount += newCount;
                     // invoke events
                     foreach (var button_ in newButtons)

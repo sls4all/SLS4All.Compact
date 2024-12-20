@@ -31,11 +31,13 @@ using Microsoft.AspNetCore.Hosting;
 using SLS4All.Compact.Camera;
 using System.Buffers;
 using SLS4All.Compact.Numerics;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SLS4All.Compact.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class BedMatrix2Controller : BedMatrixController
     {
         public BedMatrix2Controller(

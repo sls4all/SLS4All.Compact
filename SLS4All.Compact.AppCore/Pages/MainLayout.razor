@@ -8,6 +8,7 @@
 @using SLS4All.Compact.Printer
 @using SLS4All.Compact.ComponentModel
 @using SLS4All.Compact.Pages
+@using SLS4All.Compact.Security
 @using SLS4All.Compact.Storage.PrinterSettings
 @using SLS4All.Compact.UpdateModel
 @using SLS4All.Compact.Text
@@ -18,7 +19,8 @@
 @inject IApplicationUpdate ApplicationUpdate
 @inject IPrinterSettingsStorage PrinterSettingsStorage
 @inject IMemberManager MemberManager
-@inject IPrinterAuthentication PrinterAuthentication
+@inject ISystemAuthentication SystemAuthentication
+@inject ISignInManager SignInManager
 @inject ISafeShutdownManager SafeShutdownManager
 @inject IPrinterMaintenanceManager MaintenanceManager
 @inject AppThemeManager AppTheme
@@ -31,7 +33,8 @@
     var widthStr = (100 / _scale.X).ToString(CultureInfo.InvariantCulture) + "%";
     var heightStr = (100 / _scale.Y).ToString(CultureInfo.InvariantCulture) + "%";
     var hasMemberId = MemberManager.HasMemberId;
-    var hasInitializedSystemPassword = PrinterAuthentication.HasInitializedSystemPasswords;
+    var hasInitializedSystemPassword = SystemAuthentication.HasInitializedSystemPasswords;
+    var hasWebPassord = SignInManager.HasPassword;
     var isShutdownScheduled = SafeShutdownManager.IsShutdownScheduled;
     var isMaintenanceRequired = MaintenanceManager.IsMaintenanceRequired;
     var latestUpdate = _updateLastState?.NewerInfos.Length > 0
@@ -73,7 +76,7 @@
                 <ul class="top-nav">
                     @*<li class="d-xl-none"><a href="" data-sa-action="search-open"><i class="zwicon-search"></i></a></li>*@
 
-                    @if (!hasInitializedSystemPassword || !hasMemberId || latestUpdate != null || _updateLastState?.HadForbidden == true || isShutdownScheduled || _watchdogDisabled || isMaintenanceRequired)
+                    @if (!hasInitializedSystemPassword || !hasWebPassord || !hasMemberId || latestUpdate != null || _updateLastState?.HadForbidden == true || isShutdownScheduled || _watchdogDisabled || isMaintenanceRequired)
                     {
                         <li class="dropdown d-none d-lg-inline-block">
                             <a href="" data-toggle="dropdown" class="top-nav__notify"><i class="zwicon-bell"></i></a>
@@ -109,7 +112,20 @@
                                             </div>
                                         </a>
                                     }
-                                    @if (!hasInitializedSystemPassword)
+                                    @if (!hasInitializedSystemPassword && !hasWebPassord)
+                                    {
+                                        <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.SystemPassword" class="listview__item">
+                                            <i class="bi bi-lock avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    Passwords not changed
+                                                </div>
+                                                <p>System and remote web interface passwords are set to default, to secure the printer for remote system access, please change the value to your preference.</p>
+                                            </div>
+                                        </a>
+                                    }
+                                    else if (!hasInitializedSystemPassword)
                                     {
                                         <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.SystemPassword" class="listview__item">
                                             <i class="bi bi-lock avatar-img" />
@@ -119,6 +135,19 @@
                                                     System passwords not changed
                                                 </div>
                                                 <p>System passwords are set to default, to secure the printer for remote system access, please change the value to your preference.</p>
+                                            </div>
+                                        </a>
+                                    }
+                                    else if (!hasWebPassord)
+                                    {
+                                        <a href="@PrinterSettings.SelfPath/@PrinterSettings.TabIndex.SystemPassword" class="listview__item">
+                                            <i class="bi bi-lock avatar-img" />
+
+                                            <div class="listview__content">
+                                                <div class="listview__heading">
+                                                    Web interface password not set
+                                                </div>
+                                                <p>Remote web interface password is no set, to secure the printer for remote access, please change the value to your preference.</p>
                                             </div>
                                         </a>
                                     }
@@ -548,6 +577,8 @@
 
                         <li><a href="@InfoPage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-info-circle"></i> Info</a></li>
 
+                        <li><a href="@PrintTuningReportPage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-info-circle"></i> Print Tuning Debug</a></li>
+
                         <li><a href="@ShutdownPage.SelfPath" data-sa-action="aside-close-default" data-sa-target=".sidebar"><i class="zwicon-sign-out"></i> Shutdown</a></li>
                     </ul>
                 </div>
@@ -558,7 +589,7 @@
                         foreach (var __theme in AppTheme.AllThemeIds)
                         {
                             var theme = __theme;
-                            <a href="javascript:void(0)" class="themes__item @(_theme == theme ? "active" : "")" @onclick="() => SetTheme(theme)"><img src="/_content/SLS4All.Compact.AppCore/img/bg/@(theme).jpg" alt=""></a>
+                            <a href="javascript:void(0)" class="themes__item @(_theme == theme ? "active" : "")" @onclick="() => SetTheme(theme)"><img src="_content/SLS4All.Compact.AppCore/img/bg/@(theme).jpg" alt=""></a>
                         }
                     }
                 </div>
@@ -592,6 +623,7 @@
     private PrinterPageTitle? _title;
     private Vector2 _scale = Vector2.One;
     private bool _isLocalSession;
+    private string? _localSessionKey;
     private ApplicationUpdateReport? _updateLastState;
     private bool _isDeveloperMode;
     private FileBrowserModal? _browseModal;
@@ -618,20 +650,24 @@
         var queryDictionary = System.Web.HttpUtility.ParseQueryString(queryString);
         var sx = queryDictionary[FrontendHelpers.UIScaleXKey];
         var sy = queryDictionary[FrontendHelpers.UIScaleYKey];
-        var isLocalSessionStr = queryDictionary[FrontendHelpers.IsLocalSessionKey];
-        var options = Options.CurrentValue;
-        if (FrontendHelpers.IsEnabled(isLocalSessionStr))
+        var localSessionKey = queryDictionary[FrontendHelpers.LocalSessionKey];
+        if (!string.IsNullOrEmpty(sx) || !string.IsNullOrEmpty(sy) || !string.IsNullOrEmpty(localSessionKey))
         {
-            _isLocalSession = true;
-            if (options.LocalScaleX != null)
-                _scale.X = options.LocalScaleX.Value;
-            if (options.LocalScaleY != null)
-                _scale.Y = options.LocalScaleY.Value;
+            var options = Options.CurrentValue;
+            if (localSessionKey == options.LocalSessionKey)
+            {
+                _localSessionKey = localSessionKey;
+                _isLocalSession = true;
+                if (options.LocalScaleX != null)
+                    _scale.X = options.LocalScaleX.Value;
+                if (options.LocalScaleY != null)
+                    _scale.Y = options.LocalScaleY.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(sx))
+                _scale.X = Convert.ToSingle(sx, CultureInfo.InvariantCulture);
+            if (!string.IsNullOrWhiteSpace(sy))
+                _scale.Y = Convert.ToSingle(sy, CultureInfo.InvariantCulture);
         }
-        if (!string.IsNullOrWhiteSpace(sx))
-            _scale.X = Convert.ToSingle(sx, CultureInfo.InvariantCulture);
-        if (!string.IsNullOrWhiteSpace(sy))
-            _scale.Y = Convert.ToSingle(sy, CultureInfo.InvariantCulture);
 
         await base.OnParametersSetAsync();
     }
@@ -685,6 +721,7 @@
         MemberManager.StateChanged.AddHandler(OnMemberManagerStateChanged);
         AppTheme.ThemeChanged.AddHandler(OnThemeChanged);
         SafeShutdownManager.ShutdownScheduledChangedEvent.AddHandler(OnShutdownScheduledChanged);
+        SignInManager.PasswordChangedEvent.AddHandler(OnWebPasswordChanged);
         Navigation.LocationChanged += OnLocationChanged;
         await base.OnInitializedAsync();
     }
@@ -698,7 +735,7 @@
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "setReloadUri", GetReloadUri());
+            await JSRuntime.InvokeVoidAsync("AppHelpersInvoke", "setReloadUri", GetReloadUri(true));
         }
         catch (InvalidOperationException)
         {
@@ -713,6 +750,7 @@
         MemberManager.StateChanged.RemoveHandler(OnMemberManagerStateChanged);
         AppTheme.ThemeChanged.RemoveHandler(OnThemeChanged);
         SafeShutdownManager.ShutdownScheduledChangedEvent.AddHandler(OnShutdownScheduledChanged);
+        SignInManager.PasswordChangedEvent.RemoveHandler(OnWebPasswordChanged);
     }
 
     private Task TryInvokeStateHasChanged(Action? action = null)
@@ -761,6 +799,11 @@
         return TryInvokeStateHasChanged();
     }
 
+    private Task OnWebPasswordChanged(CancellationToken cancel)
+    {
+        return TryInvokeStateHasChanged();
+    }
+
     private Task OnMemberManagerStateChanged(CancellationToken cancel)
     {
         return TryInvokeStateHasChanged();
@@ -785,21 +828,39 @@
 
     private void Reload(string? relative = null)
     {
-        Navigation.NavigateTo(GetReloadUri(relative), true);
+        Navigation.NavigateTo(GetReloadUri(true, relative), true);
     }
 
-    public string GetReloadUri(string? relative = null)
+    public string GetReloadUri(bool forForceReload, string? relative = null)
     {
-        var uri = new Uri(Navigation.Uri);
-        if (relative != null)
-            uri = new Uri(uri, relative);
-        string queryString = uri.GetLeftPart(UriPartial.Path);
-        if (_scale.X != 1)
-            queryString = PrinterStringExtensions.AppendQueryString(queryString, FrontendHelpers.UIScaleXKey, _scale.X);
-        if (_scale.Y != 1)
-            queryString = PrinterStringExtensions.AppendQueryString(queryString, FrontendHelpers.UIScaleYKey, _scale.Y);
-        if (_isLocalSession)
-            queryString = PrinterStringExtensions.AppendQueryString(queryString, FrontendHelpers.IsLocalSessionKey, _isLocalSession);
-        return queryString;
+        if (forForceReload)
+        {
+            // absolute uri with parameters
+            var uri = new Uri(Navigation.BaseUri);
+            if (relative != null)
+                uri = new Uri(uri, relative);
+            var target = uri.ToString();
+            target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.UIScaleXKey, _scale.X, add: _scale.X != 1);
+            target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.UIScaleYKey, _scale.Y, add: _scale.Y != 1);
+            target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.LocalSessionKey, _localSessionKey, add: _isLocalSession);
+            if (_isLocalSession)
+            {
+                target = LocalSession.GetSelfPath(target);
+                target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.LocalSessionKey, _localSessionKey, add: _isLocalSession);
+            }
+            return target;
+        }
+        else
+        {
+            // relative uri without parameters
+            var uri = new Uri(Navigation.BaseUri);
+            if (relative != null)
+                uri = new Uri(uri, relative);
+            var target = uri.PathAndQuery;
+            target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.UIScaleXKey, null);
+            target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.UIScaleYKey, null);
+            target = PrinterStringExtensions.AppendQueryString(target, FrontendHelpers.LocalSessionKey, null);
+            return target;
+        }
     }
 }

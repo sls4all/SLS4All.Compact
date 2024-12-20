@@ -18,6 +18,8 @@ namespace SLS4All.Compact.Components
             string? validationError = null, 
             string? cssScope = null, 
             bool isEditable = true,
+            string? placeholder = null,
+            string cssClass = "",
             IInputValueTraits? traits = null,
             EventCallback valueEntered = default)
         {
@@ -38,11 +40,11 @@ namespace SLS4All.Compact.Components
                 builder.AddAttribute(seq++, nameof(editor.Title), value.Name.Name);
                 var desc = value.Description.Description;
                 if (actualValue != null)
-                    builder.AddAttribute(seq++, "class", "property-value-set");
+                    builder.AddAttribute(seq++, "class", "property-value-set " + cssClass);
                 else if (defaultValue != null)
-                    builder.AddAttribute(seq++, "class", "property-value-set-parent");
+                    builder.AddAttribute(seq++, "class", "property-value-set-parent " + cssClass);
                 else
-                    builder.AddAttribute(seq++, "class", "property-value-not-set");
+                    builder.AddAttribute(seq++, "class", "property-value-not-set " + cssClass);
                 if (valueEntered.HasDelegate)
                     builder.AddAttribute(seq++, nameof(editor.ValueEntered), valueEntered);
                 builder.AddAttribute(seq++, nameof(editor.Obj), obj);
@@ -50,6 +52,7 @@ namespace SLS4All.Compact.Components
                 builder.AddAttribute(seq++, nameof(editor.Path), value.Path);
                 builder.AddAttribute(seq++, nameof(editor.ValueObjectChanged), value.SetValue); // NOTE: before Value!
                 builder.AddAttribute(seq++, nameof(editor.Value), actualValue);
+                builder.AddAttribute(seq++, nameof(editor.Placeholder), placeholder);
                 builder.AddAttribute(seq++, nameof(editor.IsEditable), value.Name.IsEditable && isEditable);
                 builder.AddAttribute(seq++, nameof(editor.DefaultValue), defaultValue);
                 builder.AddAttribute(seq++, nameof(editor.ValidationError), validationError);
@@ -61,7 +64,7 @@ namespace SLS4All.Compact.Components
                     builder.OpenElement(seq++, "span");
                     if (cssScope != null)
                         builder.AddAttribute(seq++, cssScope);
-                    builder.AddContent(seq++, displayedValue == null ? "not set" : traits.ValueToString(displayedValue));
+                    builder.AddContent(seq++, displayedValue == null ? (placeholder ?? "not set") : traits.ValueToString(displayedValue));
                     builder.CloseElement();
                     if (value.Unit != null && displayedValue != null)
                     {

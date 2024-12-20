@@ -58,11 +58,41 @@ var SLS4All;
                             backdrop: false
                         });
                     }
-                    static setImageSrcById(id, src) {
+                    static setStyle1ById(id, key1, value1) {
                         return __awaiter(this, void 0, void 0, function* () {
                             var element = document.getElementById(id);
                             if (element) {
-                                element.src = src;
+                                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                            }
+                        });
+                    }
+                    static setStyle2ById(id, key1, value1, key2, value2) {
+                        return __awaiter(this, void 0, void 0, function* () {
+                            var element = document.getElementById(id);
+                            if (element) {
+                                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                                element.style.setProperty(key2, value2 == null ? null : String(value2), "important");
+                            }
+                        });
+                    }
+                    static setStyle3ById(id, key1, value1, key2, value2, key3, value3) {
+                        return __awaiter(this, void 0, void 0, function* () {
+                            var element = document.getElementById(id);
+                            if (element) {
+                                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                                element.style.setProperty(key2, value2 == null ? null : String(value2), "important");
+                                element.style.setProperty(key3, value3 == null ? null : String(value3), "important");
+                            }
+                        });
+                    }
+                    static setStyle4ById(id, key1, value1, key2, value2, key3, value3, key4, value4) {
+                        return __awaiter(this, void 0, void 0, function* () {
+                            var element = document.getElementById(id);
+                            if (element) {
+                                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                                element.style.setProperty(key2, value2 == null ? null : String(value2), "important");
+                                element.style.setProperty(key3, value3 == null ? null : String(value3), "important");
+                                element.style.setProperty(key4, value4 == null ? null : String(value4), "important");
                             }
                         });
                     }
@@ -102,29 +132,6 @@ var SLS4All;
                                     else {
                                         elementAny.dataSrcToLoad = src;
                                     }
-                                }
-                            }
-                        });
-                    }
-                    static streamImageSrcById(id, contentType, streamRef) {
-                        return __awaiter(this, void 0, void 0, function* () {
-                            var element = document.getElementById(id);
-                            if (element) {
-                                var array;
-                                try {
-                                    array = (yield streamRef.arrayBuffer());
-                                }
-                                catch (_a) {
-                                    return;
-                                }
-                                if (array.length != 0) {
-                                    var blob = new Blob([array], { type: contentType });
-                                    var oldSrc = element.src;
-                                    element.src = URL.createObjectURL(blob);
-                                    try {
-                                        URL.revokeObjectURL(oldSrc);
-                                    }
-                                    catch (_b) { }
                                 }
                             }
                         });
@@ -332,6 +339,9 @@ var SLS4All;
                             };
                             http.send();
                         }, 1000);
+                    }
+                    static getBaseUri() {
+                        return document.getElementById("sls4all_base").getAttribute("href");
                     }
                     static setReloadUri(uri) {
                         Helpers._reloadUri = uri;

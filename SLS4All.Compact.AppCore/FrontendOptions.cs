@@ -23,5 +23,6 @@ namespace SLS4All.Compact
         /// Displays nesting meshes (slows down UI!)
         /// </summary>
         public bool ShowAdvancedNestingFeatures { get; set; } = false;
+        public string? LocalSessionKey { get; set; }
     }
 }

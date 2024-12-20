@@ -33,5 +33,8 @@ namespace SLS4All.Compact.Configuration
             else
                 return PrinterCollectionExtensions.JsonEquals(x, y);
         }
+
+        public override T Clone(T obj)
+            => PrinterCollectionExtensions.JsonClone(obj);
     }
 }

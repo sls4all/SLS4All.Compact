@@ -4,7 +4,8 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using SLS4All.Compact.IO;
+using SLS4All.Compact.Graphics;
+using SLS4All.Compact.IO;
 using SLS4All.Compact.Threading;
 using System;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ namespace SLS4All.Compact.Camera
         NotSet = 0,
         LaserMinimal,
         Printing,
+        AutoTuning,
         Sintering,
     }
 
@@ -23,6 +25,10 @@ namespace SLS4All.Compact.Camera
     {
         bool IsMostlyEmpty { get; }
 
+        (int Width, int Height, BoundaryRectangle Working)? WorkingArea { get; }
+
         Task<IAsyncDisposable> SetCameraMode(CameraMode mode, CancellationToken cancel = default);
+
+        (int RequiredLength, int Width, int Height) TryGetWorkingAreaBrightness(Span<byte> pixels);
     }
 }

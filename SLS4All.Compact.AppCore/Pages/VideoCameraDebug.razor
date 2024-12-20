@@ -8,7 +8,7 @@
 @inject ImageStreamingHelper ImageStreamingHelper
 @inject IJSRuntime JSRuntime
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" IsFullPage="true" />
 
 <div class="d-flex h-100 flex-column position-relative">
     <img id="@_id" @key="_streamKey" src="@StreamUri" style="height:0px; flex-grow: 1; object-fit: contain" />
@@ -31,7 +31,7 @@
 </div>
 
 @code {
-    public const string SelfPath = "/videocameradebug";
+    public const string SelfPath = "videocameradebug";
     private readonly object _streamKey = new();
     private readonly string _id = Guid.NewGuid().ToString();
     private Timer _timer;
@@ -40,7 +40,7 @@
     private long _streamCounter;
     private CancellationTokenSource? _lightsTestCancelSource;
 
-    private string StreamUri => $"/api/videocamera/image/{_id}?c={_streamCounter}";
+    private string StreamUri => $"api/videocamera/image/{_id}?c={_streamCounter}";
 
     public VideoCameraDebug()
     {

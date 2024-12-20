@@ -7,6 +7,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -114,10 +115,28 @@ namespace SLS4All.Compact.Collections
             return strx == stry;
         }
 
+        public static T JsonClone<T>(T obj)
+        {
+            var str = JsonSerializer.Serialize(obj, s_jsonEqualsOptions);
+            var clone = JsonSerializer.Deserialize<T>(str, s_jsonEqualsOptions)!;
+            return clone;
+        }
+
         public static int GetJsonHashCode<T>(T obj)
         {
             var str = JsonSerializer.Serialize(obj, s_jsonEqualsOptions);
             return str.GetHashCode();
+        }
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+        public static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IEnumerable<T> source, [EnumeratorCancellation]CancellationToken cancel = default)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+        {
+            foreach (var item in source)
+            {
+                cancel.ThrowIfCancellationRequested();
+                yield return item;
+            }
         }
     }
 }

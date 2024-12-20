@@ -6,7 +6,7 @@
 @inject ITemperatureClient TemperatureClient
 @inject IOptionsMonitor<ThermoCameraCompareOptions> Options
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
 
 @{
     var state = TemperatureClient.CurrentState;
@@ -34,7 +34,7 @@
     }
 
     private const string CssScope = "b-thermo-camera-compare";
-    public const string SelfPath = "/thermocameracompare";
+    public const string SelfPath = "thermocameracompare";
     private readonly object _cameraViewKey = new object();
     private readonly object _cameraViewKey2 = new object();
     private ThermoCameraView? _cameraView;

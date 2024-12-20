@@ -37,6 +37,7 @@ namespace SLS4All.Compact.Helpers
         bool IsBoolean => false;
         bool IsNullable => false;
         bool IsTimeSpan => false;
+        Func<Task>? Action => null;
         InputValueTraitsAction[]? Actions => null;
         object?[]? Choices => null;
         string[]? FilenameMasks => null;
@@ -49,36 +50,36 @@ namespace SLS4All.Compact.Helpers
         object? StringToValue(string text);
     }
 
-    //public sealed class ActionInputValueTraits : IInputValueTraits
-    //{
-    //    private readonly Func<object?, string?> _valueToString;
+    public sealed class ActionInputValueTraits : IInputValueTraits
+    {
+        private readonly Func<object?, string?> _valueToString;
 
-    //    public ActionInputValueTraits(
-    //        Type type,
-    //        Func<object?, IInputValueTraitsActionHandler, Task>? action,
-    //        Func<object?, string?> valueToString)
-    //    {
-    //        Type = type;
-    //        IsNullable = Nullable.GetUnderlyingType(type) != null;
-    //        Action = action;
-    //        _valueToString = valueToString;
-    //    }
+        public ActionInputValueTraits(
+            Type type,
+            Func<object?, string?> valueToString,
+            Func<Task> action)
+        {
+            Type = type;
+            _valueToString = valueToString;
+            IsNullable = Nullable.GetUnderlyingType(type) != null;
+            Action = action;
+        }
 
-    //    public Type Type { get; }
+        public Type Type { get; }
 
-    //    public Func<object?, IInputValueTraitsActionHandler, Task>? Action { get; }
+        public Func<Task> Action { get; }
 
-    //    public bool IsNullable { get; }
+        public bool IsNullable { get; }
 
-    //    public object? StringToValue(string text)
-    //        => null;
+        public object? StringToValue(string text)
+            => null;
 
-    //    public string? ValueToString(object? value)
-    //        => _valueToString(value);
+        public string? ValueToString(object? value)
+            => _valueToString(value);
 
-    //    public string? ValueToEditableString(object? value)
-    //        => _valueToString(value);
-    //}
+        public string? ValueToEditableString(object? value)
+            => _valueToString(value);
+    }
 
     public sealed class DelegatedInputValueTraits : IInputValueTraits
     {

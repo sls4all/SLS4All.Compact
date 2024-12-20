@@ -53,7 +53,9 @@ namespace SLS4All.Compact.McuApp
                 DebuggerHelpers.WaitForDebugger();
 
             // disable paging for this process so system I/O cant affect us as much
-            var disabledPaging = PrinterGC.TryDisableProcessPaging();
+            bool? disabledPaging = null;
+            if (Array.IndexOf(args, "--no-paging") != -1)
+                disabledPaging = PrinterGC.TryDisableProcessPaging();
 
             CompactServiceCollectionExtensions.ScanAssemblies.Add(typeof(Program).Assembly);
             CompactServiceCollectionExtensions.ScanAssemblies.Add(typeof(IPrinterClient).Assembly);
@@ -114,7 +116,7 @@ namespace SLS4All.Compact.McuApp
                 try
                 {
                     logger.LogInformation($"MCU Host is starting to run at {DateTime.UtcNow} UTC");
-                    if (!disabledPaging)
+                    if (disabledPaging == false)
                         logger.LogWarning($"Failed to disable system paging for this process");
                     logger.LogInformation($"Configuration was loaded from: {Environment.NewLine}{configurationSources}");
                     await host.RunAsync();

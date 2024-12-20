@@ -45,6 +45,7 @@
             _fpsUpDown = new NumericUpDown();
             label3 = new Label();
             _statusBox = new TextBox();
+            _passwordBox = new TextBox();
             ((System.ComponentModel.ISupportInitialize)_thermoPicture).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_videoPicture).BeginInit();
             ((System.ComponentModel.ISupportInitialize)_fpsUpDown).BeginInit();
@@ -64,7 +65,7 @@
             _addressBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _addressBox.Location = new Point(163, 6);
             _addressBox.Name = "_addressBox";
-            _addressBox.Size = new Size(645, 23);
+            _addressBox.Size = new Size(378, 23);
             _addressBox.TabIndex = 1;
             _addressBox.Text = "http://192.168.1.126/";
             // 
@@ -161,11 +162,22 @@
             _statusBox.Size = new Size(958, 20);
             _statusBox.TabIndex = 11;
             // 
+            // _passwordBox
+            // 
+            _passwordBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _passwordBox.Location = new Point(547, 6);
+            _passwordBox.Name = "_passwordBox";
+            _passwordBox.PasswordChar = '*';
+            _passwordBox.PlaceholderText = "password";
+            _passwordBox.Size = new Size(261, 23);
+            _passwordBox.TabIndex = 12;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(982, 450);
+            Controls.Add(_passwordBox);
             Controls.Add(_statusBox);
             Controls.Add(label3);
             Controls.Add(_fpsUpDown);
@@ -202,5 +214,6 @@
         private NumericUpDown _fpsUpDown;
         private Label label3;
         private TextBox _statusBox;
+        private TextBox _passwordBox;
     }
 }

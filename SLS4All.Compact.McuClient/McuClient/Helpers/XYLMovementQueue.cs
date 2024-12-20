@@ -368,20 +368,19 @@ namespace SLS4All.Compact.McuClient.Helpers
             _stateL.AddSource(new XYLMovementPoint(time, pwm));
         }
 
-        public void AddReset(double time, double posX, double posY, double dwelled = 0)
+        public void Clear()
         {
             _stateX.Source.Clear();
             _stateY.Source.Clear();
             _stateL.Source.Clear();
-            var before = time - dwelled;
-            _stateX.AddReset(before, posX);
-            _stateY.AddReset(before, posY);
-            _stateL.AddReset(before, 0);
-            if (dwelled != 0)
-            {
-                AddXY(time, posX, posY);
-                AddL(time, 0);
-            }
+        }
+
+        public void AddReset(double time, double posX, double posY)
+        {
+            Clear();
+            _stateX.AddReset(time, posX);
+            _stateY.AddReset(time, posY);
+            _stateL.AddReset(time, 0);
         }
 
         private bool ScheduleFlushInFlushLock(
@@ -519,7 +518,6 @@ namespace SLS4All.Compact.McuClient.Helpers
             StepperState state,
             double elapsed,
             SystemTimestamp now,
-            McuMinClockFunc? minClock,
             bool dryRun)
         {
             var pticksf = stepper.GetPrecisionIntervalFromSecondsDouble(elapsed) + state.FlushingData.PrecisionRemainder;
@@ -535,7 +533,6 @@ namespace SLS4All.Compact.McuClient.Helpers
                     pticks,
                     timestamp,
                     now: now,
-                    minClock: minClock,
                     dryRun: dryRun);
             }
         }
@@ -547,7 +544,6 @@ namespace SLS4All.Compact.McuClient.Helpers
             ref McuTimestamp timestamp,
             StepperState state,
             SystemTimestamp now,
-            McuMinClockFunc? minClock,
             bool dryRun)
         {
             var timeStart = state.FlushingData.Time;
@@ -561,7 +557,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                 {
                     if (posStart == posEnd)
                     {
-                        QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                        QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, dryRun);
                     }
                     else
                     {
@@ -569,7 +565,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                         var steps = stepper.GetSteps(velocity, posStart, posEnd, state.FlushingData.PrecisionRemainder);
                         if (steps.Count == 0)
                         {
-                            QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                            QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, dryRun);
                         }
                         else
                         {
@@ -581,7 +577,6 @@ namespace SLS4All.Compact.McuClient.Helpers
                                 0,
                                 timestamp,
                                 now: now,
-                                minClock: minClock,
                                 dryRun: dryRun);
                             state.FlushingData.PrecisionRemainder = steps.PrecisionRemainder;
                         }
@@ -599,7 +594,6 @@ namespace SLS4All.Compact.McuClient.Helpers
             ref McuTimestamp timestamp,
             StepperState state,
             SystemTimestamp now,
-            McuMinClockFunc? minClock,
             bool dryRun)
         {
             var elapsed = time - state.FlushingData.Time;
@@ -607,14 +601,13 @@ namespace SLS4All.Compact.McuClient.Helpers
             Debug.Assert(elapsed >= 0);
             if (elapsed >= 0)
             {
-                QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, minClock, dryRun);
+                QueueDwellFlushingInner(stepper, ref timestamp, state, elapsed, now, dryRun);
 
                 Debug.Assert(value != double.MaxValue);
                 timestamp = stepper.QueuePwm(
                     (float)value,
                     timestamp,
                     now: now,
-                    minClock: minClock,
                     dryRun: dryRun);
 
                 state.FlushingData.Time = time;
@@ -729,7 +722,6 @@ namespace SLS4All.Compact.McuClient.Helpers
             StepperState state,
             SystemTimestamp now,
             Span<XYLMovementPoint> compressed,
-            McuMinClockFunc? minClock,
             bool dryRun)
         {
             for (var i = 0; i < compressed.Length; i++)
@@ -747,7 +739,6 @@ namespace SLS4All.Compact.McuClient.Helpers
                         ref timestamp,
                         state,
                         now,
-                        minClock,
                         dryRun);
                 }
                 else
@@ -759,7 +750,6 @@ namespace SLS4All.Compact.McuClient.Helpers
                         ref timestamp,
                         state,
                         now,
-                        minClock,
                         dryRun);
                 }
             }
@@ -800,7 +790,7 @@ namespace SLS4All.Compact.McuClient.Helpers
                     }
 
                     // execute
-                    ExecuteXYLInnerDryOrReal(stepper, ref timestamp, state, now, compressed, null, dryRun: false);
+                    ExecuteXYLInnerDryOrReal(stepper, ref timestamp, state, now, compressed, dryRun: false);
                 }
                 else if (fallbackTime > state.FlushingData.Time) // no data, just try to move time in the stepper a bit
                 {
@@ -811,7 +801,6 @@ namespace SLS4All.Compact.McuClient.Helpers
                         state,
                         elapsed,
                         now,
-                        null,
                         false);
                     state.FlushingData.Time = fallbackTime;
                 }

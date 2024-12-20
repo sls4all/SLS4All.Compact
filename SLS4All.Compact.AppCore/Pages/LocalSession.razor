@@ -1,0 +1,32 @@
+﻿@page "/local"
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Security
+@using SLS4All.Compact.Text
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [ExcludeFromCommonHead]
+@inject NavigationManager NavigationManager
+@inject ISignInManager SignInManager
+@inject IOptionsMonitor<FrontendOptions> Options
+
+@code {
+    public const string SelfPath = "local";
+
+    [SupplyParameterFromQuery(Name = FrontendHelpers.LocalSessionKey)]
+    private string? LocalSessionKey { get; set; }
+    [SupplyParameterFromQuery]
+    private string? TargetUrl { get; set; }
+
+    public static string GetSelfPath(string? targetUrl = null)
+        => PrinterStringExtensions.AppendQueryString(SelfPath, nameof(TargetUrl), targetUrl);
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        var options = Options.CurrentValue;
+        if (!string.IsNullOrEmpty(options.LocalSessionKey) && LocalSessionKey == options.LocalSessionKey)
+            SignInManager.SignIn();
+        NavigationManager.NavigateTo(PrinterStringExtensions.AppendQueryString(TargetUrl ?? IndexPage.SelfPath, FrontendHelpers.LocalSessionKey, LocalSessionKey));
+    }
+}

@@ -1,5 +1,6 @@
 #!/bin/bash
 #set -x # echo on
+shopt -s dotglob # glob hidden files and directories for update
 
 list_descendants()
 {
@@ -31,8 +32,6 @@ trap 'kill_descendants' KILL INT TERM EXIT # just a precaution to not to keep an
 if [ -z "$BASEURL" ]; then
     BASEURL="http://localhost"
 fi
-PINGURL="ping"
-INDEXURL="?local=1"
 if [ -z "$APPENV_NAME" ]; then
     APPENV_NAME="Inova-RaspberryPi5"
 fi
@@ -42,6 +41,11 @@ fi
 if [ -z "$SPLASH_DIR" ]; then
     export SPLASH_DIR="${HOME}"
 fi
+if [ -z "$LOCAL_SESSION_KEY" ]; then
+    LOCAL_SESSION_KEY=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 32; echo)
+fi
+PINGURL="ping"
+INDEXURL="local?local=$LOCAL_SESSION_KEY"
 ARCHIVE_DIR="${APPROOT_DIR}/Archive" 
 PREVIOUS_DIR="${APPROOT_DIR}/Previous"
 PREVIOUS_CURRENT_DIR="${APPROOT_DIR}/Previous/Current"
@@ -228,7 +232,7 @@ while :; do
             echo "Starting proxy..."
             cd $CURRENT_DIR
             chmod +x $ENTRY_POINT
-            ./$ENTRY_POINT --environment $APPENV_NAME --Application:Proxy true --Application:Port $PROXY_PORT $ADDITIONAL_ARGS
+            ./$ENTRY_POINT --environment $APPENV_NAME --Application:Proxy=true --Application:Port=$PROXY_PORT $ADDITIONAL_ARGS
             echo "Proxy exited"
         )&
     else
@@ -239,7 +243,7 @@ while :; do
             if [ -f $LIFETIME_COMMAND_FILE ]; then
                 rm -f $LIFETIME_COMMAND_FILE
             fi
-            ./$ENTRY_POINT --environment $APPENV_NAME --PrinterLifetime:CommandOutputFilename=$LIFETIME_COMMAND_FILE $ADDITIONAL_ARGS
+            ./$ENTRY_POINT --environment $APPENV_NAME --Frontend:LocalSessionKey=$LOCAL_SESSION_KEY --PrinterLifetime:CommandOutputFilename=$LIFETIME_COMMAND_FILE $ADDITIONAL_ARGS
             echo "Application exited"
         )&
     fi

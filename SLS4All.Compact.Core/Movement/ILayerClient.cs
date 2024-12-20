@@ -4,7 +4,9 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using SLS4All.Compact.Threading;
+using Microsoft.Extensions.Options;
+using SLS4All.Compact.Configuration;
+using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -46,6 +48,10 @@ namespace SLS4All.Compact.Movement
         /// Disables Z movement entirely
         /// </summary>
         public bool DisableZMovement { get; set; }
+        /// <summary>
+        /// Number of layers
+        /// </summary>
+        public int LayerCount => (int)Math.Ceiling(TotalThickness / LayerThickness);
     }
 
     public class BeginLayerSetup
@@ -124,6 +130,10 @@ namespace SLS4All.Compact.Movement
         /// Disables Z movement entirely
         /// </summary>
         public bool DisableZMovement { get; set; }
+        /// <summary>
+        /// Number of layers
+        /// </summary>
+        public int LayerCount => (int)Math.Ceiling(TotalThickness / LayerThickness);
     }
 
     public class PowderVolumeSetup
@@ -160,14 +170,22 @@ namespace SLS4All.Compact.Movement
 
     public class BedLevelingSetup
     {
-    }
-
-    public class FinishBedLevelingSetup
-    {
+        /// <summary>
+        /// Size of leveling step [μm]
+        /// </summary>
+        public double? StepThickness { get; set; }
+        /// <summary>
+        /// Number of leveling steps
+        /// </summary>
+        public int? StepCount { get; set; }
         /// <summary>
         /// Gets or sets if we are preparing for a dry printing (this generaly means that Z2 axis will be lowered slightly to prevent recoater from disturbing the surface during dry printing)
         /// </summary>
         public bool DryPrintEnabled { get; set; }
+    }
+
+    public class FinishBedLevelingSetup
+    {
     }
 
     /// <param name="Depth">Depth in mm</param>
@@ -214,6 +232,10 @@ namespace SLS4All.Compact.Movement
     {
     }
 
+    public class MoveForDryPrintSetup
+    {
+    }
+
     public record class PowderVolumeTotals(
         VolumeAndDepth BedLeveling,
         VolumeAndDepth BedPreparation,
@@ -236,17 +258,24 @@ namespace SLS4All.Compact.Movement
 
     public interface ILayerClient
     {
+        AsyncEvent LayerMovesSafeForPrintBedEvent { get; }
         PowderVolumeTotals GetPowderVolume(PowderVolumeSetup setup);
+        double GetBedLevelingTotalDepth(BedLevelingSetup? setup);
         Task BedLeveling(BedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
         Task FinishBedLeveling(FinishBedLevelingSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
         Task BeginPrint(BeginPrintSetup setup, CancellationToken cancel = default);
-        Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task BedPreparation(IOptionsMonitor<BedPreparationSetup> setupMonitor, StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task BedPreparation(BedPreparationSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
+            => BedPreparation(ConstantOptionsMonitor.Create(setup), onStatus, cancel);
         Task BeginLayer(BeginLayerSetup setup, CancellationToken cancel = default);
         Task EndLayer(EndLayerSetup setup, CancellationToken cancel = default);
-        Task PrintCap(PrintCapSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task PrintCap(IOptionsMonitor<PrintCapSetup> setupMonitor, StatusUpdater? onStatus, CancellationToken cancel = default);
+        Task PrintCap(PrintCapSetup setup, StatusUpdater? onStatus, CancellationToken cancel = default)
+            => PrintCap(ConstantOptionsMonitor.Create(setup), onStatus, cancel);
         Task EndPrint(EndPrintSetup setup, CancellationToken cancel = default);
         Task HomeBedsAndRecoater(HomeBedsAndRecoaterSetup setup, StatusUpdater? status = null, CancellationToken cancel = default);
         Task SetPowderDepth(SetPowderDepthSetup setup, CancellationToken cancel = default);
         Task EjectCake(EjectCakeSetup setup, CancellationToken cancel = default);
+        Task MoveForDryPrint(MoveForDryPrintSetup setup, CancellationToken cancel = default);
     }
 }

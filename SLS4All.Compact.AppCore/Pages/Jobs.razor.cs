@@ -41,6 +41,7 @@ using System.Diagnostics.CodeAnalysis;
 using SLS4All.Compact.Movement;
 using SLS4All.Compact.Printing;
 using System.Threading.Channels;
+using SLS4All.Compact.PrintSessions;
 
 namespace SLS4All.Compact.Pages
 {
@@ -255,6 +256,7 @@ namespace SLS4All.Compact.Pages
         internal sealed record SyncObject(
             string Name, 
             string Hash, 
+            int? NestingPriority,
             int InstanceCount, 
             float Scale,
             float Inset,
@@ -681,7 +683,7 @@ namespace SLS4All.Compact.Pages
                                         needsGC = true;
                                         return await JobStorage.GetObject(item.Path, cancel);
                                     };
-                                    return (item.Hash, streamFactory, item.InstanceCount, item.Scale, item.Inset, item.UserData, item.ConstraintsAroundZ, item.TransformState);
+                                    return (item.Hash, streamFactory, item.NestingPriority, item.InstanceCount, item.Scale, item.Inset, item.UserData, item.ConstraintsAroundZ, item.TransformState);
                                 }), (fileHashes, ex) =>
                                 {
                                     foreach (var fileHash in fileHashes)
@@ -915,10 +917,11 @@ namespace SLS4All.Compact.Pages
                         Debug.Assert(false);
                         continue;
                     }
+                    var isThinObject = instance.ObjectCopy?.IsThinObject == true;
                     var overrideSetup = (PrintSetup setup) =>
                     {
                         var objSetup = setup.Clone();
-                        objSetup.IsThinObject = instance.ObjectCopy?.IsThinObject == true;
+                        objSetup.IsThinObject = isThinObject;
                         return objSetup;
                     };
                     res.Add(new PrintingObject(instance.Hash, mesh, instance.MeshPrintTransform, overrideSetup));

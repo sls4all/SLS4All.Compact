@@ -56,9 +56,11 @@ RPostHomingDistance = 10
 CompensatePwmLatency = true
 CollectGarbageOnFinishMovement = true
 CollectGarbageOnFinishMovementMinPeriod = "0:1:0"
+CollectGarbageMajorOnFinishMovementMinPeriod = "1:0:0"
 # Number of steps at stepper critical speed to get a minimum duration for laser-off movement, to ensure that the MCU is not overloaded with too many commands.
 # Value should correspond to how many times is CPU duration of loading new stepper command and executing it in one step - is larger than - average CPU duration of single step.
 LaserOffMinDurationSteps = 30
+MicroDwellDuration = "0:0:0.025" # smaller that any underflow period like McuStepperGlobal.UnderflowDuration
 
     [McuMovementClient.XYLQueue]
     CompressFlushPeriod = "0:0:0.05"
@@ -94,7 +96,7 @@ LogOutput = false
 [McuManager]
 KeepaliveEnablePins = [ "io-en" ]
 KeepaliveEnablePeriod = "0:0:1"
-KeepaliveEnableMaxDuraton = "0:0:5"
+KeepaliveEnableMaxDuration = "0:0:5"
 
     [McuManager.Mcus.1-1]
     Name = "mcu"
@@ -316,6 +318,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     MaxDelta = 0.0
     SetCycleFrequency = 4.0
     PowerConsumption = 200
+    PowerManagerPriority = 10 # somewhere between than default 0 and surface
 
         [McuManager.Heaters.printChamber1.Sensor.InovaGate1]
         Bus = "ssp0"
@@ -338,6 +341,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     MaxDelta = 0.0
     SetCycleFrequency = 4.0
     PowerConsumption = 200
+    PowerManagerPriority = 10 # somewhere between than default 0 and surface
 
         [McuManager.Heaters.printChamber2.Sensor.InovaGate1]
         Bus = "ssp0"
@@ -360,6 +364,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     MaxDelta = 0.0
     SetCycleFrequency = 4.0
     PowerConsumption = 200
+    PowerManagerPriority = 10 # somewhere between than default 0 and surface
 
         [McuManager.Heaters.printChamber3.Sensor.InovaGate1]
         Bus = "ssp0"
@@ -382,6 +387,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     MaxDelta = 0.0
     SetCycleFrequency = 4.0
     PowerConsumption = 200
+    PowerManagerPriority = 10 # somewhere between than default 0 and surface
 
         [McuManager.Heaters.printChamber4.Sensor.InovaGate1]
         Bus = "ssp0"
@@ -410,9 +416,9 @@ KeepaliveEnableMaxDuraton = "0:0:5"
         CsPin = "P1.20"
         Channel = 0
         SpiSpeed = 15_000_000
-	# NOTE: enable shorter read period and averaging for beds, the sensor has a large noise
+	    # NOTE: enable shorter read period and averaging for beds, the sensor has a large noise
         ReadPeriod = "0:0:0.15"
-	AverageDuration = "0:0:1.0"
+	    AverageDuration = "0:0:1.0"
 
         [McuManager.Heaters.powderBed.VerifySensor]
         MinTemperature = 0
@@ -429,15 +435,16 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     MaxDelta = 0.0
     SetCycleFrequency = 4.0
     PowerConsumption = 140
+    PowerManagerPriority = 10 # somewhere between than default 0 and surface
 
         [McuManager.Heaters.printBed.Sensor.InovaGate1]
         Bus = "ssp0"
         CsPin = "P1.20"
         Channel = 1
         SpiSpeed = 15_000_000
-	# NOTE: enable shorter read period and averaging for beds, the sensor has a large noise
+	    # NOTE: enable shorter read period and averaging for beds, the sensor has a large noise
         ReadPeriod = "0:0:0.15"
-	AverageDuration = "0:0:1.0"
+	    AverageDuration = "0:0:1.0"
 
         [McuManager.Heaters.printBed.VerifySensor]
         MinTemperature = 0
@@ -481,7 +488,7 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     LightsPwm = 0.25
     LightsPins = [ "zero1:PC1", "zero1:PC2", "zero1:PC3", "zero1:PC4" ]
     PowerConsumptionPerLight = 200
-    PowerManagerPriority = 10 # any value larger that default 0 (default on other heaters)
+    PowerManagerPriority = 20 # larger than default 0 and powder bed/chamber
 
         [McuManager.Heaters.surface.InovaSurface.Quadrant1]
         HeaterPins = [ "zero1:PC4", "zero1:PC1" ]
@@ -639,3 +646,4 @@ KeepaliveEnableMaxDuraton = "0:0:5"
     Type = "Digital"
     Pin = "P1.21"
     AllowInShutdown = true
+    

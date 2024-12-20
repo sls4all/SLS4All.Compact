@@ -20,6 +20,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Channels;
@@ -57,6 +58,7 @@ namespace SLS4All.Compact.Movement
         private readonly Lock _lock = new();
         private readonly AsyncLock _homingLock;
         private readonly TrapezoidCalculator _trapezoid;
+        private TimeSpan _totalDuration;
 
         public FakeMovementClient(
             ILogger<FakeMovementClient> logger,
@@ -87,7 +89,7 @@ namespace SLS4All.Compact.Movement
                 _timestamp = now;
         }
 
-        public override ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override ValueTask Dwell(TimeSpan delay, bool includeAux, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
             var options = _options.CurrentValue;
@@ -99,22 +101,25 @@ namespace SLS4All.Compact.Movement
             return ValueTask.CompletedTask;
         }
 
-        public override Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override async Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
-            cancel.ThrowIfCancellationRequested();
-            TimeSpan duration;
+            while (true)
+            {
+                var remaining = GetRemainingPrintTime(context: context, cancel: cancel).GetAwaiter().GetResult();
+                if (remaining.Duration != TimeSpan.Zero)
+                    await Delay(remaining.Duration, context, cancel);
+                else
+                    break;
+            }
+        }
+
+        public override Task StopAndFinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        {
             lock (_lock)
             {
-                var now = SystemTimestamp.Now;
-                if (!_timestamp.IsEmpty && _timestamp > now)
-                    duration = _timestamp - now;
-                else
-                    duration = TimeSpan.Zero;
+                _timestamp = default;
             }
-            if (duration != TimeSpan.Zero)
-                return Delay(duration, context, cancel);
-            else
-                return Task.CompletedTask;
+            return FinishMovement(context: context, cancel: cancel);
         }
 
         public override async ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
@@ -202,7 +207,7 @@ namespace SLS4All.Compact.Movement
                     item.Speed ?? _maxReaasonableVelocity,
                     0,
                     Math.Abs(distance),
-                    0);
+                    0) + item.Dwell.TotalSeconds;
                 _timestamp += duration / options.SpeedFactor;
             }
             return UpdatePositionHighFrequency(false, cancel);
@@ -229,7 +234,7 @@ namespace SLS4All.Compact.Movement
                 return TimeSpan.Zero;
         }
 
-        public override ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool clamp = false, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             var options = _options.CurrentValue;
             var velocity = Math.Min(speed / 60 ?? options.MaxXYVelocity, options.MaxXYVelocity);
@@ -240,9 +245,24 @@ namespace SLS4All.Compact.Movement
                 double distance;
                 TimeSpan duration;
                 ResetTimestampInner();
-                distance = Math.Sqrt(relative ? x * x + y * y : NumberExtensions.Square(x - _posX) + NumberExtensions.Square(y - _posY));
-                _posX = relative ? _posX + x : x;
-                _posY = relative ? _posY + y : y;
+                var rawStartX = _posX;
+                var rawStartY = _posY;
+                var rawEndX = relative ? rawStartX + x : x;
+                var rawEndY = relative ? rawStartY + y : y;
+                if (rawEndX < 0 || rawEndY < 0 ||
+                    rawEndX > options.MaxXY || rawEndY > options.MaxXY)
+                {
+                    if (clamp)
+                    {
+                        rawEndX = Math.Clamp(rawEndX, 0, options.MaxXY);
+                        rawEndY = Math.Clamp(rawEndY, 0, options.MaxXY);
+                    }
+                    else
+                        throw new ArgumentException($"Final position, X={rawEndX}, Y={rawEndY}, is out of range");
+                }
+                _posX = rawEndX;
+                _posY = rawEndY;
+                distance = Math.Sqrt(NumberExtensions.Square(rawStartX - rawEndX) + NumberExtensions.Square(rawStartY - rawEndY));
                 if (distance != 0)
                     duration = TimeSpan.FromSeconds(distance / velocity);
                 else
@@ -268,10 +288,10 @@ namespace SLS4All.Compact.Movement
                 return ValueTask.CompletedTask;
         }
 
-        public override ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
+        public override ValueTask<RemainingPrintTime> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             cancel.ThrowIfCancellationRequested();
-            TimeSpan duration;
+            TimeSpan duration, totalDuration;
             lock (_lock)
             {
                 var now = SystemTimestamp.Now;
@@ -279,8 +299,13 @@ namespace SLS4All.Compact.Movement
                     duration = _timestamp - now;
                 else
                     duration = TimeSpan.Zero;
+                if (duration == TimeSpan.Zero)
+                    _totalDuration = TimeSpan.Zero;
+                else if (duration > _totalDuration)
+                    _totalDuration = duration;
+                totalDuration = _totalDuration;
             }
-            return new ValueTask<(TimeSpan, SystemTimestamp)>((duration, SystemTimestamp.Now + duration));
+            return new ValueTask<RemainingPrintTime>(new RemainingPrintTime(totalDuration, duration, SystemTimestamp.Now + duration, RemainingPrintTimeFlags.NotSet));
         }
 
         public override double? TryGetMinLaserPwmCycleTime(IPrinterClientCommandContext? context = null)

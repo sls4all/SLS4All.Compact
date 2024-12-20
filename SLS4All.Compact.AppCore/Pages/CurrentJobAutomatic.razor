@@ -56,7 +56,7 @@
         else
         {
             <button class="btn btn-danger btn--icon-text" @onclick="() => StopDoNest()" style="background: linear-gradient(to right, rgba(255,0,0,0.30) @nestingProgressInt%, rgba(255,0,0,0.15) @nestingProgressInt%)">
-                <i class="bi bi-pip-fill" /> Cancel @(nestingProgress.RoundToDecimal(0, true))%
+                <i class="bi bi-pip-fill" /> Cancel @(nestingProgress.RoundToDecimal(0, zeroes: true))%
             </button>
         }
     </div>;
@@ -128,11 +128,15 @@ else if (tabIndex == TabIndex.Objects)
     {
         var obj = __obj;
         var isSelected = obj == selectedObject;
+        var nestingPriorityValue = StorageValue.Create(obj, nameof(obj.NestingPriority));
         var countValue = StorageValue.Create(obj, nameof(obj.InstanceCount));
         var instanceCount = Job.GetNestedInstanceCount(obj);
         var objError = Jobs!.GetError(obj, "");
         <tr class="object-name-row @(isSelected ? "table-active" : "")" @onclick="() => Jobs!.SelectObject(obj, true)">
-            <td colspan="2">
+            <td class="text-center pr-0 font-italic">
+                Priority &amp; Count
+            </td>
+            <td>
                 @obj.Name
                 @if (obj.Constraints.Length > 0)
                 {
@@ -159,7 +163,11 @@ else if (tabIndex == TabIndex.Objects)
         }
         <tr @key="obj" class="object-props-row @(isSelected ? "table-active" : "")">
             <td>
-                @countValue.RenderValueEditor(null, obj, validationError: Jobs!.GetError(obj, nameof(obj.InstanceCount)), cssScope: CssScope, isEditable: !isNesting)
+                <div class="d-flex flex-row">
+                    @nestingPriorityValue.RenderValueEditor(null, obj, validationError: Jobs!.GetError(obj, nameof(obj.NestingPriority)), cssScope: CssScope, isEditable: !isNesting, placeholder: "auto")
+                    &nbsp;
+                    @countValue.RenderValueEditor(null, obj, validationError: Jobs!.GetError(obj, nameof(obj.InstanceCount)), cssScope: CssScope, isEditable: !isNesting)
+                </div>
             </td>
             <td>
                 <button class="btn btn-theme btn--icon-text" disabled="@isNesting" @onclick="async () => { AddInstanceCount(obj, 1); await Jobs!.ValidateInner(true); }">

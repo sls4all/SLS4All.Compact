@@ -28,7 +28,7 @@ namespace SLS4All.Compact.Configuration
                 _taskQueue = new TaskQueue();
                 _listener = listener;
                 _writer = writer;
-                _lastCurrent = writer._options.CurrentValue;
+                _lastCurrent = writer.Clone(writer._options.CurrentValue);
                 _innerHandler = writer._options.OnChange(OnChange);
             }
 
@@ -38,7 +38,7 @@ namespace SLS4All.Compact.Configuration
                 {
                     if (!_writer.Equals(_lastCurrent, value))
                     {
-                        _lastCurrent = value;
+                        _lastCurrent = _writer.Clone(value);
                         _listener?.Invoke(value);
                     }
                     return Task.CompletedTask;
@@ -64,6 +64,8 @@ namespace SLS4All.Compact.Configuration
         public abstract Task Write(T newValue, CancellationToken cancel);
 
         public abstract bool Equals(T x, T y);
+
+        public abstract T Clone(T obj);
 
         public IDisposable? OnChange(Action<T> listener)
             => new DisposableWrapper(this, listener);

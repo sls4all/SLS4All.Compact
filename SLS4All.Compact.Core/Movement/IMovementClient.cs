@@ -24,7 +24,8 @@ namespace SLS4All.Compact.Movement
         double? Acceleration = null, 
         double? Decceleration = null,
         double? InitialSpeed = null, 
-        double? FinalSpeed = null);
+        double? FinalSpeed = null,
+        TimeSpan Dwell = default);
 
     public enum EndstopSensitivity
     {
@@ -34,23 +35,34 @@ namespace SLS4All.Compact.Movement
         User,
     }
 
+    [Flags]
+    public enum RemainingPrintTimeFlags
+    {
+        NotSet = 0,
+        XYL = 1,
+        Motors = 2,
+    }
+    public readonly record struct RemainingPrintTime(TimeSpan TotalDuration, TimeSpan Duration, SystemTimestamp Timestamp, RemainingPrintTimeFlags Flags);
+
     public interface IMovementClient : IMovementConfig
     {
         Position CurrentPosition { get; }
         AsyncEvent<Position> PositionChangedLowFrequency { get; }
         AsyncEvent<PositionHighFrequency> PositionChangedHighFrequency { get; }
+        TimeSpan MicroDwellDuration { get; }
 
         TimeSpan GetQueueAheadDuration(IPrinterClientCommandContext? context = null);
         TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext? context = null);
-        ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool clamp = false, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask HomeXY(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask MoveAux(MovementAxis axis, MoveAuxItem item, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask<bool> EndstopMoveAux(MovementAxis axis, EndstopSensitivity sensitivity, IReadOnlyList<MoveAuxItem> items, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-        ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        ValueTask<RemainingPrintTime> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        Task StopAndFinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask MoveContinuous(MovementAxis axis, bool positive, double speed, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
-        ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        ValueTask Dwell(TimeSpan delay, bool includeAux, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
         ValueTask SetLaser(double value, bool noCompensation = false, IPrinterClientCommandContext ? context = null, CancellationToken cancel = default);
 
         ValueTask MoveXYCode(ChannelWriter<CodeCommand> channel, double x, double y, bool relative, double? speed = null, CancellationToken cancel = default);

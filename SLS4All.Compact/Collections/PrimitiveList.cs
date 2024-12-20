@@ -38,7 +38,7 @@ namespace SLS4All.Compact.Collections
     [DebuggerDisplay("Count = {Count}")]
     public sealed unsafe class PrimitiveList<T> : IEnumerable<T>, IReadOnlyList<T>
     {
-        private const int _minArrayLength = 16; // items
+        private const int _minArrayLength = 4; // items, same as List<T>
 
         private T[] _array;
         private int _count;
@@ -108,10 +108,8 @@ namespace SLS4All.Compact.Collections
 
         public PrimitiveList(int capacity = 0, int count = 0)
         {
-            if (capacity < count)
-                capacity = (int)BitOperations.RoundUpToPowerOf2((uint)count);
             if (capacity == 0)
-                _array = Array.Empty<T>();
+                _array = [];
             else
                 _array = new T[capacity];
             _count = count;

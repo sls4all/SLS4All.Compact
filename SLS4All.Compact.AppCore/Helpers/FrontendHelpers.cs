@@ -14,38 +14,9 @@ namespace SLS4All.Compact.Helpers
 {
     public static class FrontendHelpers
     {
-        public const string IsLocalSessionKey = "local";
+        public const string LocalSessionKey = "local";
         public const string UIScaleXKey = "sx";
         public const string UIScaleYKey = "sy";
-        
-        public static void Reload(this NavigationManager manager, IMainLayout mainLayout)
-        {
-            var uri = AddMainQueryStrings(manager.Uri, mainLayout);
-            manager.NavigateTo(uri, true, true);
-        }
-
-        public static string AddMainQueryStrings(string uri, IMainLayout mainLayout)
-        {
-            var uriUri = new Uri(uri);
-            var args = QueryHelpers.ParseQuery(uriUri.Query);
-            if (mainLayout.IsLocalSession)
-                args[IsLocalSessionKey] = "1";
-            else
-                args.Remove(IsLocalSessionKey);
-            if (mainLayout.Scale.X != 1)
-                args[UIScaleXKey] = mainLayout.Scale.X.ToString(CultureInfo.InvariantCulture);
-            else
-                args.Remove(UIScaleXKey);
-            if (mainLayout.Scale.Y != 1)
-                args[UIScaleYKey] = mainLayout.Scale.Y.ToString(CultureInfo.InvariantCulture);
-            else
-                args.Remove(UIScaleYKey);
-            var res = QueryHelpers.AddQueryString(
-                uriUri.GetLeftPart(UriPartial.Path), 
-                args);
-            return res;
-        }
-
         public static bool IsEnabled(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))

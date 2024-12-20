@@ -1,0 +1,14 @@
+﻿@inject NavigationManager NavigationManager
+
+@code {
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        // NOTE: navigate here and not in OnInitialized, because there the navigation would redirect to possibly invalid absolute url if port forwarding is in the way
+        if (firstRender)
+        {
+            var target = Login.GetSelfPath(NavigationManager.Uri); // NOTE: use absolute path, taken from browser, so it includes any port forwards
+            NavigationManager.NavigateTo(target, true, true);
+        }
+        return base.OnAfterRenderAsync(firstRender);
+    }
+}

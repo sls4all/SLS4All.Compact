@@ -46,7 +46,7 @@ namespace SLS4All.Compact.Camera
         private readonly Lock _lastMimeLock = new();
         private MimeData _lastMime;
 
-        public AsyncEvent<MimeData> ImageCaptured { get; } = new();
+        public AsyncEvent<MimeData> Captured { get; } = new();
 
         public CurrentPlotterImageGenerator(
             ILogger<CurrentPlotterImageGenerator> logger,
@@ -85,9 +85,10 @@ namespace SLS4All.Compact.Camera
                     var image = _plotter.CreateImage(hotspotAge: options.HotspotAge, hotspotTo: SystemTimestamp.Now, noCache: true);
                     lock (_lastMimeLock)
                     {
-                        _lastMime = image;
+                        _lastMime.Return();
+                        _lastMime = image.RentCopy();
                     }
-                    await ImageCaptured.Invoke(image, cancel);
+                    await Captured.Invoke(image, cancel);
                 }
                 catch (Exception ex) when (!cancel.IsCancellationRequested)
                 {
@@ -96,13 +97,16 @@ namespace SLS4All.Compact.Camera
             }
         }
 
-        public bool TryGetLastImage(out MimeData data)
+        public bool TryRentLastValue(out MimeData data)
         {
             lock (_lastMimeLock)
             {
-                data = _lastMime;
+                data = _lastMime.RentCopy();
+                return !data.IsEmpty;
             }
-            return !data.IsEmpty;
         }
+
+        public IDisposable StartScope()
+            => NullDisposable.Instance;
     }
 }

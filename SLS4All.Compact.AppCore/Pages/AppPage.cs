@@ -4,11 +4,13 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using SLS4All.Compact.Numerics;
 using SLS4All.Compact.Printer;
 using SLS4All.Compact.Storage.PrinterSettings;
+using System;
 using System.Collections.Concurrent;
 
 namespace SLS4All.Compact.Pages
@@ -37,8 +39,8 @@ namespace SLS4All.Compact.Pages
         [Inject]
         public IUnitConverter UnitConverter { get; set; } = default!;
 
-        public string GetReloadUri()
-            => MainLayout!.GetReloadUri();
+        public string GetReloadUri(bool forForceReload)
+            => MainLayout!.GetReloadUri(forForceReload);
 
         protected override async Task OnInitializedAsync()
         {
@@ -54,17 +56,27 @@ namespace SLS4All.Compact.Pages
         }
 
         public void TryInvokeStateHasChanged(CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(cancel);
+            => _ = TryInvokeStateHasChangedAsync((Func<ValueTask>?)null, null, cancel);
 
         public Task TryInvokeStateHasChangedAsync(CancellationToken cancel = default)
+            => TryInvokeStateHasChangedAsync((Func<ValueTask>?)null, null, cancel);
+
+        public void TryInvokeStateHasChanged(Func<ValueTask>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
+            => _ = TryInvokeStateHasChangedAsync(action, postAction, cancel);
+
+        public Task TryInvokeStateHasChangedAsync(Func<ValueTask>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
         {
             try
             {
-                return InvokeAsync(() =>
+                return InvokeAsync(async () =>
                 {
                     try
                     {
+                        if (action != null)
+                            await action();
                         StateHasChanged();
+                        if (postAction != null)
+                            await postAction();
                     }
                     catch (Exception ex)
                     {
@@ -79,10 +91,10 @@ namespace SLS4All.Compact.Pages
             }
         }
 
-        public void TryInvokeStateHasChanged(Func<ValueTask> action, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, cancel);
+        public void TryInvokeStateHasChanged(Func<ValueTask<bool>>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
+            => _ = TryInvokeStateHasChangedAsync(action, postAction, cancel);
 
-        public Task TryInvokeStateHasChangedAsync(Func<ValueTask> action, CancellationToken cancel = default)
+        public Task TryInvokeStateHasChangedAsync(Func<ValueTask<bool>>? action, Func<ValueTask>? postAction = default, CancellationToken cancel = default)
         {
             try
             {
@@ -90,35 +102,12 @@ namespace SLS4All.Compact.Pages
                 {
                     try
                     {
-                        await action();
+                        if (action != null)
+                            if (!await action())
+                                return;
                         StateHasChanged();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, $"Failed to update state");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, $"Failed to update state");
-                return Task.CompletedTask;
-            }
-        }
-
-        public void TryInvokeStateHasChanged(Func<ValueTask<bool>> action, CancellationToken cancel = default)
-            => TryInvokeStateHasChangedAsync(action, cancel);
-
-        public Task TryInvokeStateHasChangedAsync(Func<ValueTask<bool>> action, CancellationToken cancel = default)
-        {
-            try
-            {
-                return InvokeAsync(async () =>
-                {
-                    try
-                    {
-                        if (await action())
-                            StateHasChanged();
+                        if (postAction != null)
+                            await postAction();
                     }
                     catch (Exception ex)
                     {

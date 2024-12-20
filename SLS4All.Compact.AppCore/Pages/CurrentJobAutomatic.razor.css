@@ -4,6 +4,7 @@
 .properties-panel .hide-top-line td, .properties-panel .hide-top-line th {
     border-top: none;
 }
+
 .property-table .object-row {
 }
 
@@ -167,6 +168,10 @@
         white-space: break-spaces;
     }
 
+.print-row td {
+    padding-bottom: 0px;
+}
+
 .buttons-row-container {
     display: flex;
     flex-direction: row;
@@ -181,3 +186,13 @@
         font-size: 17px;
         width: 100%;
     }
+
+.new-defaults {
+    font-size: 15px;
+    padding: 6px;
+    margin-left: 4px;
+}
+
+.nesting-priority {
+    width: 4em;
+}

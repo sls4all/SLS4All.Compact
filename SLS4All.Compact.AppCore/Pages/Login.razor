@@ -1,0 +1,99 @@
+﻿@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [ExcludeFromCommonHead]
+@inject AppThemeManager AppTheme
+@inject NavigationManager NavigationManager
+@inject ISignInManager SignInManager
+
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Identity
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Security
+@using SLS4All.Compact.Text
+@using System.Security.Claims
+@using System.ComponentModel.DataAnnotations
+
+<HeadContent>
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+</HeadContent>
+
+<div class="app-component" data-sa-theme="@_theme">
+    <div class="login @(m_isError ? "shake" : "")">
+        <h1>SLS4All Compact</h1>
+        <p>
+            Password required for remote web access.
+        </p>
+        <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login" action="@SelfPath" class="values">
+            <InputText type="password" placeholder="Enter password" @bind-Value="@Input.Password" class="route-focus" />
+            <InputText type="hidden" @bind-Value="@Input.ReturnUrlFallback" class="route-focus" />
+            <button type="submit" class="login-btn login-btn-primary login-btn-block login-btn-large">Login</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private sealed class InputModel
+    {
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+        [DataType(DataType.Text)]
+        public string ReturnUrlFallback { get; set; } = "";
+    }
+
+    public const string SelfPath = "login";
+
+    private string _theme = default!;
+    private bool m_isError;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    public static string GetSelfPath(string? returnUrl = null)
+        => PrinterStringExtensions.AppendQueryString(SelfPath, nameof(ReturnUrl), returnUrl);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _theme = AppTheme.ThemeIdDefault;
+        if (!SignInManager.HasPassword)
+        {
+            if (await SignInManager.TrySignInUsingPassword(""))
+            {
+                NavigateAfterLogin();
+            }
+        }
+        await base.OnInitializedAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (ReturnUrl != null)
+            Input.ReturnUrlFallback = ReturnUrl;
+    }
+
+    private async Task LoginUser()
+    {
+        if (await SignInManager.TrySignInUsingPassword(Input.Password))
+        {
+            NavigateAfterLogin();
+        }
+        else
+        {
+            Input.Password = "";
+            m_isError = true;
+        }
+        StateHasChanged();
+    }
+
+    private void NavigateAfterLogin()
+    {
+        var returnUrl = ReturnUrl ?? (string.IsNullOrEmpty(Input.ReturnUrlFallback) ? null : Input.ReturnUrlFallback);
+        NavigationManager.NavigateTo(returnUrl ?? IndexPage.SelfPath);
+    }
+}

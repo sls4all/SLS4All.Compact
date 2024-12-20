@@ -6,7 +6,6 @@
 
 ﻿using SLS4All.Compact.Threading;
 using System;
-using System.Diagnostics.Contracts;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,6 +28,7 @@ namespace SLS4All.Compact.Temperature
         public double? LayersTemperatureStart { get; set; }
         public double? LayersTemperatureEnd { get; set; }
         public TimeSpan? LayersPeriod { get; set; }
+        public bool NoGradualHeating { get; set; }
 
         public void DisableHeatingLayers()
         {

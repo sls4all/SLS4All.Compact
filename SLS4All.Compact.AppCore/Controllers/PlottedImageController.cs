@@ -23,14 +23,15 @@ using SLS4All.Compact.Helpers;
 using SLS4All.Compact.Slicing;
 using SLS4All.Compact.IO;
 using SLS4All.Compact.Threading;
-using static System.Net.Mime.MediaTypeNames;
 using SLS4All.Compact.Diagnostics;
 using SLS4All.Compact.Camera;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SLS4All.Compact.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PlottedImageController : ControllerBase
     {
         private readonly static Lock _singleThreadedCreateImageLock = new(); // helps to reduce CPU load when multiple clients are connected and requesting plots
@@ -51,7 +52,7 @@ namespace SLS4All.Compact.Controllers
         [HttpGet("{id}")]
         public Task Image(string id, CancellationToken cancel)
         {
-            return _streamingHelper.PullImage(
+            return _streamingHelper.Pull(
                 id,
                 _generator,
                 Response,

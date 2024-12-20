@@ -1,0 +1,53 @@
+﻿.dummy {
+}
+
+.report {
+    font-size: 15px;
+    overflow-y: scroll;
+    height: 100%;
+}
+
+::deep h1 {
+    font-size: 20px;
+}
+
+::deep h2 {
+    font-size: 17px;
+}
+
+::deep table {
+    background: #012B39;
+    border-radius: 0.25em;
+    border-collapse: collapse;
+    margin: 1em;
+}
+
+::deep th {
+    border-bottom: 1px solid #364043;
+    color: #E2B842;
+    font-weight: 600;
+    padding: 0.5em 1em;
+    text-align: left;
+}
+
+::deep td {
+    color: #fff;
+    font-weight: 400;
+    padding: 0.65em 1em;
+}
+
+::deep .disabled td {
+    color: #4F5F64;
+}
+
+::deep tbody tr {
+    transition: background 0.25s ease;
+}
+
+    ::deep tbody tr:hover {
+        background: #014055;
+    }
+
+::deep img {
+    margin-bottom: 4px;
+}

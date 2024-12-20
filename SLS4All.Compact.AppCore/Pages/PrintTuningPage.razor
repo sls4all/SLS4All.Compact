@@ -1,0 +1,354 @@
+﻿@page "/print-tuning"
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Pages.Wizards
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Storage.PrintSessions
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@inherits AppPage
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject IValidationContextFactory ValidationContextFactory
+@inject IPrintAutoTuner PrintAutoTuner
+@inject ISurfaceHeater SurfaceHeater
+@implements IDisposable
+
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
+
+@{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
+    var autoTunerRunning = PrintAutoTuner.IsRunning;
+    var surfaceTarget = SurfaceHeater.TargetTemperature;
+    var autoDetectionEnabled = PrintAutoTuner.AutoDetectEnabled;
+    var reportDirectory = PrintAutoTuner.ReportDirectory;
+    var layerCountToStartRemaining = PrintAutoTuner.LayerCountToStartRemaining;
+}
+
+<ModalWrapper @ref="_autoTuningModal" class="fade app-modal stop-modal" Context="modal" ExternalCssScope="@CssScope">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Auto tuning
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                EXPERIMENTAL FEATURE. Auto tuning is a procedure that can be run during <b>Bed preparation</b>. It will automatically increase surface temperature each few layers.
+            </p>
+            <p>
+                You will need to monitor the live camera view and look for any changes in powder color or reflectivity.
+                After the changes are confirmed, the temperature parameters will be automatically set few degrees below the current surface temperature.
+                The changes on the surface should heal themselves during rest of the <b>Bed preparation</b>.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => AutoTuning(true)" class="btn btn-primary">Start auto tuning!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="root-container">
+    <div class="container-flex">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-6 col-lg-5">
+                <div class="jumbotron pt-4 pb-2">
+                    <h2>
+                        Print parameters tuning
+                    </h2>
+                    <hr class="my-3">
+                    @if (autoTunerRunning)
+                    {
+                        var progressStatus = PrintingGlobal.BackgroundTask.Status?.ProgressStatus;
+                        var layer = (int)(progressStatus?.PhaseDone ?? 0) + 1;
+                        var layerCount = (int)(progressStatus?.PhaseTotal ?? 1);
+
+                        <p class="issue issue-active">
+                            <span class="badge badge-danger text-wrap w-100">
+                                Auto tuning is in progress. Please monitor the surface over the camera.
+                                If you see <b>changes in powder color or reflectivity</b>, click on the <i class="d-inline-block">I see changes</i> button below.
+                            </span>
+                        </p>
+                        <p>
+                            The tuned temperature will be set from the current minus the offset of
+                            <ValueEditor @bind-Value="PrintAutoTuner.FinalTemperatureOffset" Title="Decrease offset" Unit="°C" class="auto-decrease-offset" ExternalCssScope="@CssScope" />
+                        </p>
+                        @if (reportDirectory != null)
+                        {
+                            <p>
+                                Report will be saved to the printer <b>documents directory</b>.
+                            </p>
+                        }
+                        <p>
+                            Bed preparation layer <b>@(layer)/@(layerCount)</b> 
+                            @if (layerCountToStartRemaining > 0)
+                            {
+                                <i> (start after <b>@layerCountToStartRemaining</b>)</i>
+                            }
+                            <br />
+                            @if (surfaceTarget != null)
+                            {
+                                <text>Surface is currently set to <b>@surfaceTarget.Value.ToString("0.0") °C</b></text>
+                            }
+                        </p>
+                        <p>
+                            <div class="form-check checkbox-slider--b-flat d-inline-block">
+                                <label>
+                                    <input type="checkbox" @bind="PrintAutoTuner.AutoDetectEnabled"><span>Auto-detection</span>
+                                </label>
+                            </div><span>, threshold: </span>
+                            <ValueEditor @bind-Value="AutoDetectThresholdPercent" Title="Threshold" Subtitle="Percentual threshold to auto detect changes in powder. This value should be determined empirically for powder type and color. Larger the value, the less sensitive will the auto detection be." Unit="%" class="auto-detect-sensitivity" ExternalCssScope="@CssScope" />
+                        </p>
+                    }
+                    else
+                    {
+                        <p>
+                            Here you can override and tune live printing parameters. Applied values should have an effect on next layer.
+                            You can try <b>Auto tuning</b> if you are in <b>Bed Preparation</b> phase.
+                        </p>
+                        <table class="table table-sm property-table">
+                            <tbody>
+                                <CascadingValue IsFixed="true" Value="Validate">
+                                    @RenderValues([
+                                                                                 (_setupOverrides, _setupDefaults, nameof(_setupOverrides.BedPreparationTemperatureTarget)),
+                                                                                                                                                                                                                    (_setupOverrides, _setupDefaults, nameof(_setupOverrides.BeginLayerTemperatureTarget)),
+                                                                                                                                                                                                                    (_setupOverrides, _setupDefaults, nameof(_setupOverrides.PrintCapTemperatureTarget)),
+                                                                                                                                                                                                                                                        ], hideTopLine: true)
+                                </CascadingValue>
+                            </tbody>
+                        </table>
+                    }
+                    <p class="lead">
+                        @if (!autoTunerRunning)
+                        {
+                            var hasChanges = !_setupOverrides.Equals(_setupOverridesSource);
+                            var canSetDefaults = !_setupOverrides.Equals(new PrintSetupOverrides()) && !_setupOverrides.Equals(_setupDefaults);
+                            var isBedPrep = PrintingGlobal.PrintingPhase == PrintingPhase.BedPreparation;
+                            <a class="btn btn-primary btn-lg mb-1 @(hasChanges ? "" : "disabled")" disabled="@(!hasChanges)" role="button" @onclick="() => Apply()">Apply</a>
+                            <a class="btn btn-secondary btn-lg mb-1 @(hasChanges ? "" : "disabled")" role="button" disabled="@(!hasChanges)" @onclick="() => ResetToApplied()">Undo</a>
+                            <a class="btn btn-danger btn-lg mb-1 @(canSetDefaults ? "" : "disabled")" role="button" disabled="@(!canSetDefaults)" @onclick="() => ResetToProfile()">Set profile defaults</a>
+                            <a class="btn btn-info btn-lg mb-1 @(isBedPrep ? "" : "disabled")" role="button" disabled="@(!isBedPrep)" @onclick="() => AutoTuning()">Auto tuning...</a>
+                        }
+                        else
+                        {
+                            <a class="btn btn-primary btn-lg" @onclick="() => PrintAutoTuner.ChangesDetected()">I see changes!</a>
+                            <a class="btn btn-danger btn-lg" @onclick="() => PrintAutoTuner.Stop()">Stop auto tuning</a>
+                        }
+                    </p>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <VideoCameraView @key="_videoCameraKey" class="w-100" LightsControlsEnabled="false" ControlsEnabled="false" ExternalCssScope="@CssScope" DisplayWorkingArea="autoDetectionEnabled" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string SelfPath = "print-tuning";
+    public const string DismissKey = "dismiss-tuning-stop";
+    private const string CssScope = "b-print-tuning";
+    private readonly object _videoCameraKey = new();
+    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private Timer? _timer;
+    private PrintSetupOverrides _setupOverridesSource, _setupOverrides, _setupDefaults;
+    private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
+    private ModalWrapper? _autoTuningModal;
+
+    protected bool IsPrinting => PrintingGlobal.IsPrinting;
+    private double AutoDetectThresholdPercent
+    {
+        get => PrintAutoTuner.AutoDetectThresholdFactor * 100;
+        set
+        {
+            var factor = value / 100;
+            if (factor <= 0)
+                return;
+            if (factor > 1)
+                factor = 1;
+            PrintAutoTuner.AutoDetectThresholdFactor = factor;
+            StateHasChanged();
+        }
+    }
+
+    public PrintTuningPage()
+    {
+        _setupOverridesSource = _setupOverrides = _setupDefaults = new();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        string queryString = new System.Uri(NavigationManager.Uri).Query;
+        var queryDictionary = System.Web.HttpUtility.ParseQueryString(queryString);
+        var dismiss = queryDictionary[DismissKey];
+        if (!string.IsNullOrEmpty(dismiss))
+        {
+            PrintAutoTuner.DismissedWarning();
+            NavigationManager.NavigateTo(SelfPath, replace: true);
+        }
+        return base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected virtual bool CanContinueIfNotPrinting(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder __builder)
+    {
+        if (!IsPrinting)
+        {
+            <div class="printing-notification">
+                <p>
+                    <span class="badge badge-dark text-wrap">
+                        <i class="bi bi-x" /> Printing is not in progress.
+                    </span>
+                </p>
+                <p>
+                    <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+                </p>
+            </div>
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        ResetToApplied();
+        _timer = new Timer(OnTimer, null, s_period, s_period);
+    }
+
+    private void OnTimer(object? state)
+        => TryInvokeStateHasChanged(() =>
+        {
+            var setupOverridesSource = PrintingGlobal.SetupOverrides;
+            if (!setupOverridesSource.Equals(_setupOverridesSource))
+                ResetToApplied();
+            _setupDefaults = PrintingGlobal.SetupOverridesDefaults;
+            return ValueTask.FromResult(true);
+        });
+
+    private async Task Apply()
+    {
+        var context = ValidationContextFactory.CreateContext();
+        await ValidateInner();
+        if (_validationErrors.Count == 0)
+        {
+            PrintingGlobal.SetupOverrides = _setupOverrides;
+            ResetToApplied();
+        }
+    }
+
+    private string? GetError(object obj, string path)
+    {
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, path), out var value))
+            return value.Message;
+        else
+            return null;
+    }
+
+    private async Task AutoTuning(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            await _autoTuningModal!.Show();
+        }
+        else
+        {
+            await _autoTuningModal!.Close();
+            await PrintAutoTuner.Start(new PrintAutoTunerStartArgs
+                {
+                    DismissWarningUri = $"{SelfPath}?{DismissKey}=true",
+                });
+        }
+    }
+
+    private async Task ValidateInner()
+    {
+        var values = _setupOverrides;
+        var validationContext = ValidationContextFactory.CreateContext();
+        var helper = await values.Validate(validationContext);
+        _validationErrors = helper.ToDictionary();
+    }
+
+    private void ResetToApplied()
+    {
+        _setupOverridesSource = PrintingGlobal.SetupOverrides;
+        _setupOverrides = _setupOverridesSource.Clone();
+        _setupDefaults = PrintingGlobal.SetupOverridesDefaults;
+    }
+
+    private void ResetToProfile()
+    {
+        PrintingGlobal.SetupOverrides = new();
+        ResetToApplied();
+    }
+
+    private async Task<string?> Validate(object obj, string name)
+    {
+        await ValidateInner();
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, name), out var value))
+            return value.Message; // not valid
+        else
+        {
+            StateHasChanged();
+            return null;
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    private IInputValueTraits? GetTraits(StorageValue value)
+    {
+        return null;
+    }
+
+    private RenderFragment RenderValues(
+        (object profile, object profileDefault, string path)[] pathsSource,
+        bool hideTopLine = true)
+    {
+        return builder =>
+        {
+            var seq = 1;
+
+            void RenderColumn(object profile, object profileDefault, string path, bool hasPath)
+            {
+                var value = StorageValue.Create(profile, path);
+                var valueDefault = profileDefault != profile ? StorageValue.Create(profileDefault, path) : null;
+                var visibility = hasPath ? "" : "invisible";
+                IInputValueTraits? traits = GetTraits(value);
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-6 property-name {visibility}");
+                builder.AddContent(seq++, value.Name.Name);
+                builder.CloseElement();
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-6 property-value pr-4 {visibility}");
+                builder.AddContent(seq++, value.RenderValueEditor(valueDefault, profile, cssScope: CssScope, traits: traits));
+                builder.CloseElement();
+            }
+
+            int row = 0;
+            foreach (var path in pathsSource)
+            {
+                builder.OpenElement(seq++, "tr");
+                builder.AddAttribute(seq++, CssScope);
+                if (row == 0 && hideTopLine)
+                    builder.AddAttribute(seq++, "class", "hide-top-line");
+                RenderColumn(path.profile, path.profileDefault, path.path, true);
+                builder.CloseElement();
+                row++;
+            }
+        };
+    }
+}

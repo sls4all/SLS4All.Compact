@@ -35,14 +35,14 @@
         modalClass += "value-editor-modal-full";
 
     <FileBrowserModal 
-        @ref="_fileBrowser" 
-        MaxSelectedCount="1" 
-        Masks="@Traits.FilenameMasks" 
-        Directory="@Traits.Directory" 
-        AllowSelectDirectories="false" 
-        AllowSelectFilesOutsideMask="false" 
-        OpenClicked="selection => OnFileSelected(selection)"
-        Closed="OnEditorClosed" />
+    @ref="_fileBrowser" 
+    MaxSelectedCount="1" 
+    Masks="@Traits.FilenameMasks" 
+    Directory="@Traits.Directory" 
+    AllowSelectDirectories="false" 
+    AllowSelectFilesOutsideMask="false" 
+    OpenClicked="selection => OnFileSelected(selection)"
+    Closed="OnEditorClosed" />
 
     <Modal @ref="_modal" class="@modalClass" Opened="OnEditorOpened" Closed="OnEditorClosed">
         <div class="modal-content">
@@ -724,6 +724,8 @@
     {
         if (_shown)
             return Task.CompletedTask;
+        if (Traits.Action != null)
+            return Traits.Action();
         _renderModal = true;
         _shown = false;
         _choices = Traits.Choices?.Select(x => new ChoiceItem { Value = x }).ToArray();

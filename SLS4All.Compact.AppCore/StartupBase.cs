@@ -52,6 +52,9 @@ using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using SLS4All.Compact.Pages.Wizards;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore;
+using SLS4All.Compact.Security;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication;
 
 namespace SLS4All.Compact
 {
@@ -75,6 +78,7 @@ namespace SLS4All.Compact
             typeof(PrinterWearCaptureSavedOptions),
             typeof(PrinterMaintenanceManagerSavedOptions),
             typeof(InovaAdvancedBedProjectionSavedOptions),
+            typeof(SignInManagerSavedOptions),
         ];
         public static string[] ConfigurationSources { get; set; } = [];
         public static bool AppsettingsSafeModeEnabled { get; set; }
@@ -161,11 +165,13 @@ namespace SLS4All.Compact
             services.Configure<FrontendOptions>(Configuration.GetSection("Frontend"));
 
             services.AddAsImplementationAndInterfaces<Pages.Test2D.ValuesContainer>(ServiceLifetime.Scoped);
+            services.AddAsImplementationAndInterfaces<Pages.PowderTuningPage.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Pages.SlicingPage.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Pages.MovementPage.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Components.TemperatureControl.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Components.ThermoCameraView.ValuesContainer>(ServiceLifetime.Scoped);
             services.AddAsImplementationAndInterfaces<Pages.Wizards.GalvoCalibrationWizard.ValuesContainer>(ServiceLifetime.Scoped);
+            services.AddAsImplementationAndInterfaces<Pages.Wizards.PowderTuningWizard.ValuesContainer>(ServiceLifetime.Scoped);
             services.Configure<Pages.ThermoCameraCompare.ThermoCameraCompareOptions>(Configuration.GetSection("ThermoCameraCompare"));
 
             services.Configure<ExhaustiveNesterOptions>(Configuration.GetSection("ExhaustiveNester"));
@@ -177,8 +183,8 @@ namespace SLS4All.Compact
             services.AddAsImplementationAndInterfaces<NestingService>(ServiceLifetime.Singleton);
             services.Configure<UIToastProviderOptions>(Configuration.GetSection("UIToastProvider"));
             services.AddAsImplementationAndInterfaces<UIToastProvider>(ServiceLifetime.Singleton);
-            services.Configure<FileEdgeStorageOptions>(Configuration.GetSection("FileEdgeStorage"));
-            services.AddAsImplementationAndInterfaces<FileEdgeStorage>(ServiceLifetime.Singleton);
+            services.Configure<FileEdgeStorageOptions>(Configuration.GetSection("FileSlicerStorage"));
+            services.AddAsImplementationAndInterfaces<FileSlicerStorage>(ServiceLifetime.Singleton);
 
             if (applicationOptions.UseIdealCircleHotspotCalculator)
             {
@@ -235,14 +241,20 @@ namespace SLS4All.Compact
             services.Configure<SafeShutdownManagerOptions>(Configuration.GetSection("SafeShutdownManager"));
             services.AddAsImplementationAndInterfaces<SafeShutdownManager>(ServiceLifetime.Singleton);
 
-            services.Configure<ImageStreamingHelperOptions>(Configuration.GetSection("ImageStreamingHelper"));
+            services.Configure<StreamingHelperOptions>(Configuration.GetSection("StreamingHelper"));
             services.AddAsImplementationAndInterfaces<ImageStreamingHelper>(ServiceLifetime.Singleton);
+            services.AddAsImplementationAndInterfaces<RemainingPrintTimeStreamingHelper>(ServiceLifetime.Singleton);
+            services.Configure<RemainingPrintTimeStylesGeneratorOptions>(Configuration.GetSection("RemainingPrintTimeStylesGenerator"));
+            services.AddAsImplementationAndInterfaces<RemainingPrintTimeStylesGenerator>(ServiceLifetime.Singleton);
             
+            services.Configure<PowderTuningWizardOptions>(Configuration.GetSection("PowderTuningWizard"));
             services.Configure<OpticalSetupWizardOptions>(Configuration.GetSection("OpticalSetupWizard"));
             services.Configure<ThermoSetupWizardOptions>(Configuration.GetSection("ThermoSetupWizard"));
             services.Configure<GalvoCalibrationWizardOptions>(Configuration.GetSection("GalvoCalibrationWizard"));
 
-            //services.AddAsImplementationAndInterfaces<BasicSlicerEdgeSorter>(ServiceLifetime.Transient);
+            services.AddAsImplementationAndInterfaces<FileExtensionContentTypeProvider>(ServiceLifetime.Singleton);
+
+            //services.AddAsImplementationAndInterfaces<BasicSlicerEdgeSorter>(ServiceLifetime.Transient);re
             services.AddAsImplementationAndInterfaces<AdvancedSlicerEdgeSorter>(ServiceLifetime.Transient);
             services.AddAsImplementationAndInterfaces<ThreadStackTraceDumper>(ServiceLifetime.Singleton);
         }
@@ -361,13 +373,13 @@ namespace SLS4All.Compact
             WebApplication app)
         {
             var server = services.GetRequiredService<IServer>();
-            var feOptions = services.GetRequiredService<IOptions<FrontendOptions>>();
+            var feOptions = services.GetRequiredService<IOptionsMonitor<FrontendOptions>>();
             var printerCultureManager = services.GetRequiredService<IPrinterCultureManager>();
             var toastProvider = services.GetRequiredService<IToastProvider>();
             var constructables = services.GetRequiredService<IEnumerable<IObjectFactory<IConstructable, object>>>();
             var delayedConstructables = services.GetRequiredService<IEnumerable<IObjectFactory<IDelayedConstructable, object>>>();
 
-            if (feOptions.Value.ShowAdvancedDebugFeatures)
+            if (feOptions.CurrentValue.ShowAdvancedDebugFeatures)
             {
                 app.UseDeveloperExceptionPage();
             }
@@ -398,7 +410,7 @@ namespace SLS4All.Compact
                 parameters.AddSupportedCultures(cultures)
                     .AddSupportedUICultures(cultures)
                     .SetDefaultCulture("en-US");
-                parameters.RequestCultureProviders.Insert(0, new PrinterLocalRequestCultureProvider(printerCultureManager));
+                parameters.RequestCultureProviders.Insert(0, new PrinterLocalRequestCultureProvider(feOptions, printerCultureManager));
             });
 
             app.MapControllers();

@@ -35,7 +35,7 @@ namespace SLS4All.Compact.Threading
             _singleHandler = _noHandlerDelegate;
         }
 
-        private void OnHandlerChangedInner()
+        private void OnHandlerChanged()
             => HandlersChanged?.Invoke(this, EventArgs.Empty);
 
         public ValueTask Invoke(CancellationToken cancel)
@@ -90,8 +90,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryAdd(handler, _counter++);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => handler, _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
 
         public void AddHandler(Func<CancellationToken, Task> handler)
@@ -100,8 +100,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryAdd(handler, _counter++);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => handler, _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
 
         public void RemoveHandler(Func<CancellationToken, ValueTask> handler)
@@ -110,8 +110,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryRemove(handler, out _);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => _handlers.Keys.Single(), _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
 
         public void RemoveHandler(Func<CancellationToken, Task> handler)
@@ -120,8 +120,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryRemove(handler, out _);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => _handlers.Keys.Single(), _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
     }
 
@@ -137,7 +137,6 @@ namespace SLS4All.Compact.Threading
         public bool HasHandlers => _singleHandler != _noHandlerDelegate;
         public int HandlersCount => _handlers.Count;
         public event EventHandler? HandlersChanged;
-        public Lock HandlersChangedSync => _handlersChangedSync;
 
         public AsyncEvent(bool ordered = false)
         {
@@ -145,7 +144,7 @@ namespace SLS4All.Compact.Threading
             _singleHandler = _noHandlerDelegate;
         }
 
-        private void OnHandlerChangedInner()
+        private void OnHandlerChanged()
             => HandlersChanged?.Invoke(this, EventArgs.Empty);
 
         public ValueTask Invoke(TArg1 arg1, CancellationToken cancel)
@@ -200,8 +199,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryAdd(handler, _counter++);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => handler, _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
 
         public void AddHandler(Func<TArg1, CancellationToken, Task> handler)
@@ -210,8 +209,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryAdd(handler, _counter++);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => handler, _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
 
         public void RemoveHandler(Func<TArg1, CancellationToken, ValueTask> handler)
@@ -220,8 +219,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryRemove(handler, out _);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => _handlers.Keys.Single(), _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
 
         public void RemoveHandler(Func<TArg1, CancellationToken, Task> handler)
@@ -230,8 +229,8 @@ namespace SLS4All.Compact.Threading
             {
                 _handlers.TryRemove(handler, out _);
                 _singleHandler = _handlers.Count switch { 0 => _noHandlerDelegate, 1 => _handlers.Keys.Single(), _ => null };
-                OnHandlerChangedInner();
             }
+            OnHandlerChanged();
         }
     }
 }

@@ -49,6 +49,7 @@ namespace SLS4All.Compact
         Fake,
         McuManagerLocal,
         PipedMcuManagerProxy,
+        McuManagerFake,
     }
 
     public enum PrinterPloterType

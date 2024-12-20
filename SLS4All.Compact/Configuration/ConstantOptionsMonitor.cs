@@ -16,13 +16,13 @@ namespace SLS4All.Compact.Configuration
 {
     public sealed class ConstantOptionsMonitor<T> : IOptionsMonitor<T>
     {
-        public T CurrentValue { get; set; }
+        public T CurrentValue { get; }
 
         public ConstantOptionsMonitor(T value)
             => CurrentValue = value;
 
         public T Get(string? name)
-            => throw new KeyNotFoundException();
+            => string.IsNullOrEmpty(name) ? CurrentValue : throw new NotSupportedException();
 
         public IDisposable OnChange(Action<T, string> listener)
             => NullDisposable.Instance;
@@ -30,7 +30,7 @@ namespace SLS4All.Compact.Configuration
 
     public static class ConstantOptionsMonitor
     {
-        public static ConstantOptionsMonitor<T> Create<T>(T value)
+        public static IOptionsMonitor<T> Create<T>(T value)
             => new ConstantOptionsMonitor<T>(value);
     }
 }

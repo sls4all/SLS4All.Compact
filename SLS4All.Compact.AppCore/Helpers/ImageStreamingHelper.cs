@@ -4,6 +4,7 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
+using Azure;
 using Lexical.FileProvider.Package;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,48 +23,28 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
+using System.Threading.Channels;
 using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SLS4All.Compact.Helpers
 {
-    public class ImageStreamingHelperOptions
+    public sealed class ImageStreamingHelper : StreamingHelperBase<MimeData>
     {
-        public TimeSpan CleanupPeriod { get; set; } = TimeSpan.FromSeconds(5);
-    }
+        private static readonly MimeData _imageStreamingPlaceholder;
 
-    public class ImageStreamingHelper : BackgroundThreadService
-    {
-        private sealed class PullData
+        static ImageStreamingHelper()
         {
-            public required AsyncEvent<MimeData> ImageCapturedEvent { get; init; }
-            public SystemTimestamp Timestamp;
-            public MimeData Data;
-            public Func<MimeData, CancellationToken, ValueTask>? Handler;
+            _imageStreamingPlaceholder = new MimeData(
+                "image/gif",
+                typeof(ImageStreamingHelper).Assembly.GetManifestResourceStream("SLS4All.Compact.Helpers.ImageStreamingPlaceholder.gif")!.ReadAllToArrayAndDispose());
         }
-
-        private readonly ILogger _logger;
-        private readonly IOptionsMonitor<ImageStreamingHelperOptions> _options;
-        private readonly ConcurrentDictionary<string, CancellationTokenSource> _streamCancels;
-        private readonly Lock _locker;
-        private readonly Dictionary<AsyncEvent<MimeData>, PullData> _pullDataByEvent;
-        private readonly Dictionary<string, PullData> _pullDataById;
-        private readonly MimeData _imageStreamingPlaceholder;
 
         public ImageStreamingHelper(
             ILogger<ImageStreamingHelper> logger,
-            IOptionsMonitor<ImageStreamingHelperOptions> options)
-            : base(logger)
+            IOptionsMonitor<StreamingHelperOptions> options)
+            : base(logger, options, _imageStreamingPlaceholder)
         {
-            _logger = logger;
-            _options = options;
-
-            _streamCancels = new();
-            _locker = new();
-            _pullDataByEvent = new();
-            _pullDataById = new();
-            _imageStreamingPlaceholder = new MimeData(
-                "image/gif",
-                GetType().Assembly.GetManifestResourceStream("SLS4All.Compact.Helpers.ImageStreamingPlaceholder.gif")!.ReadAllToArrayAndDispose());
         }
 
         public async Task StreamMultipart(
@@ -142,131 +123,20 @@ namespace SLS4All.Compact.Helpers
             }
         }
 
-        public bool TryGetImageCapturedEvent(string id, [MaybeNullWhen(false)] out AsyncEvent<MimeData> imageReadyEvent)
+        public override ValueTask Write(MimeData data, HttpResponse response, CancellationToken cancel)
         {
-            lock (_locker)
-            {
-                if (_pullDataById.TryGetValue(id, out var pullData))
-                {
-                    imageReadyEvent = pullData.ImageCapturedEvent;
-                    return true;
-                }
-                else
-                {
-                    imageReadyEvent = null;
-                    return false;
-                }
-            }
-        }
-
-        public void SetPulledImage(string id)
-        {
-            lock (_locker)
-            {
-                if (_pullDataById.TryGetValue(id, out var pullData))
-                    pullData.Timestamp = SystemTimestamp.Now;
-            }
-        }
-
-        public async Task PullImage(
-            string id,
-            IImageGenerator generator,
-            HttpResponse response,
-            CancellationToken cancel)
-        {
-            PullData? pullData;
-            if (!generator.TryGetLastImage(out var data))
-                data = _imageStreamingPlaceholder;
-            var imageCaptured = generator.ImageCaptured;
-            lock (_locker)
-            {
-                var now = SystemTimestamp.Now;
-                if (!_pullDataByEvent.TryGetValue(imageCaptured, out pullData))
-                {
-                    if (!_pullDataByEvent.TryGetValue(imageCaptured, out pullData))
-                    {
-                        pullData = new PullData
-                        {
-                            ImageCapturedEvent = imageCaptured,
-                        };
-                        _pullDataByEvent.TryAdd(imageCaptured, pullData);
-                    }
-                }
-
-                _pullDataById[id] = pullData;
-
-                pullData.Timestamp = now;
-
-                if (pullData.Handler == null)
-                {
-                    pullData.Handler = (image, cancel) =>
-                    {
-                        var imageCopy = image.RentCopy();
-                        lock (_locker)
-                        {
-                            pullData.Data.Return();
-                            pullData.Data = imageCopy;
-                        }
-                        return ValueTask.CompletedTask;
-                    };
-
-                    imageCaptured.AddHandler(pullData.Handler);
-                }
-
-                if (!pullData.Data.IsEmpty)
-                    data = pullData.Data.RentCopy();
-            }
-
             response.ContentType = data.ContentType;
             response.Headers["Cache"] = "no-store, no-cache, must-revalidate";
-            await response.Body.WriteAsync(data.Data, cancel);
-            data.Return();
+            return response.Body.WriteAsync(data.Data, cancel);
         }
 
-        protected override async Task ExecuteTaskAsync(CancellationToken cancel)
-        {
-            var options = _options.CurrentValue;
-            var timer = new PeriodicTimer(options.CleanupPeriod);
-            var remainingDataById = new HashSet<PullData>();
-            var removedIds = new HashSet<string>();
-            var removedEvents = new HashSet<AsyncEvent<MimeData>>();
-            while (await timer.WaitForNextTickAsync(cancel))
-            {
-                var expiredAt = SystemTimestamp.Now - options.CleanupPeriod;
-                remainingDataById.Clear();
-                removedIds.Clear();
-                removedEvents.Clear();
-                lock (_locker)
-                {
-                    foreach ((var id, var pullData) in _pullDataById)
-                    {
-                        if (pullData.Timestamp < expiredAt || pullData.Handler == null)
-                            removedIds.Add(id);
-                    }
+        protected override MimeData RentCopy(MimeData data)
+            => data.RentCopy();
 
-                    foreach (var id in removedIds)
-                        _pullDataById.Remove(id);
+        protected override void Return(MimeData data)
+            => data.Return();
 
-                    foreach (var pullData in _pullDataById.Values)
-                        remainingDataById.Add(pullData);
-
-                    foreach ((var ev, var pullData) in _pullDataByEvent)
-                    {
-                        if (!remainingDataById.Contains(pullData))
-                        {
-                            if (pullData.Handler != null)
-                            {
-                                pullData.ImageCapturedEvent.RemoveHandler(pullData.Handler);
-                                pullData.Handler = null;
-                            }
-                            removedEvents.Add(ev);
-                        }
-                    }
-
-                    foreach (var ev in removedEvents)
-                        _pullDataByEvent.Remove(ev);
-                }
-            }
-        }
+        protected override bool IsEmpty(MimeData data)
+            => data.IsEmpty;
     }
 }

@@ -8,10 +8,32 @@
 		<PackageProjectUrl>https://github.com/sls4all</PackageProjectUrl>
 		<Authors>SLS4All</Authors>
 		<Copyright>© 2024 anyteq development s.r.o.</Copyright>
+		<!-- https://github.com/dotnet/sdk/issues/9363 -->
+		<!-- Enable roll-forward to latest patch.  This allows one restore operation
+         to apply to all of the self-contained publish operations. -->
+		<TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<None Include="../LICENSE.txt" Pack="true" PackagePath=""/>
 		<None Include="../README.md" Pack="true" PackagePath=""/>
 	</ItemGroup>
+
+	<!-- https://github.com/dotnet/sdk/issues/9363 -->
+	<Target Name="PublishAllRids">
+		<ItemGroup>
+		  <!-- Transform RuntimeIdentifiers property to item -->
+		  <RuntimeIdentifierForPublish Include="$(RuntimeIdentifiers)" />
+
+		  <!-- Transform RuntimeIdentifierForPublish items to project items to pass to MSBuild task -->
+		  <ProjectToPublish Include="@(RuntimeIdentifierForPublish->'$(MSBuildProjectFullPath)')">
+			<AdditionalProperties>RuntimeIdentifier=%(RuntimeIdentifierForPublish.Identity)</AdditionalProperties>
+		  </ProjectToPublish>
+		</ItemGroup>
+
+		<MSBuild Projects="@(ProjectToPublish)"
+				 Targets="Publish"
+				 BuildInParallel="true"
+				 />
+	  </Target>
 </Project>

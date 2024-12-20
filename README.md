@@ -120,3 +120,10 @@ subdirectory (i.e. we do not utilize contents of
 
 We would like to thank Kevin O'Connor and all other [Klipper](https://www.klipper3d.org/) authors 
 and maintainers.
+
+# Third-Party Licenses
+
+MCUs run [modified Klipper firmware](https://github.com/sls4all/SLS4All.Compact.Klipper), licensed under *GNU General Public License v3.0*
+
+PrinterApp uses [Markdig](https://github.com/xoofx/markdig) Nuget for Markdown processing, licensed under *BSD-2-Clause* license
+

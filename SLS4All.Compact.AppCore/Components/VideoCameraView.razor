@@ -37,12 +37,17 @@
     }
     <div class="video-image-container" @attributes="@JustAttributesWithCssScope">
         <img id="@_id" @key="_streamKey" class="video-image" src="@StreamUri" @attributes="@JustAttributesWithCssScope" />
+        @if (DisplayWorkingArea)
+        {
+            <img id="@_id" @key="_workingAreaKey" class="video-image video-image-overlay" src="@WorkingAreaUri" @attributes="@JustAttributesWithCssScope" />
+        }
     </div>
 </div>
 
 @code {
     public const string CssScope = "b-camera-view";
     private readonly object _streamKey = new();
+    private readonly object _workingAreaKey = new();
     private readonly string _id = Guid.NewGuid().ToString();
     private bool? _isLightEnabled;
     private bool _hasTouchedLights;
@@ -53,7 +58,8 @@
     private ImageStreamingHandle? _streamHandle;
     private long _streamCounter;
 
-    private string StreamUri => $"/api/videocamera/image/{_id}?c={_streamCounter}";
+    private string StreamUri => $"api/videocamera/image/{_id}?c={_streamCounter}";
+    private string WorkingAreaUri => $"api/videocamera/workingarea/{_id}?c={_streamCounter}";
 
     [Parameter]
     public bool LightsControlsEnabled { get; set; } = true;
@@ -66,6 +72,9 @@
 
     [Parameter]
     public CameraMode Mode { get; set; } = CameraMode.NotSet;
+
+    [Parameter]
+    public bool DisplayWorkingArea { get; set; } = false;
 
     private bool IsLightEnabled
     {

@@ -4,7 +4,7 @@
 @implements IDisposable
 @inject ICodePlotter Plotter
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-layer-geometry.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-layer-geometry.png" IsFullPage="true" />
 
 <div class="d-flex h-100 py-3 flex-column">
     <div class="d-flex flex-row m-auto">
@@ -31,7 +31,7 @@
 </div>
 
 @code {
-    public const string SelfPath = "/plot";
+    public const string SelfPath = "plot";
     private System.Threading.Timer? _timer;
     private const int _period = 500;
     private int _layerIndex = 0;
@@ -50,7 +50,7 @@
     }
 
     public string LayerUrl
-        => $"/api/PlottedImage/{Plotter.Version}/{_layerIndex - 1}";
+        => $"api/PlottedImage/{Plotter.Version}/{_layerIndex - 1}";
 
     protected override void OnInitialized()
     {

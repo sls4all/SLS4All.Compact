@@ -24,24 +24,30 @@ using SLS4All.Compact.IO;
 using System.Diagnostics;
 using SLS4All.Compact.Printer;
 using SLS4All.Compact.Printing;
+using Microsoft.AspNetCore.Authorization;
+using SLS4All.Compact.Temperature;
 
 namespace SLS4All.Compact.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PrintingServiceController : ControllerBase
     {
         private readonly IPrintingService _printing;
         private readonly IPrinterPerformanceProvider _performance;
+        private readonly ISurfaceHeater _surfaceHeater;
         private readonly ILogger<PrintingServiceController> _logger;
 
         public PrintingServiceController(
             IPrintingService printing,
             IPrinterPerformanceProvider performance,
+            ISurfaceHeater surfaceHeater,
             ILogger<PrintingServiceController> logger)
         {
             _printing = printing;
             _performance = performance;
+            _surfaceHeater = surfaceHeater;
             _logger = logger;
         }
 
@@ -52,8 +58,10 @@ namespace SLS4All.Compact.Controllers
             var status = _printing.BackgroundTask.Status;
             var performance = _performance.Values;
             const long MB = 1024 * 1024;
+            var surfaceTarget = _surfaceHeater.TargetTemperature;
             return new
             {
+                SurfaceTarget = surfaceTarget != null ? (double?)Math.Round(surfaceTarget.Value, 2) : null,
                 Progress = MathF.Round(status?.Progress ?? 0, 1),
                 Remaining = status?.ProgressStatus?.Estimate.Remaining ?? TimeSpan.Zero,
                 RemainingIncomplete = status?.ProgressStatus?.Estimate.Incomplete ?? true,

@@ -1,0 +1,435 @@
+﻿@page "/wizard/powder-tuning"
+@using System.Diagnostics
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.Diagnostics
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Nesting
+@using SLS4All.Compact.Power
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Printer
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Processing.Meshes
+@using SLS4All.Compact.Scripts
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Storage.PrintJobs
+@using SLS4All.Compact.Storage.PrintProfiles
+@using SLS4All.Compact.Storage.PrinterSettings
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@using SLS4All.Compact.Numerics
+@using System.Globalization
+@inherits WizardBase<PowderTuningWizard.Step>
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject ILayerClient LayerClient
+@inject IPrintSessionStorage PrintSessionStorage
+@inject IValidationContextFactoryScoped ValidationContextFactory
+@inject IPrintProfileStorage ProfileStorage
+@inject IPrinterTimeManager TimeManager
+@inject ICurrentPrintingParamsProvider PrintingParamsProvider
+@inject IPrinterSettingsStorage SettingsStorage
+@inject ValuesContainer Values
+@inject IOptionsMonitor<PowderTuningWizardOptions> Options
+
+@{
+    if (!CanContinueIfNotPrinting(__builder))
+        return;
+    base.BuildRenderTree(__builder);
+}
+
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_profileModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Select the print profile
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                Select printing profile for the target temperatures (only valid profiles are shown):
+            </p>
+            <div class="list-group">
+                @foreach (var __profile in _profiles)
+                {
+                    var profile = __profile;
+                    <a class="list-group-item list-group-item-action print-profile" @onclick="() => OnSetProfile(profile)">
+                        <img src="_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" width="40" height="40" />
+                        @profile.Name
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<div class="container">
+    <div class="jumbotron pt-4 pb-2">
+        @switch (StepIndex)
+        {
+            case Step.Introduction:
+                <h2>
+                    Powder tuning
+                </h2>
+                <hr class="my-3">
+                <p>
+                    This wizard will start a <i>Job</i> that is intended to test temperatures and energy densities for a printing powder. 
+                    It is not necessary to use this wizard when you are just using the predefined printing profiles and you do not intend to create new ones.
+                </p>
+                <p>
+                    When you continue, you will have to select an existing valid print profile for initial parameters.
+                </p>
+                <p>
+                    After the job finishes, a report from this job will be saved to documents folder on the printer using the name: <ValueEditor Title="Report name" @bind-Value="_powderTuningJobName" Placeholder="Select filename" />
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg btn--icon-text" role="button" @onclick="() => DoStep()">
+                        <i class="bi bi-clipboard-check" /> Select the print profile...
+                    </a>
+                </p>
+                break;
+            case Step.Parameters:
+                <h2>
+                    Override parameters
+                </h2>
+                <hr class="my-3">
+                <p>
+                    Please select and override other parameters for the job. 
+                </p>
+                <p>
+                    <table class="table table-sm property-table">
+                        <tbody>
+                            <CascadingValue IsFixed="true" Value="Validate">
+                                @RenderValues([
+                                    (Values, _defaultValues, nameof(Values.StartingTemperatureChamberBedLimit)),
+                                    (Values, _defaultValues, nameof(Values.ExtraPowderDepth)),
+                                    (Values, _defaultValues, nameof(Values.StartingTemperatureSurfaceLimit)),
+                                    (Values, _defaultValues, nameof(Values.NoGradualHeating)),
+                                ], hideTopLine: true)
+                            </CascadingValue>
+                        </tbody>
+                    </table>
+                </p>
+                <hr class="my-3">
+                <p class="lead">
+                    <a class="btn btn-primary btn-lg btn--icon-text" role="button" @onclick="() => DoStep()">
+                        <i class="bi bi-clipboard-check" /> Start the print wizard!
+                    </a>
+                </p>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    public enum Step
+    {
+        NotSet = 0,
+        Introduction,
+        Parameters,
+    }
+
+    public class ValuesContainer : IValidatable
+    {
+        [StorageName("Extra powder")]
+        [StorageDescription("Extra powder (measured in print chamber) for laying down layers while testing the powder. If set to zero, you will not be able to add new layers once the the heating completes.")]
+        [StorageUnit(Units.Millimeter)]
+        public decimal? ExtraPowderDepth { get; set; }
+
+        [StorageName("Bed & chamber limit")]
+        [StorageDescription("Lowers the chambers and beds temperatures from profile to this value for initial heating, so you have enough room to increase the temperature manually.")]
+        [StorageUnit(Units.Celsius)]
+        public decimal? StartingTemperatureChamberBedLimit { get; set; }
+
+        [StorageName("Surface limit")]
+        [StorageDescription("Lowers the surface temperatures from profile to this value for initial heating, so you have enough room to increase the temperature manually.")]
+        [StorageUnit(Units.Celsius)]
+        public decimal? StartingTemperatureSurfaceLimit { get; set; }
+
+        [StorageName("No gradual heating")]
+        [StorageDescription("Skips the initial gradual (controlled) heating procedure and just sets the initial temperatures at once. This is helpful if the printer is already heated up from prevuous attempts")]
+        public bool NoGradualHeating { get; set; }
+
+        public ValueTask<ValidationHelper> Validate(ValidationContext context)
+        {
+            var helper = context.CreateHelper(this);
+            helper.Validate(ExtraPowderDepth, min: 0);
+            helper.Validate(StartingTemperatureChamberBedLimit, above: 0, allowNull: true);
+            helper.Validate(StartingTemperatureSurfaceLimit, above: 0, allowNull: true);
+            helper.Validate(NoGradualHeating);
+            return helper;
+        }
+
+        public void MergeFrom(ValuesContainer other)
+        {
+            ExtraPowderDepth = other.ExtraPowderDepth ?? ExtraPowderDepth;
+            StartingTemperatureChamberBedLimit = other.StartingTemperatureChamberBedLimit ?? StartingTemperatureChamberBedLimit;
+            StartingTemperatureSurfaceLimit = other.StartingTemperatureSurfaceLimit ?? StartingTemperatureSurfaceLimit;
+            NoGradualHeating = other.NoGradualHeating;
+        }
+
+        public ValuesContainer Clone()
+        {
+            var clone = new ValuesContainer();
+            clone.MergeFrom(this);
+            return clone;
+        }
+    }
+
+    public const string SelfPath = "wizard/powder-tuning";
+    private const string CssScope = "b-powder-tuning-wizard";
+
+    private string _powderTuningJobName = "";
+    private PrintProfile[] _profiles = [];
+    private ModalWrapper? _profileModal;
+    private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
+    private PrintProfile? _selectedProfile;
+    private ValuesContainer _defaultValues = new ValuesContainer
+    {
+        ExtraPowderDepth = 0,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (PrintingGlobal.PrintingPhase == PrintingPhase.PowderTuning)
+        {
+            NavigationManager.NavigateTo(PowderTuningPage.SelfPath);
+            return;
+        }
+
+        StepIndex = Step.Introduction;
+        var validationContext = ValidationContextFactory.CreateContext();
+
+        var profiles = new List<PrintProfile>();
+        foreach (var item in await ProfileStorage.GetOrderedMergedProfiles())
+        {
+            var isValid = await item.Profile.Validate(validationContext);
+            if (isValid.IsValid)
+                profiles.Add(item.Profile);
+        }
+        _profiles = profiles.ToArray();
+        var timeZone = await TimeManager.GetTimeZone(MainLayout?.IsLocalSession ?? false, true) ?? TimeZoneInfo.Local;
+        var now = TimeZoneInfo.ConvertTimeFromUtc(System.DateTime.UtcNow, timeZone);
+        _powderTuningJobName = string.Create(CultureInfo.InvariantCulture, $"powders-{now:yyyy-MM-dd_HH-mm}");
+        await base.OnInitializedAsync();
+    }
+
+    private async Task DoStep(bool force = false)
+    {
+        switch (StepIndex)
+        {
+            case Step.Introduction:
+                await _profileModal!.Show();
+                break;
+            case Step.Parameters:
+                await ValidateInner();
+                if (_validationErrors.Count == 0)
+                    await Advance();
+                break;        
+        }
+    }
+
+    private string? GetError(object obj, string path)
+    {
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, path), out var value))
+            return value.Message;
+        else
+            return null;
+    }
+
+    private async Task ValidateInner()
+    {
+        var stacked = _defaultValues.Clone();
+        var values = Values;
+        stacked.MergeFrom(values);
+        var validationContext = ValidationContextFactory.CreateContext() with
+            {
+                OverrideObj = x =>
+                {
+                    if (x == stacked)
+                        return values;
+                    return null;
+                }
+            };
+        var helper = await stacked.Validate(validationContext);
+        _validationErrors = helper.ToDictionary();
+    }
+
+    private async Task<string?> Validate(object obj, string name)
+    {
+        await ValidateInner();
+        if (_validationErrors.TryGetValue(new ValidationKey(obj, name), out var value))
+            return value.Message; // not valid
+        else
+        {
+            StateHasChanged();
+            return null;
+        }
+    }
+
+    private async Task Advance(Step? advanceTo = default(Step?))
+    {
+        if (StepIndex == Step.Parameters)
+        {
+            if (_selectedProfile == null)
+                return;
+            var printingParameters = await TryGetParametersBeforePowderTuning(_selectedProfile);
+            if (printingParameters == null)
+                return;
+            if (PrintingGlobal.BackgroundTask.Status?.IsCompleted == false)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Cannot start job",
+                        BodyText = "Job is already in progress.",
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Silent = true, // user is interacting, no need for beeping
+                    });
+                return;
+            }
+            PrintingParamsProvider.PrintingParams = printingParameters;
+            NavigationManager.NavigateTo(PrintWizard.SelfPath);
+            return;
+        }
+        StepIndex++;
+    }
+
+    private async Task<PrintingParameters?> TryGetParametersBeforePowderTuning(PrintProfile profile)
+    {
+        var context = ValidationContextFactory.CreateContext();
+        var powerSettings = SettingsStorage.GetPowerSettingsDefaults();
+        powerSettings.MergeFrom(SettingsStorage.GetPowerSettings());
+        var powerSettingsValidation = await powerSettings.Validate(context);
+        if (!powerSettingsValidation!.IsValid)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Invalid settings",
+                    BodyText = "Printer power settings contain errors",
+                    Type = ToastMessageType.Error,
+                    Key = this,
+                    Silent = true, // user is interacting, no need for beeping
+                });
+            return default;
+        }
+        var values = _defaultValues.Clone();
+        values.MergeFrom(Values);
+        var job = new PowderTuningJob
+            {
+                Name = _powderTuningJobName,
+                PrintProfile = new PrintProfileReference(profile.Id),
+                ExtraPowderDepth = values.ExtraPowderDepth ?? 0,
+            };
+        var setup = await PrintingGlobal.CreateSetup(job, profile, powerSettings);
+        var options = Options.CurrentValue;
+        if (values.StartingTemperatureChamberBedLimit != null)
+        {
+            var limit = values.StartingTemperatureChamberBedLimit.Value;
+            if (setup.BedPreparationTemperatureTarget > limit)
+                setup.BedPreparationTemperatureTarget = limit;
+            if (setup.BeginLayerTemperatureTarget > limit)
+                setup.BeginLayerTemperatureTarget = limit;
+            if (setup.HeatingTargetPowder > limit)
+                setup.HeatingTargetPowder = limit;
+            if (setup.HeatingTargetPrint > limit)
+                setup.HeatingTargetPrint = limit;
+            if (setup.HeatingTargetPrintBed > limit)
+                setup.HeatingTargetPrintBed = limit;
+            if (setup.HeatingTargetPrintBed2 > limit)
+                setup.HeatingTargetPrintBed2 = limit;
+            if (setup.PrintCapTemperatureTarget > limit)
+                setup.PrintCapTemperatureTarget = limit;
+        }
+        if (values.StartingTemperatureSurfaceLimit != null)
+        {
+            var limit = values.StartingTemperatureSurfaceLimit.Value;
+            if (setup.SurfaceTarget > limit)
+                setup.SurfaceTarget = limit;
+            if (setup.SurfaceTarget2 > limit)
+                setup.SurfaceTarget2 = limit;
+        }
+        setup.NoGradualHeating = values.NoGradualHeating; 
+        setup.IsBedPreparationEnabled = false;
+        setup.IsPrintCapEnabled = false;
+        setup.PowderTuningDepth = job.ExtraPowderDepth * 1000;
+        setup.PowderTuningGridDim = options.GridDim;
+        setup.PowderTuningGridMargin = options.GridMargin;
+        return new PrintingParameters(
+            powerSettings,
+            profile,
+            [],
+            false,
+            setup,
+            job);
+    }
+
+    private async Task OnSetProfile(PrintProfile profile)
+    {
+        await _profileModal!.Close();
+        if (profile == null || string.IsNullOrWhiteSpace(_powderTuningJobName))
+            return;
+        _selectedProfile = profile;
+        await Advance();
+    }
+
+    private IInputValueTraits? GetTraits(StorageValue value)
+    {
+        return null;
+    }
+
+    private RenderFragment RenderValues(
+        (object profile, object profileDefault, string? path)[] pathsSource,
+        bool hideTopLine = true)
+    {
+        return builder =>
+        {
+            var paths = pathsSource.Where(x => x.path != null).ToArray()!;
+            var seq = 1;
+            var rows = (paths.Length + 1) / 2;
+            var col1 = 0;
+            var col2 = rows;
+            var nonNullPath = paths.First();
+
+            void RenderColumn(object profile, object profileDefault, string path, bool hasPath, bool isLeft)
+            {
+                var value = StorageValue.Create(profile, path);
+                var valueDefault = profileDefault != profile ? StorageValue.Create(profileDefault, path) : null;
+                var visibility = hasPath ? "" : "invisible";
+                IInputValueTraits? traits = GetTraits(value);
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-1 property-name {(isLeft ? "" : "pl-4")} {visibility}");
+                builder.AddContent(seq++, value.Name.Name);
+                builder.CloseElement();
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-4 property-value {(isLeft ? "pr-4" : "")} {visibility}");
+                builder.AddContent(seq++, value.RenderValueEditor(valueDefault, profile, validationError: GetError(profile, value.Path), cssScope: CssScope, traits: traits));
+                builder.CloseElement();
+            }
+
+            for (int row = 0; row < rows; row++)
+            {
+                var hasFirstPath = col1 < paths.Length;
+                var hasSecondPath = col2 < paths.Length;
+                var firstPath = (hasFirstPath ? paths[col1++] : nonNullPath);
+                var secondPath = (hasSecondPath ? paths[col2++] : nonNullPath);
+                builder.OpenElement(seq++, "tr");
+                builder.AddAttribute(seq++, CssScope);
+                if (row == 0 && hideTopLine)
+                    builder.AddAttribute(seq++, "class", "hide-top-line");
+                RenderColumn(firstPath.profile, firstPath.profileDefault, firstPath.path!, hasFirstPath, true);
+                RenderColumn(secondPath.profile, secondPath.profileDefault, secondPath.path!, hasSecondPath, false);
+                builder.CloseElement();
+            }
+        };
+    }
+}

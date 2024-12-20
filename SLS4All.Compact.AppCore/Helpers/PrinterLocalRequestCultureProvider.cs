@@ -6,6 +6,7 @@
 
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.Extensions.Options;
 using SLS4All.Compact.Printer;
 using System.Runtime.CompilerServices;
 
@@ -14,11 +15,14 @@ namespace SLS4All.Compact.Helpers
     public class PrinterLocalRequestCultureProvider : RequestCultureProvider
     {
         private static readonly ConditionalWeakTable<object, ProviderCultureResult?> s_results = new();
+        private readonly IOptionsMonitor<FrontendOptions> _options;
         private readonly IPrinterCultureManager _printerCultureManager;
 
         public PrinterLocalRequestCultureProvider(
+            IOptionsMonitor<FrontendOptions> options,
             IPrinterCultureManager printerCultureManager)
         {
+            _options = options;
             _printerCultureManager = printerCultureManager;
         }
 
@@ -33,8 +37,9 @@ namespace SLS4All.Compact.Helpers
             if (!request.QueryString.HasValue)
                 return result;
 
-            string? localStr = request.Query[FrontendHelpers.IsLocalSessionKey];
-            if (!FrontendHelpers.IsEnabled(localStr))
+            var options = _options.CurrentValue;
+            string? localSessionKey = request.Query[FrontendHelpers.LocalSessionKey];
+            if (string.IsNullOrEmpty(localSessionKey) || localSessionKey.Equals(options.LocalSessionKey) == false)
                 return result;
 
             var culture = await _printerCultureManager.GetPrinterCulture();

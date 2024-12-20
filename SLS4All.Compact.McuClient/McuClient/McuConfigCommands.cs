@@ -72,6 +72,29 @@ namespace SLS4All.Compact.McuClient
             _initializedMcu = mcu;
         }
 
+        private int FinishCrcInner(IMcu mcu, int? requestedMoveCount)
+        {
+            _configCommands.Insert(0, mcu.LookupCommand("allocate_oids count=%c").Bind(_nextOid));
+
+            var commands = _configCommands.Concat(_restartCommands).Concat(_initCommands).ToArray();
+            var commandsStr = string.Join(
+                "\n",
+                commands.Select(x => x.ToString())
+                    .Append($"requestedMoveCount={requestedMoveCount}"));
+            var crc = Math.Abs(BinaryPrimitives.ReadInt32LittleEndian(SHA1.HashData(MemoryMarshal.AsBytes(commandsStr.AsSpan()))));
+            return crc;
+        }
+
+        public async Task<int> GetCrc(ILogger? logger, IMcu mcu, int? requestedMoveCount, CancellationToken cancel)
+        {
+            await InitializeOnly(logger, mcu, cancel);
+
+            lock (_lock)
+            {
+                return FinishCrcInner(mcu, requestedMoveCount);
+            }
+        }
+
         public async Task<bool> TryInitializeAndSend(ILogger? logger, IMcu mcu, int priority, int? prevCrc, int? requestedMoveCount, CancellationToken cancel)
         {
             McuCommand[] config, restart, init;
@@ -81,14 +104,7 @@ namespace SLS4All.Compact.McuClient
 
             lock (_lock)
             {
-                _configCommands.Insert(0, mcu.LookupCommand("allocate_oids count=%c").Bind(_nextOid));
-
-                var commands = _configCommands.Concat(_restartCommands).Concat(_initCommands).ToArray();
-                var commandsStr = string.Join(
-                    "\n", 
-                    commands.Select(x => x.ToString())
-                        .Append($"requestedMoveCount={requestedMoveCount}"));
-                crc = Math.Abs(BinaryPrimitives.ReadInt32LittleEndian(SHA1.HashData(MemoryMarshal.AsBytes(commandsStr.AsSpan()))));
+                crc = FinishCrcInner(mcu, requestedMoveCount);
                 if (prevCrc != null)
                 {
                     if (prevCrc != crc)

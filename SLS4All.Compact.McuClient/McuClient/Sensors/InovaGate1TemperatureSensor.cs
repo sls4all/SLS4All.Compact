@@ -90,7 +90,6 @@ namespace SLS4All.Compact.McuClient.Sensors
 
             Mcu.RegisterConfigCommand(BuildConfig);
             manager.RegisterSetup(Mcu, OnSetup);
-
             manager.RunningCancel.Register(() =>
             {
                 lock (_shutdownReadSync)
@@ -172,6 +171,17 @@ namespace SLS4All.Compact.McuClient.Sensors
                 .Bind("min_value", CalcAdc(options.MinTemperature))
                 .Bind("max_value", CalcAdc(options.MaxTemperature));
             Mcu.Send(cmd, McuCommandPriority.Default, McuOccasion.Now);
+
+            if (Mcu.IsFake)
+            {
+                Mcu.Manager.RunPeriodicEvent(this, cancel =>
+                {
+                    var value = new McuTemperatureSensorData(Random.Shared.NextSingle() * 280 + 20, SystemTimestamp.Now);
+                    _lastValue = value;
+                    _readEventQueue.EnqueueValue(() => ReadEvent.Invoke(value, _manager.RunningCancel), null);
+                    return ValueTask.CompletedTask;
+                }, options.ReadPeriod, options.ReadPeriod);
+            }
             return ValueTask.CompletedTask;
         }
 

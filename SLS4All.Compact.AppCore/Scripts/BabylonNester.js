@@ -250,7 +250,7 @@ export class BabylonNester {
         var handleMaterial = new StandardMaterial("handleMaterial", this.scene);
         handleMaterial.backFaceCulling = backFaceCulling;
         handleMaterial.diffuseColor = color;
-        handleMaterial.bumpTexture = new Texture("/_content/SLS4All.Compact.AppCore/ui/img/logo-normal.png");
+        handleMaterial.bumpTexture = new Texture("_content/SLS4All.Compact.AppCore/ui/img/logo-normal.png");
         handleMaterial.freeze();
         return handleMaterial;
     }

@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.AccessControl;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -25,7 +26,7 @@ namespace SLS4All.Compact.McuClient
         String,
     }
 
-    public readonly record struct McuCommandArgument(McuCommandArgumentType Type, string Name, int Start, int Length);
+    public readonly record struct McuCommandArgumentInfo(McuCommandArgumentType Type, string Name, int Start, int Length);
     public readonly record struct McuCommandArgumentValue(long Int64, ArraySegment<byte> ArraySegment, ArenaBuffer<byte> ArenaBuffer)
     {
         public int Int32 => (int)Int64;
@@ -70,6 +71,27 @@ namespace SLS4All.Compact.McuClient
         }
     }
 
+    public readonly record struct McuCommandArgument(McuCommand Command, int Index)
+    {
+        public McuCommandArgumentValue Value
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                if (Command != null)
+                    return Command[Index];
+                else
+                    return default;
+            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                if (Command != null)
+                    Command[Index] = value;
+            }
+        }
+    }
+
     public sealed class McuCommand
     {
         private readonly static Regex s_argumentRegex = new Regex("(?<name>[a-zA-Z0-9_]+)=(?<format>%[-+ #]*(\\d+|\\*)?(.\\d+|.\\*)?(hh|h|l|ll|j|z|t|L|I|I32|I64|w)?[%csdioxXufFeEaAgGp]|%n)", RegexOptions.Compiled);
@@ -78,16 +100,17 @@ namespace SLS4All.Compact.McuClient
         private readonly string _commandName;
         private readonly string _messageFormat;
         private readonly McuCommandArgumentValue[] _argumentValues;
-        private readonly McuCommandArgument[] _arguments;
+        private readonly McuCommandArgumentInfo[] _argumentInfos;
         private double _sentTimestamp = default;
         private double _receiveTimestamp = default;
         private bool _isTimingCritical;
+        private bool _isMovement;
 
         public string MessageFormat => _messageFormat;
         public int CommandId => _commandId;
         public string CommandName => _commandName;
-        public int ArgumentCount => _arguments.Length;
-        public McuCommandArgument[] Arguments => _arguments;
+        public int ArgumentCount => _argumentInfos.Length;
+        public McuCommandArgumentInfo[] ArgumentInfos => _argumentInfos;
         public double SentTimestamp
         {
             get => _sentTimestamp;
@@ -97,6 +120,12 @@ namespace SLS4All.Compact.McuClient
         {
             get => _receiveTimestamp;
             set => _receiveTimestamp = value;
+        }
+
+        public McuCommandArgumentValue this[McuCommandArgument arg]
+        {
+            get => _argumentValues[arg.Index];
+            set => _argumentValues[arg.Index] = value;
         }
 
         public McuCommandArgumentValue this[int index]
@@ -111,6 +140,12 @@ namespace SLS4All.Compact.McuClient
             set => _argumentValues[GetArgumentIndex(name)] = value;
         }
 
+        public bool IsMovement
+        {
+            get => _isMovement;
+            set => _isMovement = value;
+        }
+
         public bool IsTimingCritical
         {
             get => _isTimingCritical;
@@ -122,13 +157,13 @@ namespace SLS4All.Compact.McuClient
         /// </remarks>
         public static McuCommand PlaceholderCommand { get; } = new McuCommand(-1, "placeolder", "placeolder", []);
 
-        private McuCommand(int commandId, string commandName, string messageFormat, McuCommandArgument[] arguments)
+        private McuCommand(int commandId, string commandName, string messageFormat, McuCommandArgumentInfo[] arguments)
         {
             _commandId = commandId;
             _commandName = commandName;
             _messageFormat = messageFormat;
             _argumentValues = arguments.Length == 0 ? Array.Empty<McuCommandArgumentValue>() : new McuCommandArgumentValue[arguments.Length];
-            _arguments = arguments;
+            _argumentInfos = arguments;
         }
 
         public McuCommandArgumentValue? TryGetArgument(string name)
@@ -159,12 +194,12 @@ namespace SLS4All.Compact.McuClient
             sb.Append(_messageFormat);
             if (_argumentValues.Length > 0)
             {
-                for (int i = _arguments.Length - 1; i >= 0; i--)
+                for (int i = _argumentInfos.Length - 1; i >= 0; i--)
                 {
                     var value = _argumentValues[i].ToString();
                     if (value != null)
                     {
-                        var arg = _arguments[i];
+                        var arg = _argumentInfos[i];
                         sb.Remove(arg.Start, arg.Length);
                         sb.Insert(arg.Start, value);
                     }
@@ -175,9 +210,9 @@ namespace SLS4All.Compact.McuClient
 
         public bool TryGetArgumentIndex(string name, out int index)
         {
-            for (int i = 0; i < _arguments.Length; i++)
+            for (int i = 0; i < _argumentInfos.Length; i++)
             {
-                var argument = _arguments[i];
+                var argument = _argumentInfos[i];
                 if (argument.Name == name)
                 {
                     index = i;
@@ -195,19 +230,22 @@ namespace SLS4All.Compact.McuClient
             return index;
         }
 
+        public McuCommandArgument GetArgument(string name)
+            => new McuCommandArgument(this, GetArgumentIndex(name));
+
         public static McuCommand Parse(int commandId, string messageFormat)
         {
             var percentCount = messageFormat.Count(x => x == '%');
             var formatMatches = s_argumentRegex.Matches(messageFormat);
             if (formatMatches.Count != percentCount)
                 throw new FormatException($"Invalid format specifiers for command: {messageFormat}");
-            var list = new List<McuCommandArgument>();
+            var list = new List<McuCommandArgumentInfo>();
             foreach (Match match in formatMatches)
             {
                 var name = match.Groups["name"].Value;
                 var format = match.Groups["format"];
                 var type = format.Value.Contains('s') ? McuCommandArgumentType.String : McuCommandArgumentType.Number;
-                list.Add(new McuCommandArgument(type, name, format.Index, format.Length));
+                list.Add(new McuCommandArgumentInfo(type, name, format.Index, format.Length));
             }
 
             var parts = messageFormat.Split(' ');
@@ -218,16 +256,17 @@ namespace SLS4All.Compact.McuClient
 
         public McuCommand Clone()
         {
-            var clone = new McuCommand(_commandId, _commandName, _messageFormat, _arguments);
+            var clone = new McuCommand(_commandId, _commandName, _messageFormat, _argumentInfos);
             for (int i = 0; i < _argumentValues.Length; i++)
                 clone._argumentValues[i] = _argumentValues[i].CloneIncludingBuffer();
             clone._isTimingCritical = _isTimingCritical;
+            clone._isMovement = _isMovement;
             return clone;
         }
 
         public McuCommand Bind(params long[] values)
         {
-            if (values.Length != _arguments.Length)
+            if (values.Length != _argumentInfos.Length)
                 throw new ArgumentException($"Number of arguments do not match");
             for (int i = 0; i < values.Length; i++)
                 _argumentValues[i] = values[i];
@@ -253,6 +292,19 @@ namespace SLS4All.Compact.McuClient
             var index = GetArgumentIndex(name);
             _argumentValues[index] = new McuCommandArgumentValue(0, default, value);
             return this;
+        }
+
+        public void Cleanup()
+        {
+            for (int i = 0; i < ArgumentCount; i++)
+            {
+                var arg = this[i];
+                if (arg.ArenaBuffer.Arena != null)
+                    arg.ArenaBuffer.DecrementReference();
+                this[i] = default;
+            }
+            IsMovement = false;
+            IsTimingCritical = false;
         }
     }
 }

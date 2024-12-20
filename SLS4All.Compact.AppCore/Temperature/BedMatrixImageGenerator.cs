@@ -41,7 +41,7 @@ namespace SLS4All.Compact.Temperature
         public float PathDashLength { get; set; } = 20;
     }
 
-    public sealed class BedMatrixImageGenerator : LazyImageGenerator
+    public sealed class BedMatrixImageGenerator : LazyDataGenerator<MimeData>
     {
         public const string ImageMime = "image/jpeg";
         private readonly ILogger _logger;
@@ -112,7 +112,7 @@ namespace SLS4All.Compact.Temperature
             return avg;
         }
 
-        protected override async Task RunGrabberOverride(CancellationToken cancel)
+        protected override async Task RunGeneratorOverride(CancellationToken cancel)
         {
             var queue = new PrimitiveDeque<(TimeSpan elapsed, float[] matrix)>(1);
             var stopwatch = Stopwatch.StartNew();
@@ -129,7 +129,6 @@ namespace SLS4All.Compact.Temperature
                 return ValueTask.CompletedTask;
             }
             var stream = new MemoryStream();
-            var chain = new TaskQueue();
             var options = _options.CurrentValue;
             try
             {
@@ -147,7 +146,7 @@ namespace SLS4All.Compact.Temperature
                         }
                         stream.SetLength(0);
                         WriteImage(_cropped, avg, _camera.Width, _camera.Height, stream);
-                        await ImageCaptured.Invoke(new MimeData(ImageMime, stream.AsMemory()), cancel);
+                        await OnCaptured(new MimeData(ImageMime, stream.AsMemory()), cancel);
                     }
                 }
                 while (await timer.WaitForNextTickAsync(cancel));
@@ -234,8 +233,8 @@ namespace SLS4All.Compact.Temperature
                     paint.TextAlign = SKTextAlign.Right;
                     _bitmap.ScalePixels(_bitmapScaled, SKFilterQuality.Low); // NOTE: low means bilinear, which is good enough
 
-                    using var pathEffect1 = SKPathEffect.CreateDash(new[] { options.PathDashLength, options.PathDashLength }, 0f);
-                    using var pathEffect2 = SKPathEffect.CreateDash(new[] { options.PathDashLength, options.PathDashLength }, options.PathDashLength);
+                    using var pathEffect1 = SKPathEffect.CreateDash([options.PathDashLength, options.PathDashLength], 0f);
+                    using var pathEffect2 = SKPathEffect.CreateDash([options.PathDashLength, options.PathDashLength], options.PathDashLength);
                     using var boxPaint1 = new SKPaint { Color = SKColors.White, StrokeWidth = 1f, IsStroke = true, IsAntialias = true };
                     using var boxPaint2 = new SKPaint { Color = SKColors.Black, StrokeWidth = 1f, IsStroke = true, IsAntialias = true };
                     boxPaint1.PathEffect = pathEffect1;
@@ -244,7 +243,7 @@ namespace SLS4All.Compact.Temperature
                     var mainBox = _camera.MainBox;
                     foreach (var box in boxes)
                     {
-                        var box2 = mainBox.OffsetInTopLeft(box.Box);
+                        var box2 = mainBox.OffsetInTopLeft(box.Rectangle);
                         canvas.DrawRect(box2.MinX * scale, box2.MinY * scale, (box2.MaxX - box2.MinX + 1) * scale - 1, (box2.MaxY - box2.MinY + 1) * scale - 1, boxPaint1);
                         canvas.DrawRect(box2.MinX * scale, box2.MinY * scale, (box2.MaxX - box2.MinX + 1) * scale - 1, (box2.MaxY - box2.MinY + 1) * scale - 1, boxPaint2);
                     }
@@ -311,5 +310,14 @@ namespace SLS4All.Compact.Temperature
             _typeface.Dispose();
             _font.Dispose();
         }
+
+        protected override MimeData RentCopy(MimeData data)
+            => data.RentCopy();
+
+        protected override void Return(MimeData data)
+            => data.Return();
+
+        protected override bool IsEmpty(MimeData data)
+            => data.IsEmpty;
     }
 }

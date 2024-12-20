@@ -57,6 +57,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 return count;
             }
         }
+        public override bool IsFake => false;
 
         public PipedMcuLocal(
             ILoggerFactory loggerFactory, 
@@ -210,6 +211,9 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                     break;
                 case MessageType.SendCancelManyCommand:
                     OnSendCancelManyCommand(body);
+                    break;
+                case MessageType.MovementCancelCommand:
+                    OnMovementCancelCommand(body, streamToDevice);
                     break;
                 case MessageType.TryReplaceCommand:
                     OnTryReplaceCommand(body, commandFactory, streamToDevice);
@@ -387,13 +391,23 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             SendCancel(ids);
         }
 
+        private void OnMovementCancelCommand(Span<byte> body, Stream streamToDevice)
+        {
+            var timestamp = MovementCancel();
+            Span<byte> response = stackalloc byte[Measure(timestamp)];
+            var responseSpan = response;
+            Write(ref responseSpan, timestamp);
+            streamToDevice.Write(response);
+        }
+
         private void OnTryReplaceCommand(Span<byte> body, PipedCommandFactory commandFactory, Stream streamToDevice)
         {
             var id = ReadMcuSendResult(ref body);
+            var occasion = ReadMcuOccasion(ref body);
             var command = ReadCommand(ref body, null, commandFactory);
             try
             {
-                var result = TryReplace(id, command);
+                var result = TryReplace(id, occasion, command);
                 streamToDevice.WriteByte(result ? (byte)1 : (byte)0);
             }
             finally

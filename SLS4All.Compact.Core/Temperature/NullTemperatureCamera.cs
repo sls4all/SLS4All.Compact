@@ -5,6 +5,7 @@
 // file located in the root directory of the repository.
 
 ﻿using SLS4All.Compact.Diagnostics;
+using SLS4All.Compact.Graphics;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Generic;
@@ -28,7 +29,7 @@ namespace SLS4All.Compact.Temperature
 
         public AsyncEvent CurrentPixelsChanged { get; } = new();
 
-        public TemperatureBox MainBox => default;
+        public BoundaryRectangle MainBox => default;
 
         public TemperatureMatrix GetBedMatrix()
             => new TemperatureMatrix(SystemTimestamp.Now, 0, 0, CurrentPixels);

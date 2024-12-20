@@ -259,14 +259,14 @@ namespace SLS4All.Compact.Nesting
         }
 
         public virtual async Task SyncInstances(
-            IEnumerable<(string fileHash, Func<CancellationToken, Task<Stream>> streamFactory, int count, float scale, float inset, object? userData, NestedRotationConstraints constraintsAroundZ, NestingTransformState? transformState)> instances,
+            IEnumerable<(string fileHash, Func<CancellationToken, Task<Stream>> streamFactory, int? nestingPriority, int count, float scale, float inset, object? userData, NestedRotationConstraints constraintsAroundZ, NestingTransformState? transformState)> instances,
             Func<string[], Exception, Task> loadError,
             bool removeUnreferencedMeshes,
             bool doNotKeepTransform,
             bool stateChanged = true,
             CancellationToken cancel = default)
         {
-            var differences = new Dictionary<string, (Func<CancellationToken, Task<Stream>>? streamFactory, int requestedCount, int presentCount, List<(float scale, float inset, NestedRotationConstraints constraintsAroundZ, NestingTransformState? transformState, object? userData)> data)>();
+            var differences = new Dictionary<string, (Func<CancellationToken, Task<Stream>>? streamFactory, int requestedCount, int presentCount, List<(float scale, float inset, NestedRotationConstraints constraintsAroundZ, NestingTransformState? transformState, object? userData, int? nestingPriority)> data)>();
             var removedInstances = new List<long>();
             foreach (var group in instances.GroupBy(x => x.fileHash))
             {
@@ -275,7 +275,7 @@ namespace SLS4All.Compact.Nesting
                     first.streamFactory,
                     group.Sum(x => x.count),
                     0,
-                    group.SelectMany(x => Enumerable.Repeat((x.scale, x.inset, x.constraintsAroundZ, x.transformState, x.userData), x.count)).ToList())
+                    group.SelectMany(x => Enumerable.Repeat((x.scale, x.inset, x.constraintsAroundZ, x.transformState, x.userData, x.nestingPriority), x.count)).ToList())
                 );
             }
             lock (_locker)
@@ -296,6 +296,7 @@ namespace SLS4All.Compact.Nesting
                             tuple.First.ConstraintsAroundZ = tuple.Second.constraintsAroundZ;
                             tuple.First.Inset = tuple.Second.inset;
                             tuple.First.UserData = tuple.Second.userData;
+                            tuple.First.NestingPriority = tuple.Second.nestingPriority;
                         }
                         existing.data.RemoveRange(0, Math.Min(presentCount, existing.data.Count));
                         differences[presentGroup.Key] = existing;
@@ -320,7 +321,7 @@ namespace SLS4All.Compact.Nesting
             var loadGroups = differences
                 .Where(x => x.Value.requestedCount > x.Value.presentCount)
                 .SelectMany(x => x.Value.data, (item, diffItem) => (fileHash: item.Key, diff: item.Value, diffItem))
-                .GroupBy(x => (x.fileHash, x.diffItem.scale, x.diffItem.constraintsAroundZ, x.diffItem.inset, x.diffItem.transformState, userData: ValueByReference.Create(x.diffItem.userData)));
+                .GroupBy(x => (x.fileHash, x.diffItem.scale, x.diffItem.constraintsAroundZ, x.diffItem.inset, x.diffItem.transformState, userData: ValueByReference.Create(x.diffItem.userData), x.diffItem.nestingPriority));
             var fails = new ConcurrentDictionary<string, bool>();
             try
             {
@@ -334,6 +335,7 @@ namespace SLS4All.Compact.Nesting
                                 meshGroup.Key,
                                 group.First().diff.streamFactory!,
                                 group.Count(),
+                                group.Key.nestingPriority,
                                 group.Key.scale,
                                 group.Key.constraintsAroundZ,
                                 group.Key.inset,
@@ -439,6 +441,7 @@ namespace SLS4All.Compact.Nesting
         public virtual async Task LoadInstances(
             Stream stream,
             int quanity,
+            int? nestingPriority,
             float scale,
             NestedRotationConstraints constraintsAroundZ,
             float inset,
@@ -460,6 +463,7 @@ namespace SLS4All.Compact.Nesting
                 fileHash,
                 cancel => Task.FromResult<Stream>(new MemoryStream(ms.GetBuffer(), 0, (int)ms.Length, false)),
                 quanity,
+                nestingPriority,
                 scale,
                 constraintsAroundZ,
                 inset,
@@ -474,6 +478,7 @@ namespace SLS4All.Compact.Nesting
             string fileHash,
             Func<CancellationToken, Task<Stream>> streamFactory,
             int quantity,
+            int? nestingPriority,
             float scale,
             NestedRotationConstraints constraintsAroundZ,
             float inset,
@@ -516,6 +521,7 @@ namespace SLS4All.Compact.Nesting
                         UserData = userData,
                         ConstraintsAroundZ = constraintsAroundZ,
                         Inset = inset,
+                        NestingPriority = nestingPriority,
                     };
                     _instances.Add(working.Index, working);
                 }
@@ -582,6 +588,7 @@ namespace SLS4All.Compact.Nesting
                         nested.MeshTransform = Matrix4x4.CreateScale(transformState.Scale);
                         nested.ConstraintsAroundZ = working.ConstraintsAroundZ;
                         nested.Inset = working.Inset;
+                        nested.NestingPriority = working.NestingPriority;
                         map.Add(working, nested);
                     }
                 }

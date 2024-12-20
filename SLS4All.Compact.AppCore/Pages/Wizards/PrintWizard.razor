@@ -9,6 +9,7 @@
 @using SLS4All.Compact.Nesting
 @using SLS4All.Compact.Power
 @using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.PrintSessions
 @using SLS4All.Compact.Printer
 @using SLS4All.Compact.Printing
 @using SLS4All.Compact.Processing.Meshes
@@ -45,7 +46,7 @@
     var dryPrintEnabled = _params?.Job?.DryPrintEnabled == true;
 }
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
 
 <CancelModal @ref="_halogenCheckModal" ShowSpinner="false" ExternalCssScope="@CssScope">
     <Body>
@@ -325,7 +326,7 @@
                             <tr>
                                 <th scope="row">Bed leveling</th>
                                 <td class="text-right"><b>@(Math.Ceiling(value.Value))@value.Unit</b></td>
-                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, true)) @volume.Unit</b> of powder</td>
+                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, zeroes: true)) @volume.Unit</b> of powder</td>
                             </tr>
                         }
                         @if (_volumeTotals!.BedPreparationAndCap.Depth > 0)
@@ -335,7 +336,7 @@
                             <tr>
                                 <th scope="row">Bed preparation &amp; cap</th>
                                 <td class="text-right"><b>@(Math.Ceiling(value.Value))@value.Unit</b></td>
-                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, true)) liters</b> of powder</td>
+                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, zeroes: true)) liters</b> of powder</td>
                             </tr>
                         }
                         @if (_volumeTotals!.Job.Depth > 0)
@@ -345,13 +346,13 @@
                             <tr>
                                 <th scope="row">Job</th>
                                 <td class="text-right"><b>@(Math.Ceiling(value.Value))@value.Unit</b></td>
-                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, true)) @volume.Unit</b> of powder</td>
+                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, zeroes: true)) @volume.Unit</b> of powder</td>
                             </tr>
                         }
                         <tr class="powder-total-row">
                             <th scope="row">Total</th>
                             <td class="text-right"><b>@(Math.Ceiling(totalValue.Value))@totalValue.Unit</b></td>
-                            <td class="text-right">corresponds to <b>@(totalVolume.Value.RoundToDecimal(1, true)) @totalVolume.Unit</b> of powder</td>
+                            <td class="text-right">corresponds to <b>@(totalVolume.Value.RoundToDecimal(1, zeroes: true)) @totalVolume.Unit</b> of powder</td>
                         </tr>
                     </tbody>
                 </table>
@@ -363,7 +364,11 @@
                 var reduceBy = GetUnits(_volumeTotals!.ReduceDepth!.Value.by, Units.Millimeter);
                 var reduceMax = GetUnits(_volumeTotals!.ReduceDepth!.Value.max, Units.Millimeter);
                 <p>
-                    Please reduce the <i>Print job</i> depth by at least <b>@(Math.Ceiling(reduceBy.Value))@reduceBy.Unit</b> (maximum depth <b>@(Math.Floor(reduceMax.Value))@reduceMax.Unit</b>).
+                    Please reduce the <i>Print job</i> depth by at least <b>@(Math.Ceiling(reduceBy.Value))@reduceBy.Unit</b> 
+                    @if (reduceMax.Value > 0)
+                    {
+                        <text>(maximum depth <b>@(Math.Floor(reduceMax.Value))@reduceMax.Unit</b>).</text>
+                    }
                     Please note that the <i>Job volume</i> includes extra powder required by sintered powder density (<i>Sintered factor</i> in profile).
                 </p>
                 <hr class="my-3">
@@ -435,7 +440,7 @@
                 <hr class="my-3">
                 <p>
                     Please fill the <i>powder chamber</i> with total <b>@(Math.Ceiling(totalValue.Value))@totalValue.Unit</b> 
-                    that corresponds to <b>@(totalVolume.Value.RoundToDecimal(1, true)) @totalVolume.Unit</b> of powder. 
+                    that corresponds to <b>@(totalVolume.Value.RoundToDecimal(1, zeroes: true)) @totalVolume.Unit</b> of powder. 
                     Leave the <i>print chamber</i> empty. Powder should be filled to the same level as the top of the <i>powder mantinels</i>.
                     Fill in @_addPowderIterationCount total steps by clicking <i>Add Powder</i> button below repeatedly. 
                     After each click and fill of corresponding part of the powder, please use <i>the smoothing tool</i> to flatten and compact the power.
@@ -449,7 +454,7 @@
                             <tr>
                                 <th scope="row">Bed leveling</th>
                                 <td class="text-right"><b>@(Math.Ceiling(value.Value))@value.Unit</b></td>
-                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, true)) @volume.Unit</b> of powder</td>
+                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, zeroes: true)) @volume.Unit</b> of powder</td>
                             </tr>
                         }
                         @if (_volumeTotals!.BedPreparationAndCap.Depth > 0)
@@ -459,7 +464,7 @@
                             <tr>
                                 <th scope="row">Bed preparation &amp; cap</th>
                                 <td class="text-right"><b>@(Math.Ceiling(value.Value))@value.Unit</b></td>
-                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, true)) liters</b> of powder</td>
+                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, zeroes: true)) liters</b> of powder</td>
                             </tr>
                         }
                         @if (_volumeTotals!.Job.Depth > 0)
@@ -469,13 +474,13 @@
                             <tr>
                                 <th scope="row">Job</th>
                                 <td class="text-right"><b>@(Math.Ceiling(value.Value))@value.Unit</b></td>
-                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, true)) @volume.Unit</b> of powder</td>
+                                <td class="text-right">corresponds to <b>@(volume.Value.RoundToDecimal(1, zeroes: true)) @volume.Unit</b> of powder</td>
                             </tr>
                         }
                         <tr class="powder-total-row">
                             <th scope="row">Total</th>
                             <td class="text-right"><b>@(Math.Ceiling(totalValue.Value))@totalValue.Unit</b></td>
-                            <td class="text-right">corresponds to <b>@(totalVolume.Value.RoundToDecimal(1, true)) @totalVolume.Unit</b> of powder</td>
+                            <td class="text-right">corresponds to <b>@(totalVolume.Value.RoundToDecimal(1, zeroes: true)) @totalVolume.Unit</b> of powder</td>
                         </tr>
                     </tbody>
                 </table>
@@ -634,7 +639,7 @@
                     <p>
                         <div class="form-check checkbox-slider--b-flat">
                             <label>
-                                <input type="checkbox" @bind="_disableLayerAdditiveMovement"><span>Disable layer additive movement</span>
+                                <input type="checkbox" @bind="_disableLayerAdditiveMovement"><span class="ml-4">Disable layer additive movement</span>
                             </label>
                         </div>
                     </p>
@@ -670,7 +675,7 @@
         ReadyToPrint,
     }
 
-    public const string SelfPath = "/wizard/print";
+    public const string SelfPath = "wizard/print";
     private const string CssScope = "b-print-wizard";
 
     private readonly object _cameraViewKey = new();
@@ -691,8 +696,8 @@
     private PrintingParameters? _params;
     private PowderVolumeTotals? _volumeTotals;
     private bool _completedPreview;
-    private double _sinteredVolume;
-    private double _sinteredVolumeMax;
+    private double? _sinteredVolume;
+    private double? _sinteredVolumeMax;
     private bool _surfaceHeaterOverride;
     private bool _showDebugLayerOptions;
     private bool _disableLayerAdditiveMovement;
@@ -713,7 +718,7 @@
         }
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (MainLayout!.IsDeveloperMode)
         {
@@ -733,7 +738,6 @@
             if (_params?.Job is AnalyseJob ||
                 _params?.Job.DryPrintEnabled == true)
             {
-                StepIndex = Step.Homing;
                 var setup = new PowderVolumeSetup
                     {
                         LayerThickness = (double)_params.Profile.LayerThickness!.Value,
@@ -750,16 +754,21 @@
                     : null;
                 _showDebugLayerOptions = _showDebugPrintOptions;
                 _disableLayerAdditiveMovement = _params.Setup.DisableLayerAdditiveMovement;
-                StepIndex = Step.Preview;
 
                 // calc "some initial" volume totals, that will hopefully be overwritten when user completes preview
                 _sinteredVolume = _sinteredVolumeMax = (double?)_params.Job.NestingState.SinteredVolume ?? 0; // NOTE: exact value will be known after preview
                 CalcPrintJobVolumeTotals();
             }
+            Step startStep;
+            if (_params?.Job.PreviewEnabled is null or true)
+                startStep = Step.Preview;
+            else
+                startStep = Step.VolumeCheck;
+            await Advance(startStep);
         }
 
         SlicingPreview.BackgroundTask.StateChanged.AddHandler(TryInvokeStateHasChangedAsync);
-        base.OnInitialized();
+        await base.OnInitializedAsync();
     }
 
     private async Task DoStep(bool force = false)
@@ -900,17 +909,20 @@
             StepIndex++;
         if (StepIndex == Step.VolumeCheck)
         {
-            if (_params != null && _preview != null && _preview.IsDone)
+            if (_params != null)
             {
-                _completedPreview = true;
-                _sinteredVolume = _preview.LayerWeights!
-                .Sum(x => x.FillTotalRelative)
-                    * Projection.Size.x * Projection.Size.y
-                    * ((double)_params.Profile.LayerThickness!.Value / 1_000);
-                _sinteredVolumeMax = _preview.LayerWeights!
-                .Sum(x => x.FillMaxRelative)
-                    * Projection.Size.x * Projection.Size.y
-                    * ((double)_params.Profile.LayerThickness!.Value / 1_000);
+                if (_preview != null && _preview.IsDone)
+                {
+                    _completedPreview = true;
+                    _sinteredVolume = _preview.LayerWeights!
+                        .Sum(x => x.FillTotalRelative)
+                            * Projection.Size.x * Projection.Size.y
+                            * ((double)_params.Profile.LayerThickness!.Value / 1_000);
+                    _sinteredVolumeMax = _preview.LayerWeights!
+                        .Sum(x => x.FillMaxRelative)
+                            * Projection.Size.x * Projection.Size.y
+                            * ((double)_params.Profile.LayerThickness!.Value / 1_000);
+                }
                 CalcPrintJobVolumeTotals();
                 if (_volumeTotals!.ReduceDepth == null) // no too large volume
                     StepIndex++;
@@ -935,13 +947,13 @@
         Debug.Assert(_params != null);
         var setup = new PowderVolumeSetup
                 {
-                    LayerThickness = (double)_params.Profile.LayerThickness!.Value,
-                    BedPreparationThickness = (double)_params.Profile.BedPreparationThickness!.Value,
-                    PrintCapThickness = (double)_params.Profile.PrintCapThickness!.Value,
-                    JobSinteredVolume = _sinteredVolumeMax, // NOTE: use "max" to prevent underdosing
+                    LayerThickness = (double)_params.Setup.LayerThickness,
+                    BedPreparationThickness = _params.Setup.IsBedPreparationEnabled ? (double)_params.Setup.BedPreparationThickness : 0,
+                    PrintCapThickness = _params.Setup.IsPrintCapEnabled ? (double)_params.Setup.PrintCapThickness : 0,
+                    JobSinteredVolume = _sinteredVolumeMax ?? (double?)_params.Job.NestingState.SinteredVolume ?? 0, // NOTE: use "max" to prevent underdosing
                     JobChamberDepth = (double)_params.Job.NestingState.ChamberDepth!.Value,
-                    ChamberDepth = (double)_params.Profile.PrintableDepth!.Value,
-                    SinteredVolumeFactor = (double)_params.Profile.SinteredVolumeFactor!.Value,
+                    ChamberDepth = (double)_params.Setup.PrintableDepth,
+                    SinteredVolumeFactor = (double)_params.Setup.SinteredVolumeFactor,
                 };
         _volumeTotals = LayerClient.GetPowderVolume(setup);
     }
@@ -977,8 +989,8 @@
                 {
                     var printDepth = volumeTotals?.Total.Depth * (volumeTotals?.PrintChamberArea / volumeTotals?.PowderChamberArea);
                     detail.CompletedPreview = _completedPreview;
-                    detail.SinteredVolume = (decimal)_sinteredVolume;
-                    detail.SinteredVolumeMax = (decimal)_sinteredVolumeMax;
+                    detail.SinteredVolume = (decimal)(_sinteredVolume ?? 0);
+                    detail.SinteredVolumeMax = (decimal)(_sinteredVolumeMax ?? 0);
                     detail.LayerThickness = printingParams.Profile.LayerThickness!.Value;
                     detail.BedPreparationThickness = printingParams.Profile.BedPreparationThickness!.Value;
                     detail.PrintCapThickness = printingParams.Profile.PrintCapThickness!.Value;
@@ -996,31 +1008,7 @@
             {
                 try
                 {
-                    PrintingServiceLayerStats? newStats = null;
-                    if (printingParams.Job is AnalyseJob)
-                    {
-                        await PrintingGlobal.AnalyseHeating(
-                            setup,
-                            printingParams.Job.Name,
-                            cancel);
-                    }
-                    else
-                    {
-                        await PrintingGlobal.PrintLayers(
-                            null,
-                            printingParams.Instances,
-                            _preview?.IsDone == true ? _preview.LayerWeights : null,
-                            setup,
-                            printingParams.Job.Name,
-                            oldStats,
-                            CleanupBeforePrint,
-                            async stats =>
-                            {
-                                newStats = stats;
-                                await TrySaveStatsToProfile(printingParams, newStats, printingParams.Profile.Id);
-                            },
-                            cancel);
-                    }
+                    var newStats = await RunJob(oldStats, setup, printingParams, cancel);
                     await session.Succeeded(
                         PrintingGlobal.SoftCancelMode == PrintingSoftCancelMode.NotSet
                             ? PrintSessionResult.Succeeded
@@ -1050,7 +1038,7 @@
                     if (cancel.IsCancellationRequested)
                     {
                         await session.Cancelled(default);
-                        
+
                         ToastProvider.Show(new ToastMessage
                             {
                                 Type = ToastMessageType.Warning,
@@ -1109,7 +1097,8 @@
                                         }
                                         <br />
                                         Click here to eject the cake...
-                                    </text>,
+                                    </text>
+    ,
                                     TargetUri = $"{EjectWizard.SelfPath}",
                                     Exception = ex,
                                     Silent = false, // async, beep
@@ -1120,6 +1109,43 @@
             }
         }));
         NavigationManager.NavigateTo(PrinterStatus.SelfPath);
+    }
+
+    protected virtual async Task<PrintingServiceLayerStats?> RunJob(PrintingServiceLayerStats? oldStats, PrintSetup setup, PrintingParameters printingParams, CancellationToken cancel)
+    {
+        PrintingServiceLayerStats? newStats = null;
+        if (printingParams.Job is AnalyseJob)
+        {
+            await PrintingGlobal.AnalyseHeating(
+                setup,
+                printingParams.Job.Name,
+                cancel);
+        }
+        else if (printingParams.Job is PowderTuningJob)
+        {
+            await PrintingGlobal.PowderTuning(
+                setup,
+                printingParams.Job.Name,
+                cancel);
+        }
+        else
+        {
+            await PrintingGlobal.PrintLayers(
+                null,
+                printingParams.Instances,
+                _preview?.IsDone == true ? _preview.LayerWeights : null,
+                setup,
+                printingParams.Job.Name,
+                oldStats,
+                CleanupBeforePrint,
+                async stats =>
+                {
+                    newStats = stats;
+                    await TrySaveStatsToProfile(printingParams, newStats, printingParams.Profile.Id);
+                },
+                cancel);
+        }
+        return newStats;
     }
 
     protected virtual async Task CleanupBeforePrint(CancellationToken cancel)
@@ -1209,7 +1235,6 @@
         ResetStatus();
         var setup = new FinishBedLevelingSetup
         {
-            DryPrintEnabled = _params?.Job?.DryPrintEnabled ?? false,
         };
         return await ProgressModal.Execute(
             async cancel =>

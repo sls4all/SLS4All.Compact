@@ -127,6 +127,14 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                     return PipedMcuCodec.ReadMcuSendResult(ref buffer);
                 }
 
+                public McuTimestamp ReadMcuTimestamp(IMcu mcu)
+                {
+                    var length = Measure(default(McuTimestamp));
+                    Span<byte> buffer = stackalloc byte[length];
+                    _stream.ReadExactly(buffer);
+                    return PipedMcuCodec.ReadMcuTimestamp(mcu, ref buffer);
+                }
+
                 public long ReadInt64()
                 {
                     Span<byte> buffer = stackalloc byte[8];
@@ -185,6 +193,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 
         public override bool HasTimingCriticalCommandsScheduled => GetHasTimingCriticalCommandsScheduled();
         public override Exception? CurrentError => GetCurrentError();
+        public override bool IsFake => false;
 
         public PipedMcuProxy(
             ILoggerFactory loggerFactory,
@@ -257,14 +266,15 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             return helper.ReadSendResult();
         }
 
-        public override bool TryReplace(McuSendResult id, McuCommand command)
+        public override bool TryReplace(McuSendResult id, McuOccasion occasion, McuCommand command)
         {
             using var helper = SendHelper();
-            var length = Measure(id) + Measure(command);
+            var length = Measure(id) + Measure(occasion) + Measure(command);
             Span<byte> write = stackalloc byte[MinMessageLength + length];
             var writeSpan = write;
             Initialize(ref writeSpan, MessageType.TryReplaceCommand);
             Write(ref writeSpan, id);
+            Write(ref writeSpan, occasion);
             Write(ref writeSpan, command);
             var message = Finish(write, writeSpan);
             helper.Send(message);
@@ -296,6 +306,17 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 Write(ref writeSpan, ids[i]);
             var message = Finish(write, writeSpan);
             helper.Send(message);
+        }
+
+        public override McuTimestamp MovementCancel()
+        {
+            using var helper = SendHelper();
+            Span<byte> write = stackalloc byte[MinMessageLength];
+            var writeSpan = write;
+            Initialize(ref writeSpan, MessageType.MovementCancelCommand);
+            var message = Finish(write, writeSpan);
+            helper.Send(message);
+            return helper.ReadMcuTimestamp(this);
         }
 
         private long SendWaitInner(McuCommand command, int priority, McuOccasion clock, McuSendResult? cancelFirst = null)
@@ -513,7 +534,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 
         protected override async Task<bool> SendConfigCommands(CancellationToken cancel)
         {
-            await SendConfigCommands(_configCommands, cancel);
+            await SendConfigCommands(_configCommands, ignoreCrc: false, cancel);
             return true; // true -> set WasReady
         }
 

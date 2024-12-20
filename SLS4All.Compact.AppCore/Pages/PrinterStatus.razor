@@ -27,7 +27,7 @@
 @inject ICodePlotter Plotter
 @inject IPrinterSafetySessionManager SafetySessionManager
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-printer-status.png" IsFullPage="true" />
 
 <ModalWrapper @ref="_stopModal" class="fade app-modal stop-modal" Context="modal" ExternalCssScope="@CssScope">
     <div class="modal-content">
@@ -44,14 +44,20 @@
                 <tbody>
                     @if (PrintingGlobal.SoftCancelMode == PrintingSoftCancelMode.NotSet)
                     {
-                        <tr>
-                            <td><button class="btn btn-danger" @onclick="() => OnStopSoftConfirm(PrintingSoftCancelMode.CapAndCool)">Cap &amp; cool!</button></td>
-                            <td>Ends the current layer and goes to the <i>Print cap</i> and <i>Cooling procedure</i></td>
-                        </tr>
-                        <tr>
-                            <td><button class="btn btn-danger" @onclick="() => OnStopSoftConfirm(PrintingSoftCancelMode.CoolNow)">Cool now!</button></td>
-                            <td>Ends the current layer and goes to <i>Cooling procedure</i></td>
-                        </tr>
+                        if (PrintingGlobal.SoftCancelAllowedModes.Contains(PrintingSoftCancelMode.CapAndCool))
+                        {
+                            <tr>
+                                <td><button class="btn btn-danger" @onclick="() => OnStopSoftConfirm(PrintingSoftCancelMode.CapAndCool)">Cap &amp; cool!</button></td>
+                                <td>Ends the current layer and goes to the <i>Print cap</i> and <i>Cooling procedure</i></td>
+                            </tr>
+                        }
+                        if (PrintingGlobal.SoftCancelAllowedModes.Contains(PrintingSoftCancelMode.CoolNow))
+                        {
+                            <tr>
+                                <td><button class="btn btn-danger" @onclick="() => OnStopSoftConfirm(PrintingSoftCancelMode.CoolNow)">Cool now!</button></td>
+                                <td>Ends the current layer and goes to <i>Cooling procedure</i></td>
+                            </tr>
+                        }
                     }
                     <tr>
                         <td><button class="btn btn-danger" @onclick="OnStopHardConfirm">Stop immediately!</button></td>
@@ -59,7 +65,7 @@
                     </tr>
                     <tr>
                         <td><button class="btn btn-secondary" @onclick="() => modal.Close()">Continue printing</button></td>
-                        <td>Goes back to <i>status page</i></td>
+                        <td>Goes back to the <i>status page</i></td>
                     </tr>
                 </tbody>
             </table>
@@ -85,9 +91,9 @@
     var softStopMode = isActive ? PrintingGlobal.SoftCancelMode : PrintingSoftCancelMode.NotSet;
     var progressStatus = slicingStatus?.ProgressStatus as PrintingStatus;
     var canEjectCake = !isActive && PrintSessionStorage.CanEjectCake;
-    var progress = progressStatus?.Estimate.Incomplete == false ? progressStatus.Estimate.Progress : 0;
+    var progress = Math.Clamp(progressStatus?.Estimate.Incomplete == false ? progressStatus.Estimate.Progress : 0, 0, 100);
     var progressInt = (int)Math.Round(progress);
-    var progressRemaining = progressStatus != null && progressStatus.Estimate.Remaining != TimeSpan.Zero /*&& !progressStatus.Estimate.Incomplete*/
+    var progressRemaining = progressStatus != null && progressStatus.Estimate.TimeTotal != TimeSpan.Zero
         ? (TimeSpan?)progressStatus.Estimate.Remaining
         : null;
     var shutdownReason = PrinterClient.ShutdownReason;
@@ -135,7 +141,7 @@
                                                         }
                                                         else if (canEjectCake)
                                                         {
-                                                            <span class="text-warning">job finished, ready to eject the cake!</span>
+                                                            <span class="text-warning">finished, can eject the cake!</span>
                                                         }
                                                         else
                                                         {
@@ -174,7 +180,7 @@
                                                             case PrintingStatus status when status.Phase == PrintingPhase.Heating:
                                                                 <text>heating up before job <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
                                                                 break;
-                                                            case PrintingStatus status when status.Phase == PrintingPhase.Heating2:
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.HeatingBedPreparation:
                                                                 <text>heating up for bed prep. <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
                                                                 break;
                                                             case PrintingStatus status when status.Phase == PrintingPhase.Heating3:
@@ -182,6 +188,9 @@
                                                                 break;
                                                             case PrintingStatus status when status.Phase == PrintingPhase.AnalyseHeating:
                                                                 <text>heating analysis <span class="status-progress">(@status.PhaseDone.RoundToDecimal(0)/@status.PhaseTotal.RoundToDecimal(0) steps)</span></text>
+                                                                break;
+                                                            case PrintingStatus status when status.Phase == PrintingPhase.PowderTuning:
+                                                                <text><a class="powder-tuning-link" href="@PowderTuningPage.SelfPath">powder tuning (click here)</a></text>
                                                                 break;
                                                             case PrintingStatus status when status.Phase == PrintingPhase.Cooling:
                                                                 <text>cooling down after job <span class="status-progress">(@(Math.Floor(status.PhaseDone / 60))/@(Math.Ceiling(status.PhaseTotal / 60)))</span></text>
@@ -263,7 +272,7 @@
                                                         @if (isActive)
                                                         {
                                                             <td class="status-value col" style="background: linear-gradient(to right, rgba(128,255,255,0.15) @progressInt%, rgba(128,255,255,0.05) @progressInt%)">
-                                                                @(progress.RoundToDecimal(2, true))&nbsp;
+                                                                @(progress.RoundToDecimal(2, zeroes: true))&nbsp;
                                                             </td>
                                                             <td class="status-value-suffix col-auto">
                                                                 %
@@ -324,7 +333,7 @@
                             </td>
                         </tr>
                         <tr class="hide-top-line">
-                            <td class="align-middle col-auto"><img src="/_content/SLS4All.Compact.AppCore/ui/img/status-laser.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
+                            <td class="align-middle col-auto"><img src="_content/SLS4All.Compact.AppCore/ui/img/status-laser.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
                             <td class="align-middle col">
                                 <table class="table table-sm value-table m-0">
                                     <tbody>
@@ -364,7 +373,7 @@
                                                 Powder chamber:
                                             </th>
                                             <td class="status-value col-10 @(powderChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
-                                                @(powderChamberTemperature == null ? "N/A" : powderChamberTemperature.Value.Value.RoundToDecimal(0, true))&nbsp;
+                                                @(powderChamberTemperature == null ? "N/A" : powderChamberTemperature.Value.Value.RoundToDecimal(0))&nbsp;
                                             </td>
                                             <td class="status-value-suffix col-1 @(powderChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
                                                 @powderChamberTemperature?.Unit
@@ -375,7 +384,7 @@
                                                 Print chamber:
                                             </th>
                                             <td class="status-value col-10 @(printChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
-                                                @(printChamberTemperature == null ? "N/A" : printChamberTemperature.Value.Value.RoundToDecimal(0, true))&nbsp;
+                                                @(printChamberTemperature == null ? "N/A" : printChamberTemperature.Value.Value.RoundToDecimal(0))&nbsp;
                                             </td>
                                             <td class="status-value-suffix col-1 @(printChamberTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
                                                 @printChamberTemperature?.Unit
@@ -383,10 +392,14 @@
                                         </tr>
                                         <tr>
                                             <th scope="row" class="status-text text-nowrap col-1">
-                                                Surface:
+                                                Surface: 
+                                                @if (PrintingGlobal.IsPrinting)
+                                                {
+                                                    <a class="print-overrides-link d-none d-md-inline" href="@PrintTuningPage.SelfPath"><i class="bi bi-box-arrow-in-right" />&nbsp;tune</a>
+                                                }
                                             </th>
                                             <td class="status-value col-10 @(surfaceTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
-                                                @(surfaceTemperature == null ? "N/A" : surfaceTemperature.Value.Value.RoundToDecimal(0, true))&nbsp;
+                                                @(surfaceTemperature == null ? "N/A" : surfaceTemperature.Value.Value.RoundToDecimal(0))&nbsp;
                                             </td>
                                             <td class="status-value-suffix col-1 @(surfaceTemperature?.Value >= warningTemp.Value ? "text-warning" : "")">
                                                 @surfaceTemperature?.Unit
@@ -397,7 +410,7 @@
                             </td>
                         </tr>
                         <tr>
-                            <td class="align-middle col-auto"><img src="/_content/SLS4All.Compact.AppCore/ui/img/status-position.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
+                            <td class="align-middle col-auto"><img src="_content/SLS4All.Compact.AppCore/ui/img/status-position.png" class="status-icon" ExternalCssScope="@CssScope" /></td>
                             <td class="align-middle col">
                                 <table class="table table-sm value-table m-0">
                                     <tbody>
@@ -410,7 +423,7 @@
                                                 Z1 (powder bed):
                                             </th>
                                             <td class="status-value col-10">
-                                                @(z1.Value.RoundToDecimal(3, true))&nbsp;
+                                                @(z1.Value.RoundToDecimal(3, zeroes: true))&nbsp;
                                             </td>
                                             <td class="status-value-suffix col-1">
                                                 @z1.Unit
@@ -421,7 +434,7 @@
                                                 Z2 (print bed):
                                             </th>
                                             <td class="status-value col-10">
-                                                @(z2.Value.RoundToDecimal(3, true))&nbsp;
+                                                @(z2.Value.RoundToDecimal(3, zeroes: true))&nbsp;
                                             </td>
                                             <td class="status-value-suffix col-1">
                                                 @z2.Unit
@@ -446,27 +459,28 @@
                             <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Live">
                                 <VideoCameraView @key="_cameraViewKey" class="status-any-view status-camera-view" style="@(imagePageNow == ImagePage.Live ? "opacity: 100%": "opacity: 0%")" LightsControlsEnabled="false" ExternalCssScope="@CssScope" />
                             </TimeoutContainer>
+                            <RemainingPrintTimeView @key="_printTimeViewKey" class="status-any-view print-time-view" style="@(imagePageNow != ImagePage.Thermo ? "opacity: 75%": "opacity: 0%")" ExternalCssScope="@CssScope" />
                         </div>
                     </div>
                     <div id="status_buttons" class="row pt-3 align-items-center print-controls">
                         <div class="col-3">
                             @if (canEjectCake)
                             {
-                                 <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-eject.png" OnClick="OnEject" Title="Eject" class="print-controls-button" ExternalCssScope="@CssScope" />
+                                <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-eject.png" OnClick="OnEject" Title="Eject" class="print-controls-button" ExternalCssScope="@CssScope" />
                             }
                             else
                             {
-                                <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-stop.png" IsEnabled="isActive" OnClick="OnStop" Title="Stop" class="print-controls-button" ExternalCssScope="@CssScope" />
+                                <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-stop.png" IsEnabled="isActive" OnClick="OnStop" Title="Stop" class="print-controls-button" ExternalCssScope="@CssScope" />
                             }
                         </div>
                         <div class="col-3">
-                            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-plot.png" OnClick="() => ToggleImagePage(ImagePage.Plot)" Title="Plot" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Plot" SelectedColor="#03b4da" />
+                            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-plot.png" OnClick="() => ToggleImagePage(ImagePage.Plot)" Title="Plot" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Plot" SelectedColor="#03b4da" />
                         </div>
                         <div class="col-3">
-                            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" OnClick="() => ToggleImagePage(ImagePage.Live)" Title="Live" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Live" SelectedColor="#03b4da" />
+                            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" OnClick="() => ToggleImagePage(ImagePage.Live)" Title="Live" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Live" SelectedColor="#03b4da" />
                         </div>
                         <div class="col-3">
-                            <ImageTitleButton Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" OnClick="() => ToggleImagePage(ImagePage.Thermo)" Title="Temp" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Thermo" SelectedColor="#03b4da" />
+                            <ImageTitleButton Image="_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" OnClick="() => ToggleImagePage(ImagePage.Thermo)" Title="Temp" class="print-controls-button status-plot-camera-tab" ExternalCssScope="@CssScope" IsSelected="_selectedImagePage == ImagePage.Thermo" SelectedColor="#03b4da" />
                         </div>
                     </div>
                 </div>
@@ -485,13 +499,14 @@
     }
 
     private static readonly TimeSpan _statusPlotCameraViewTimeout = TimeSpan.FromSeconds(1);
-    public const string SelfPath = "/status";
+    public const string SelfPath = "status";
     private const string CssScope = "b-printer-status";
-    private const float _warningTempCelsius = 50.0f;
+    private const float _warningTempCelsius = 45.0f;
     private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
-    private readonly object _plotterViewKey = new object();
-    private readonly object _cameraViewKey = new object();
-    private readonly object _thermoCameraViewKey = new object();
+    private readonly object _plotterViewKey = new();
+    private readonly object _cameraViewKey = new();
+    private readonly object _thermoCameraViewKey = new();
+    private readonly object _printTimeViewKey = new();
     private Timer? _timer;
     private ModalWrapper? _stopModal;
     private ImagePage _selectedImagePage = ImagePage.NotSet;

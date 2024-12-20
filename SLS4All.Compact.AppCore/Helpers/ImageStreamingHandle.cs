@@ -5,12 +5,14 @@
 // file located in the root directory of the repository.
 
 ﻿using Lexical.FileProvider.Common;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.JSInterop;
 using SLS4All.Compact.IO;
 using SLS4All.Compact.Threading;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,57 +20,76 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.Helpers
 {
-    public sealed class ImageStreamingHandle
+    public sealed class StyleStreamingHandle<T>
+        where T : struct, ITuple
     {
         private readonly IJSRuntime _jsRuntime;
-        private readonly ImageStreamingHelper _helper;
+        private readonly StyleStreamingHelperBase<T> _helper;
         private readonly string _id;
+        private readonly string[] _keys;
+        private readonly T _defaultValue;
         private readonly BackgroundTask _streamTask;
-        private readonly Func<string> _uriFunc;
-        private AsyncEvent<MimeData>? _imageCapturedEvent;
+        private AsyncEvent<T>? _styleCapturedEvent;
 
-        public ImageStreamingHandle(IJSRuntime jsRuntime, ImageStreamingHelper helper, string id, Func<string> uriFunc)
+        public StyleStreamingHandle(IJSRuntime jsRuntime, StyleStreamingHelperBase<T> helper, string id, string[] keys, T defaultValue = default)
         {
             _jsRuntime = jsRuntime;
             _helper = helper;
             _id = id;
-            _uriFunc = uriFunc;
+            _keys = keys;
+            _defaultValue = defaultValue;
             _streamTask = new BackgroundTask(noStatus: true);
         }
 
-        private Task RefreshImageSrc(MimeData image, CancellationToken cancel)
+        private Task RefreshStyle(T style, CancellationToken cancel)
         {
             return _streamTask.StartValueTask(null,
                 async cancel =>
                 {
                     try
                     {
-                        await _jsRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "setImageSrcByIdIfLoaded", _id, _uriFunc());
+                        switch (style.Length)
+                        {
+                            case 1:
+                                await _jsRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "setStyle1ById", _id, _keys[0], style[0] ?? _defaultValue[0]);
+                                break;
+                            case 2:
+                                await _jsRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "setStyle2ById", _id, _keys[0], style[0] ?? _defaultValue[0], _keys[1], style[1] ?? _defaultValue[1]);
+                                break;
+                            case 3:
+                                await _jsRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "setStyle3ById", _id, _keys[0], style[0] ?? _defaultValue[0], _keys[1], style[1] ?? _defaultValue[1], _keys[2], style[2] ?? _defaultValue[2]);
+                                break;
+                            case 4:
+                                await _jsRuntime.InvokeVoidAsync("AppHelpersInvoke", cancel, "setStyle4ById", _id, _keys[0], style[0] ?? _defaultValue[0], _keys[1], style[1] ?? _defaultValue[1], _keys[2], style[2] ?? _defaultValue[2], _keys[3], style[3] ?? _defaultValue[3]);
+                                break;
+                            default:
+                                throw new ArgumentException("Invalid number of styles");
+                        }
                     }
                     catch (Exception)
                     {
-                        TryUnregisterImageReady();
+                        TryUnregisterStyleReady();
                     }
                 });
         }
 
-        public bool TryRegisterImageReady()
+        public bool TryRegisterStyleReady()
         {
-            if (_imageCapturedEvent == null && _helper.TryGetImageCapturedEvent(_id, out _imageCapturedEvent))
+            if (_styleCapturedEvent == null && _helper.TryGetCapturedEvent(_id, out _styleCapturedEvent))
             {
-                _imageCapturedEvent.AddHandler(RefreshImageSrc);
+                _styleCapturedEvent.AddHandler(RefreshStyle);
                 return true;
             }
             else
                 return false;
         }
 
-        public void TryUnregisterImageReady()
+        public void TryUnregisterStyleReady()
         {
-            if (_imageCapturedEvent != null)
+            if (_styleCapturedEvent != null)
             {
-                _imageCapturedEvent.RemoveHandler(RefreshImageSrc);
-                _imageCapturedEvent = null;
+                _styleCapturedEvent.RemoveHandler(RefreshStyle);
+                _styleCapturedEvent = null;
             }
         }
     }

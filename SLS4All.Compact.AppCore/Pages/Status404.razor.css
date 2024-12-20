@@ -1,6 +1,10 @@
 ﻿.dummy {
 }
 
+.app-component {
+    align-content: center;
+}
+
 .printing-notification {
     font-size: 20px;
     width: 100%;
@@ -10,4 +14,3 @@
     .printing-notification .btn {
         font-size: 17px;
     }
-

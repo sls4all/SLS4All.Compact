@@ -9,8 +9,6 @@ using SLS4All.Compact.Movement;
 
 namespace SLS4All.Compact.McuClient.Pins
 {
-    public delegate long McuMinClockFunc(long minClock, long reqClock);
-
     [Flags]
     public enum McuStepperResetFlags
     {
@@ -32,6 +30,8 @@ namespace SLS4All.Compact.McuClient.Pins
         TimeSpan UnderflowDuration { get; }
         double FullStepDistance { get; }
         double MicrostepDistance { get; }
+        
+
         long GetPrecisionIntervalFromSeconds(double seconds);
         double GetPrecisionIntervalFromSecondsDouble(double seconds);
         long GetPrecisionIntervalFromVelocity(double velocity);
@@ -52,20 +52,22 @@ namespace SLS4All.Compact.McuClient.Pins
             bool expectedEndstopState,
             CancellationToken cancel);
 
+        bool GetResetNeccessary(McuTimestamp timestamp, SystemTimestamp now = default);
         McuTimestamp Move(double velocity, double startPosition, double endPosition, McuTimestamp timestamp);
         McuTimestamp Move(double initialVelocity, double finalVelocity, double startPosition, double endPosition, McuTimestamp timestamp);
         McuTimestamp Move(double initialVelocity, double finalVelocity, double acceleration, double decceleration, double maxVelocity, double startPosition, double finalPosition, McuTimestamp timestamp);
         McuTimestamp Enable(bool enable, McuTimestamp timestamp);
         McuTimestamp Reset(McuTimestamp timestamp, McuStepperResetFlags flags, out bool hasReset, SystemTimestamp now = default, double advance = 0, TimeSpan minQueueAheadDuration = default);
-        McuTimestamp QueueStep(bool positive, long precisionInterval, long count, long add, McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false);
-        McuTimestamp QueueDwell(long precisionInterval, McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false);
-        McuTimestamp QueuePwm(float value, McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false);
-        McuTimestamp QueueNextStepWaketimeVerify(McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false);
+        McuTimestamp QueueStep(bool positive, long precisionInterval, long count, long add, McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false);
+        McuTimestamp QueueDwell(long precisionInterval, McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false);
+        McuTimestamp QueuePwm(float value, McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false);
+        McuTimestamp QueueNextStepWaketimeVerify(McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false);
         void QueueFlush();
         Task<bool> QueryEndstop(CancellationToken cancel);
         (long Count, double FinalPosition) GetSteps(double position);
         (long PrecisionInterval, long Count, long Ticks, double PrecisionRemainder, double FinalPosition) GetSteps(double velocity, double startPosition, double endPosition, double precisionRemainder);
-        McuTimestamp DacReset(McuTimestamp timestamp, double maxDistance);
+        McuTimestamp DacResetAndHome(McuTimestamp timestamp, double position, double maxDistance);
         McuTimestamp DacHome(McuTimestamp timestamp, double position, double maxDistance);
+        void OnAfterStopMovement();
     }
 }

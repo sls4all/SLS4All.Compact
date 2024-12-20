@@ -48,6 +48,7 @@
         font-weight: normal;
         white-space: normal;
         text-align: left;
+        line-height: 20px;
     }
 
     .value-container .value-error {

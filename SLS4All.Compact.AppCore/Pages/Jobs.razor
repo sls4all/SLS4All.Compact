@@ -38,15 +38,16 @@
 @inject IValidationContextFactoryScoped ValidationContextFactory
 @inject IOptionsMonitor<FrontendOptions> FrontendOptions
 @inject ILayerClient LayerClient
+@inject IDefaultsInitializer DefaultsInitializer
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
 
 <FileBrowserModal @ref="_addObjectBrowser"
-                  Masks="@(new[] { "*.stl", "*.3mf", "*.obj" })"
-                  AllowSelectDirectories="false"
-                  AllowSelectFilesOutsideMask="false"
-                  Directory="@PrinterPath.Objects"
-                  OpenClicked="selection => AddObject(selection)" />
+Masks="@(new[] { "*.stl", "*.3mf", "*.obj" })"
+AllowSelectDirectories="false"
+AllowSelectFilesOutsideMask="false"
+Directory="@PrinterPath.Objects"
+OpenClicked="selection => AddObject(selection)" />
 
 <CancelModal @ref="_cancelModal" ShowSpinner="false" />
 
@@ -75,7 +76,7 @@
             @if (_nameAction == NameAction.Create)
             {
                 <text>Choose the job type</text>
-                <ValueEditor Title="Job type" @bind-Value="_jobType" Traits="GetJobTypeTraits()" class="mb-3"/>
+                <ValueEditor Title="Job type" @bind-Value="_jobType" Traits="GetJobTypeTraits()" class="mb-3" />
             }
             @if (_nameAction != NameAction.Delete)
             {
@@ -110,6 +111,25 @@
                 <button @onclick="CompleteNameAction" class="btn btn-danger">Delete!</button>
             }
             <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_restoreModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Restore job to defaults
+            </h5>
+        </div>
+        <div class="modal-body">
+            If you restore the job to defaults, it will be replaced by the (updated) version that ships with the SLS4All Compact. Any local modifications in the jobs will be lost. You can however clone this version first.
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => RestoreDefaultJob(_nameJob, true)" class="btn btn-primary">
+                Restore defaults!
+            </button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed by mind</button>
         </div>
     </div>
 </ModalWrapper>
@@ -220,6 +240,7 @@
                                             {
                                                 var job = __job;
                                                 var isSelected = job.Id == _job?.Id;
+                                                var defaults = _defaults.GetValueOrDefault(job.Id);
                                                 <tr @key="job" class="jobs-job-name-row @(isSelected ? "table-active" : "")">
                                                     <td @onclick="() => SelectJob(job, false)">
                                                         <div class="jobs-job-name-row-name">
@@ -240,6 +261,10 @@
                                                                 <small>
                                                                     <BrowserTime DateTime="job.CreatedAtUtc" />
                                                                 </small>
+                                                                @if (defaults.Flags.HasFlag(DefaultsInitializerFlags.HasNewDefaults))
+                                                                {
+                                                                    <span class="badge badge-pill badge-dark new-defaults"><i class="bi bi-stars" />&nbsp;Update ready!</span>
+                                                                }
                                                             </div>
                                                         }
                                                     </td>
@@ -265,6 +290,13 @@
                                                                 <a class="dropdown-item" href="javascript:void(0)" @onclick="() => DeleteJob(job)">
                                                                     <i class="bi bi-trash" />&nbsp;Delete job...
                                                                 </a>
+                                                                @if (defaults.Flags.HasFlag(DefaultsInitializerFlags.HasDefaults))
+                                                                {
+                                                                    <div class="dropdown-divider"></div>
+                                                                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => RestoreDefaultJob(job)">
+                                                                        <i class="bi bi-stars" />&nbsp;Restore defaults...
+                                                                    </a>
+                                                                }
                                                             </div>
                                                         </div>
                                                     </td>
@@ -353,7 +385,7 @@
         DateDesc,
     }
 
-    public const string SelfPath = "/jobs";
+    public const string SelfPath = "jobs";
     public const string CssScope = "b-jobs";
     private static readonly TimeSpan s_saveDelay = TimeSpan.FromSeconds(5);
     private int _saveIndex;
@@ -390,6 +422,7 @@
 
     private NameAction _nameAction;
     private ModalWrapper? _nameModal;
+    private ModalWrapper? _restoreModal;
     private string _nameValue = "";
     private PrintJobType _jobType = PrintJobType.Automatic;
     private PrintJobDescription _nameJob = default!;
@@ -397,6 +430,7 @@
     private ModalWrapper? _printModal;
     private CancelModal? _cancelModal;
     private volatile int _ignoreJobUpdatedRefCount;
+    private readonly Dictionary<Guid, DefaultsInitializerState> _defaults = new();
 
     private CurrentJobAutomatic? _currentJobAutomatic;
     private CurrentJobProfiling? _currentJobProfiling;
@@ -414,6 +448,11 @@
 
     private async Task RereadJobs()
     {
+        _defaults.Clear();
+        foreach (var item in await DefaultsInitializer.GetJobStates())
+            _defaults[item.Id] = item;
+        var prevSelectedId = _job?.Id;
+        var prevSelectedName = _job?.Name;
         _jobs = await JobStorage.GetOrderedJobDescriptions();
         switch (_jobSort)
         {
@@ -424,6 +463,9 @@
                 _jobs = _jobs.OrderByDescending(x => x.CreatedAtUtc).ToArray();
                 break;
         }
+        var newSelected = _jobs.FirstOrDefault(x => x.Id == prevSelectedId) 
+            ?? _jobs.FirstOrDefault(x => x.Name == prevSelectedName);
+        await SelectJob(newSelected, false);
     }
 
     protected override async Task OnInitializedAsync()
@@ -833,7 +875,7 @@
     {
         if (JobProvider.CurrentJobId != job?.Id)
             await JobProvider.SetCurrentJob(job?.Id);
-        if (_job?.Id != job?.Id || 
+        if (_job?.Id != job?.Id ||
             (job != null && _job != null && !job.Equals(_job.Job)))
         {
             _syncCollapse.Cancel(); // cancel sync
@@ -1016,6 +1058,37 @@
                 ToastProvider.Show(new ToastMessage
                     {
                         HeaderText = "Failed to delete the job",
+                        BodyText = ex.Message,
+                        Type = ToastMessageType.Error,
+                        Key = this,
+                        Exception = ex,
+                    });
+            }
+            await RereadJobs();
+        }
+    }
+
+    private async Task RestoreDefaultJob(PrintJobDescription job, bool force = false)
+    {
+        if (!force)
+        {
+            _nameJob = job;
+            await _restoreModal!.Show();
+        }
+        else
+        {
+            await _restoreModal!.Close();
+            using var _ = IgnoreJobUpdated();
+            try
+            {
+                await DefaultsInitializer.RestoreJobDefaults(job.Id);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to restore the job defaults");
+                ToastProvider.Show(new ToastMessage
+                    {
+                        HeaderText = "Failed to restore the job defaults",
                         BodyText = ex.Message,
                         Type = ToastMessageType.Error,
                         Key = this,

@@ -1,16 +1,32 @@
 ﻿@page "/Status404"
+@using SLS4All.Compact.ComponentModel
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+@inject AppThemeManager AppTheme
 
-@inherits AppPage
+<HeadContent>
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+</HeadContent>
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-home.png" IsFullPage="true" />
-
-<div class="printing-notification">
-    <p>
-        <span class="badge badge-dark text-wrap">
-            <i class="bi bi-exclamation-triangle" /> The requested page was not found.
-        </span>
-    </p>
-    <p>
-        <a class="btn btn-theme" href="@IndexPage.SelfPath">Go to the home page instead</a>
-    </p>
+<div class="app-component" data-sa-theme="@_theme">
+    <div class="printing-notification">
+        <p>
+            <span class="badge badge-dark text-wrap">
+                <i class="bi bi-exclamation-triangle" /> The requested page was not found.
+            </span>
+        </p>
+        <p>
+            <a class="btn btn-theme" href="@IndexPage.SelfPath">Go to the home page instead</a>
+        </p>
+    </div>
 </div>
+
+@code {
+    private string _theme = default!;
+
+    protected override void OnInitialized()
+    {
+        _theme = AppTheme.ThemeIdDefault;
+        base.OnInitialized();
+    }
+}

@@ -4,7 +4,7 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Console;
@@ -32,8 +32,16 @@ using SLS4All.Compact.McuClient.PipedMcu;
 using SLS4All.Compact.Printing;
 using NReco.Logging.File;
 using SLS4All.Compact.Numerics;
-using SLS4All.Compact.Storage.PrintProfiles;
 using SLS4All.Compact.Components;
+using SLS4All.Compact.Storage;
+using SLS4All.Compact.Security;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Identity;
+using SLS4All.Compact.Pages;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Net.Http.Headers;
+using Microsoft.AspNetCore.Authentication;
 
 namespace SLS4All.Compact
 {
@@ -85,6 +93,8 @@ namespace SLS4All.Compact
             app.MapRazorComponents<Pages.App>()
                 .AddAdditionalAssemblies(typeof(StartupBase).Assembly)
                 .AddInteractiveServerRenderMode();
+            app.UseAntiforgery();
+            app.UseAuthorization();
         }
 
         protected override IServiceProvider GetBootServiceProvider(IServiceCollection services)
@@ -141,6 +151,7 @@ namespace SLS4All.Compact
                     break;
                 case PrinterClientType.McuManagerLocal:
                 case PrinterClientType.PipedMcuManagerProxy:
+                case PrinterClientType.McuManagerFake:
                     services.Configure<McuStepperGlobalOptions>(Configuration.GetSection("McuStepperGlobal"));
                     services.Configure<McuManagerOptions>(Configuration.GetSection("McuManager"));
                     services.Configure<McuHostRunnerOptions>(Configuration.GetSection("McuHostRunner"));
@@ -154,6 +165,11 @@ namespace SLS4All.Compact
             {
                 case PrinterClientType.McuManagerLocal:
                     services.AddAsImplementationAndParents<McuManagerLocal>(ServiceLifetime.Singleton);
+                    break;
+                case PrinterClientType.McuManagerFake:
+                    services.Configure<FakeMcuDeviceFactoryOptions>(Configuration.GetSection("FakeMcuDeviceFactory"));
+                    services.AddAsImplementationAndInterfaces<FakeMcuDeviceFactory>(ServiceLifetime.Singleton);
+                    services.AddAsImplementationAndParents<McuManagerFake>(ServiceLifetime.Singleton);
                     break;
                 case PrinterClientType.PipedMcuManagerProxy:
                     services.AddAsImplementationAndParents<PipedMcuManagerProxy>(ServiceLifetime.Singleton);
@@ -183,6 +199,7 @@ namespace SLS4All.Compact
                     break;
                 case PrinterClientType.PipedMcuManagerProxy:
                 case PrinterClientType.McuManagerLocal:
+                case PrinterClientType.McuManagerFake:
                     services.Configure<McuMovementClientOptions>(Configuration.GetSection("McuMovementClient"));
                     services.AddAsImplementationAndInterfaces<McuMovementClient>(ServiceLifetime.Singleton);
                     services.Configure<McuTemperatureClientOptions>(Configuration.GetSection("McuTemperatureClient"));
@@ -203,6 +220,7 @@ namespace SLS4All.Compact
                     break;
                 case PrinterClientType.PipedMcuManagerProxy:
                 case PrinterClientType.McuManagerLocal:
+                case PrinterClientType.McuManagerFake:
                     services.Configure<McuPowerClientOptions>(Configuration.GetSection("McuPowerClient"));
                     services.AddAsImplementationAndInterfaces<McuPowerClient>(ServiceLifetime.Singleton);
                     services.Configure<McuInputClientOptions>(Configuration.GetSection("McuInputClient"));
@@ -242,6 +260,8 @@ namespace SLS4All.Compact
             services.AddAsImplementationAndInterfaces<AnalyseHeating>(ServiceLifetime.Singleton);
             services.Configure<MeasureHeatingOptions>(Configuration.GetSection("MeasureHeating"));
             services.AddAsImplementationAndInterfaces<MeasureHeating>(ServiceLifetime.Singleton);
+            services.Configure<PrintAutoTunerOptions>(Configuration.GetSection("PrintAutoTuner"));
+            services.AddAsImplementationAndInterfaces<PrintAutoTuner>(ServiceLifetime.Singleton);
 
             switch (applicationOptions.PrinterClient)
             {
@@ -250,6 +270,7 @@ namespace SLS4All.Compact
                     break;
                 case PrinterClientType.PipedMcuManagerProxy:
                 case PrinterClientType.McuManagerLocal:
+                case PrinterClientType.McuManagerFake:
                     services.Configure<McuHalogenClientOptions>(Configuration.GetSection("McuHalogenClient"));
                     services.AddAsImplementationAndInterfaces<McuHalogenClient>(ServiceLifetime.Singleton);
                     break;
@@ -357,6 +378,22 @@ namespace SLS4All.Compact
 
             services.Configure<PageRedirectorOptions>(Configuration.GetSection("PageRedirector"));
             services.AddAsImplementationAndInterfaces<PageRedirector>(ServiceLifetime.Singleton);
+
+            services.AddCascadingAuthenticationState();
+            services.AddAsImplementationAndInterfaces<SignInManager>(ServiceLifetime.Singleton);
+            services.AddAuthentication(options =>
+                {
+                    options.DefaultScheme = IdentityConstants.ApplicationScheme;
+                })
+                .AddCookie(IdentityConstants.ApplicationScheme, o =>
+                {
+                    o.LoginPath = new PathString("/login");
+                    o.Events = new CookieAuthenticationEvents
+                    {
+                        OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync,
+                    };
+                });
+            services.AddHttpContextAccessor();
 
             RegisterPluginOptions(applicationOptions, services);
             RegisterPluginServices(applicationOptions, services);

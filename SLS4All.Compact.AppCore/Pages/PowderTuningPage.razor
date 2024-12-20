@@ -1,0 +1,688 @@
+﻿@page "/powder-tuning"
+@page "/powder-tuning/{SelectedImagePageName}"
+@using Microsoft.Extensions.Options
+@using SLS4All.Compact.Camera
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.Movement
+@using SLS4All.Compact.Pages.Wizards
+@using SLS4All.Compact.PrintSessions
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing
+@using SLS4All.Compact.Storage
+@using SLS4All.Compact.Temperature
+@using SLS4All.Compact.Validation
+@inherits AppPage
+@inject IToastProvider ToastProvider
+@inject IPrintingService PrintingGlobal
+@inject ICodePlotter Plotter
+@inject ICameraClient CameraClient
+@inject ISurfaceHeater SurfaceHeater
+@inject ValuesContainer Values
+@inject IValidationContextFactory ValidationContextFactory
+@inject IMovementClient Movement
+@inject IOptionsMonitor<PowderTuningWizardOptions> Options
+@implements IDisposable
+
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-video-camera.png" IsFullPage="true" />
+
+<ModalWrapper @ref="_stopModal" class="fade app-modal stop-modal" Context="modal" ExternalCssScope="@CssScope">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Stop tuning
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                If you have finished, you can to stop the tuning here.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => Stop(true)" class="btn btn-danger">Stop now!</button>
+            <button @onclick="() => Cool(true)" class="btn btn-danger">Start cooling!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Do nothing</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_setSurfaceModal" class="fade app-modal stop-modal" Context="modal" ExternalCssScope="@CssScope">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Surface temperature
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                You can set or increase the surface temperature. This can help you find the point where the powder changes properties or set the temperature for test print.
+            </p>
+            <table class="table table-sm property-table">
+                <tbody>
+                    @RenderValues([
+                                                   (Values, _defaultValues, nameof(Values.SurfaceTemperature), () => SetSurfaceTemperature(true))
+                                               ], hideTopLine: true)
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            @if (Values.SurfaceTemperature != null)
+            {
+                <button @onclick="() => { Values.SurfaceTemperature = (Values.SurfaceTemperature ?? 0) + Options.CurrentValue.TemperatureIncreaseStep; return SetSurfaceTemperature(true); }" class="btn btn-primary">Increase by @(Options.CurrentValue.TemperatureIncreaseStep)°C</button>
+            }
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_beginLayerModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Add new layer
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                You can add new layer of powder here. This is helpful to start anew when the powder properties have changed from heating or you want to cover up previous test prints.
+            </p>
+            <p>
+                Please note that you may have to increase the <b>Layer thickness</b> from a default value. If the temperature was not right, the surface may not be smooth enough and the recoater might drag some powder from print bed along.
+            </p>
+            <table class="table table-sm property-table">
+                <tbody>
+                    @RenderValues([
+                                                       (Values, _defaultValues, nameof(Values.LayerThickness), null),
+                                                    ], hideTopLine: true)
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => BeginLayer(true)" class="btn btn-primary">Add layer!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_setParametersModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Set parameters
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                You can change some properties related to printing here.
+            </p>
+            <table class="table table-sm property-table">
+                <tbody>
+                    @RenderValues([
+                                 (Values, _defaultValues, nameof(Values.FillPhase), null),
+                                (Values, _defaultValues, nameof(Values.GridIndex), null),
+                                (Values, _defaultValues, nameof(Values.PrintLabelIndex), null),
+                            ], hideTopLine: true)
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => SetParameters(true)" class="btn btn-primary">Set parameters!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_bedLevelingModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Bed leveling
+            </h5>
+        </div>
+        <div class="modal-body">
+            <p>
+                You can add some extra powder to the print chamber here. This is helpful if you want to cover up imperfections from adding a new layer.
+            </p>
+            <table class="table table-sm property-table">
+                <tbody>
+                    @RenderValues([
+                                                        (Values, _defaultValues, nameof(Values.BedLevelingStepThickness), null),
+                                                    (Values, _defaultValues, nameof(Values.BedLevelingStepCount), null),
+                                                    ], hideTopLine: true)
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => BedLeveling(true)" class="btn btn-primary">Begin bed leveling!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<ModalWrapper @ref="_printModal" class="fade app-modal" Context="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                Test print
+            </h5>
+        </div>
+        <div class="modal-body">
+            <table class="table table-sm property-table">
+                <tbody>
+                    @RenderValues([
+                                                        (Values, _defaultValues, nameof(Values.LaserFirstOutlineEnergyDensity), null),
+                                                    (Values, _defaultValues, nameof(Values.LaserOtherOutlineEnergyDensity), null),
+                                                    (Values, _defaultValues, nameof(Values.LaserFillEnergyDensity), null),
+                                                    (Values, _defaultValues, nameof(Values.LaserOnPercent), null),
+                                                    (Values, _defaultValues, nameof(Values.OutlinePowerIncrease), null),
+                                                    (Values, _defaultValues, nameof(Values.OutlineCount), null),
+                                                    (Values, _defaultValues, nameof(Values.FillOutlineSkipCount), null),
+                                                    (Values, _defaultValues, nameof(Values.HotspotOverlapPercent), null),
+                                                    (Values, _defaultValues, nameof(Values.PrintLabelEnabled), null),
+                                                    ], hideTopLine: true)
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button @onclick="() => Print(true)" class="btn btn-primary">Begin printing!</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</ModalWrapper>
+
+<CancelModal @ref="_progressModal" ProgressCurrent="_done" ProgressTotal="_total" />
+<CancelModal @ref="_cancelModal" />
+
+@{
+    if (!CanContinueIfNotTuning(__builder))
+        return;
+    var imagePageNow = DisplayedImagePage;
+}
+
+<div class="container d-flex flex-column p-0 h-100">
+    <div id="status_camera_plot" class="row flex-grow-1">
+        <div class="col status-plot-camera-container">
+            <PlotterView @key="_plotterViewKey" class="status-any-view status-plot-view" style="@(imagePageNow == ImagePage.Plot ? "opacity: 100%": "opacity: 0%")" ExternalCssScope="@CssScope" />
+            <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Thermo">
+                <ThermoCameraView @key="_thermoCameraViewKey" class="status-any-view status-thermo-view" style="@(imagePageNow == ImagePage.Thermo ? "opacity: 100%": "opacity: 0%")" BedControlsEnabled="false" ExternalCssScope="@CssScope" UnitConverterFlags="LocalizationSettings.UnitConverterFlags" />
+            </TimeoutContainer>
+            <TimeoutContainer Timeout="_statusPlotCameraViewTimeout" IsEnabled="imagePageNow == ImagePage.Live">
+                <VideoCameraView @key="_cameraViewKey" class="status-any-view status-camera-view" style="@(imagePageNow == ImagePage.Live ? "opacity: 100%": "opacity: 0%")" LightsControlsEnabled="false" ExternalCssScope="@CssScope" />
+            </TimeoutContainer>
+        </div>
+    </div>
+    <div id="status_buttons" class="row pt-3 align-items-center print-controls justify-content-center">
+        <div class="col-auto">
+            <a class="btn btn-lg @(_selectedImagePage == ImagePage.Plot ? "btn-primary" : "btn-theme")" @onclick="() => ToggleImagePage(ImagePage.Plot)">Plot</a>
+            <a class="btn btn-lg @(_selectedImagePage == ImagePage.Live ? "btn-primary" : "btn-theme")" @onclick="() => ToggleImagePage(ImagePage.Live)">Live</a>
+            <a class="btn btn-lg @(_selectedImagePage == ImagePage.Thermo ? "btn-primary" : "btn-theme")" @onclick="() => ToggleImagePage(ImagePage.Thermo)">Temp</a>
+        </div>
+        <div class="col-auto">
+            <span class="badge badge-dark badge-pill">Z1 @Movement.CurrentPosition.Z1.ToString("0.000")</span>
+            <span class="badge badge-dark badge-pill">Z2 @Movement.CurrentPosition.Z2.ToString("0.000")</span>
+        </div>
+        <div class="col-auto">
+            <a class="btn btn-lg btn-theme" @onclick="() => BeginLayer()">Add layer...</a>
+            <a class="btn btn-lg btn-theme" @onclick="() => SetSurfaceTemperature()">Surface temp...</a>
+            <text> </text>
+            @if (_printingCancelSource == null)
+            {
+                <a class="btn btn-lg btn-theme" @onclick="() => Print()">Print...</a>
+            }
+            else
+            {
+                <a class="btn btn-lg btn-danger" @onclick="() => _printingCancelSource.Cancel()">Cancel</a>
+            }
+        </div>
+        <div class="col-auto">
+            <div class="btn-group">
+                <button type="button" class="btn btn-lg btn-theme dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="bi bi-three-dots-vertical" />
+                </button>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => BedLeveling()">
+                        Bed leveling...
+                    </a>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => SetParameters()">
+                        Set parameters...
+                    </a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="javascript:void(0)" @onclick="() => Stop()">
+                        Stop...
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public enum ImagePage
+    {
+        NotSet = 0,
+        Plot,
+        Live,
+        Thermo,
+    }
+
+    public class ValuesContainer
+    {
+        [StorageName("Surface temperature")]
+        [StorageDescription("The temperature the surface is regulated to using halogen/surface heaters.")]
+        [StorageUnit("°C")]
+        public decimal? SurfaceTemperature { get; set; }
+        [StorageName("Layer thickness")]
+        [StorageDescription("Thickness of the added layer")]
+        [StorageUnit("μm")]
+        public decimal LayerThickness { get; set; } = 100;
+        [StorageName("Step thickness")]
+        [StorageDescription("Thickness of single bed leveling step")]
+        [StorageUnit("μm")]
+        public decimal? BedLevelingStepThickness { get; set; } = 100;
+        [StorageName("Step count")]
+        [StorageDescription("Number of bed leveling steps to be performed")]
+        public int? BedLevelingStepCount { get; set; } = 1;
+
+        [StorageName("Print label")]
+        [StorageDescription("Print label (number) on the item")]
+        public bool PrintLabelEnabled { get; set; } = true;
+
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.LaserFirstOutlineEnergyDensity))]
+        public decimal? LaserFirstOutlineEnergyDensity { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.LaserOtherOutlineEnergyDensity))]
+        public decimal? LaserOtherOutlineEnergyDensity { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.LaserFillEnergyDensity))]
+        public decimal? LaserFillEnergyDensity { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.LaserOnPercent))]
+        public decimal? LaserOnPercent { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.OutlinePowerIncrease))]
+        public decimal? OutlinePowerIncrease { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.OutlineCount))]
+        public int? OutlineCount { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.FillOutlineSkipCount))]
+        public int? FillOutlineSkipCount { get; set; }
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.HotspotOverlapPercent))]
+        public decimal? HotspotOverlapPercent { get; set; }
+
+        [StorageForward(typeof(PrintSetup), nameof(PrintSetup.FillPhase))]
+        public int? FillPhase { get; set; }
+        [StorageName("Grid index")]
+        [StorageDescription("Zero based index of the printed item on the grid. Set to zero to print the next item to the top left corner.")]
+        public int? GridIndex { get; set; }
+        [StorageName("Print label")]
+        [StorageDescription("Number displayed on the next printed item if enabled.")]
+        public int? PrintLabelIndex { get; set; }
+
+        public ValuesContainer Clone()
+            => (ValuesContainer)MemberwiseClone();
+    }
+
+    public const string SelfPath = "powder-tuning";
+    private const string CssScope = "b-powder-tuning";
+    private static readonly TimeSpan _statusPlotCameraViewTimeout = TimeSpan.FromSeconds(1);
+    private readonly static TimeSpan s_period = TimeSpan.FromSeconds(0.5);
+    private Timer? _timer;
+    private ImagePage _selectedImagePage = ImagePage.NotSet;
+    private readonly object _plotterViewKey = new object();
+    private readonly object _cameraViewKey = new object();
+    private readonly object _thermoCameraViewKey = new object();
+    private ModalWrapper? _stopModal, _setSurfaceModal, _beginLayerModal, _bedLevelingModal, _printModal, _setParametersModal;
+    private CancelModal? _progressModal, _cancelModal;
+    private double _done, _total;
+    private ValuesContainer _defaultValues = new();
+    private CancellationTokenSource? _printingCancelSource;
+
+    protected PrintingPhase PrintingPhase => PrintingGlobal.PrintingPhase;
+
+    protected ImagePage DisplayedImagePage
+    {
+        get
+        {
+            if (_selectedImagePage == ImagePage.NotSet)
+            {
+                if (!Plotter.IsEmpty)
+                    return ImagePage.Plot;
+                else if (!CameraClient.IsMostlyEmpty)
+                    return ImagePage.Live;
+                else
+                    return ImagePage.Thermo;
+            }
+            else
+                return _selectedImagePage;
+        }
+    }
+
+    [Parameter]
+    public string SelectedImagePageName
+    {
+        get => _selectedImagePage.ToString();
+        set
+        {
+            if (Enum.TryParse<ImagePage>(value, true, out var valueEnum))
+                _selectedImagePage = valueEnum;
+        }
+    }
+
+    private void ToggleImagePage(ImagePage page)
+    {
+        if (_selectedImagePage != page)
+            NavigationManager.NavigateTo($"{SelfPath}/{page}", new NavigationOptions { ReplaceHistoryEntry = true });
+        else
+        {
+            _selectedImagePage = ImagePage.NotSet;
+            NavigationManager.NavigateTo(SelfPath, new NavigationOptions { ReplaceHistoryEntry = true });
+        }
+    }
+
+    protected virtual bool CanContinueIfNotTuning(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder __builder)
+    {
+        if (PrintingPhase != PrintingPhase.PowderTuning)
+        {
+            <div class="printing-notification">
+                <p>
+                    <span class="badge badge-dark text-wrap">
+                        <i class="bi bi-x" /> Powder tuning is not in progress.
+                    </span>
+                </p>
+                <p>
+                    <a class="btn btn-theme" href="@PrinterStatus.SelfPath">Show printing status</a>
+                </p>
+            </div>
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+
+    protected void ResetStatus()
+    {
+        _done = 0;
+        _total = 1;
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _timer = new Timer(OnTimer, null, s_period, s_period);
+        Values.SurfaceTemperature = (decimal?)SurfaceHeater.TargetTemperature;
+    }
+
+    protected Task OnStatus(double done, double total, TimeSpan? estimate, object? status)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            _done = done;
+            _total = total;
+            return ValueTask.CompletedTask;
+        });
+        return Task.CompletedTask;
+    }
+
+    private async Task Stop(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            await _stopModal!.Show();
+        }
+        else
+        {
+            await _stopModal!.Close();
+            if (await ExecuteCommand(new EndPrintSetup { }, "Stopping tuning"))
+                NavigationManager.NavigateTo(PrinterStatus.SelfPath);
+        }
+    }
+
+    private async Task Cool(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            await _stopModal!.Show();
+        }
+        else
+        {
+            await _stopModal!.Close();
+            PrintingGlobal.SoftCancel(PrintingSoftCancelMode.CoolNow);
+            NavigationManager.NavigateTo(PrinterStatus.SelfPath);
+        }
+    }
+
+    private async Task<bool> ExecuteCommand(object command, string titleText)
+    {
+        return await _progressModal!.Execute(async cancel =>
+            {
+                ResetStatus();
+                await PrintingGlobal.ExecutePowderTuningCommand(command, OnStatus, cancel);
+                return true;
+            },
+            false,
+            titleText: titleText,
+            bodyText: "Please wait...",
+            cancelText: "Cancel",
+            errorToastHeaderText: "Failed to execute command");
+    }
+
+    private async Task<bool> ExecutePrintingCommand(object command)
+    {
+        if (_printingCancelSource != null)
+            return false;
+        ResetStatus();
+        try
+        {
+            _printingCancelSource = new();
+            StateHasChanged();
+            await PrintingGlobal.ExecutePowderTuningCommand(command, OnStatus, _printingCancelSource.Token);
+            return true;
+        }
+        catch (Exception ex) when (_printingCancelSource?.IsCancellationRequested != true)
+        {
+            ToastProvider.Show(new ToastMessage
+                {
+                    HeaderText = "Printing failed",
+                    BodyText = ex.Message,
+                    Type = ToastMessageType.Error,
+                    Silent = false,
+                });
+            return false;
+        }
+        finally
+        {
+            _printingCancelSource = null;
+        }
+    }
+
+    private async Task SetSurfaceTemperature(bool fromModal = false)
+    {
+        var temp = Values.SurfaceTemperature;
+        if (!fromModal)
+        {
+            await _setSurfaceModal!.Show();
+        }
+        else if (temp >= 0)
+        {
+            await _setSurfaceModal!.Close();
+            await ExecuteCommand(new PowderTuningSetSurfaceCommand
+                {
+                    SurfaceTemperature = temp != 0 ? (double?)temp : null,
+                }, "Setting surface");
+        }
+    }
+
+    private async Task Print(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            var cmd = new PowderTuningPrintCommand();
+            await ExecuteCommand(cmd, "Getting parameters");
+            _defaultValues = new ValuesContainer
+            {
+                LaserFillEnergyDensity = cmd.PrintSetupSource?.LaserFillEnergyDensity,
+                LaserFirstOutlineEnergyDensity = cmd.PrintSetupSource?.LaserFirstOutlineEnergyDensity,
+                LaserOtherOutlineEnergyDensity = cmd.PrintSetupSource?.LaserOtherOutlineEnergyDensity,
+                LaserOnPercent = cmd.PrintSetupSource?.LaserOnPercent,
+                OutlinePowerIncrease = cmd.PrintSetupSource?.OutlinePowerIncrease,
+                OutlineCount = cmd.PrintSetupSource?.OutlineCount,
+                FillOutlineSkipCount = cmd.PrintSetupSource?.FillOutlineSkipCount,
+                HotspotOverlapPercent = cmd.PrintSetupSource?.HotspotOverlapPercent,
+            };
+            await _printModal!.Show();
+        }
+        else
+        {
+            await _printModal!.Close();
+            var values = Values.Clone();
+            ValidationHelper? helper = null;
+            await ExecutePrintingCommand(new PowderTuningPrintCommand
+                {
+                    PrintNumberEnabled = values.PrintLabelEnabled,
+                    SetupFunc = async (setup, cancel) =>
+                       {
+                           if (values.LaserFillEnergyDensity != null)
+                               setup.LaserFillEnergyDensity = values.LaserFillEnergyDensity.Value;
+                           if (values.LaserFirstOutlineEnergyDensity != null)
+                               setup.LaserFirstOutlineEnergyDensity = values.LaserFirstOutlineEnergyDensity.Value;
+                           if (values.LaserOtherOutlineEnergyDensity != null)
+                               setup.LaserOtherOutlineEnergyDensity = values.LaserOtherOutlineEnergyDensity.Value;
+                           if (values.LaserOnPercent != null)
+                               setup.LaserOnPercent = values.LaserOnPercent.Value;
+                           if (values.OutlinePowerIncrease != null)
+                               setup.OutlinePowerIncrease = values.OutlinePowerIncrease.Value;
+                           if (values.OutlineCount != null)
+                               setup.OutlineCount = values.OutlineCount.Value;
+                           if (values.FillOutlineSkipCount != null)
+                               setup.FillOutlineSkipCount = values.FillOutlineSkipCount.Value;
+                           if (values.HotspotOverlapPercent != null)
+                               setup.HotspotOverlapPercent = values.HotspotOverlapPercent.Value;
+                           var context = ValidationContextFactory.CreateContext();
+                           helper = await setup.Validate(context);
+                           if (helper.IsValid)
+                               return setup;
+                           else
+                               return null;
+                       }
+                });
+            if (helper?.IsValid == false)
+            {
+                ToastProvider.Show(new ToastMessage
+                    {
+                        Type = ToastMessageType.Error,
+                        HeaderText = "Invalid printing setup",
+                        BodyText = helper.ToString(),
+                        Silent = true,
+                    });
+            }
+        }
+    }
+
+    private async Task BedLeveling(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            await _bedLevelingModal!.Show();
+        }
+        else if (Values.BedLevelingStepThickness >= 0 && Values.BedLevelingStepCount >= 0)
+        {
+            await _bedLevelingModal!.Close();
+            await ExecuteCommand(new BedLevelingSetup
+                {
+                    StepCount = Values.BedLevelingStepCount!.Value,
+                    StepThickness = (double)Values.BedLevelingStepThickness!.Value,
+                }, "Bed leveling");
+        }
+    }
+
+    private async Task SetParameters(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            var cmd = new PowderTuningSetParametersCommand();
+            await ExecuteCommand(cmd, "Getting parameters");
+            Values.FillPhase = cmd.FillPhase;
+            Values.GridIndex = cmd.GridIndex;
+            Values.PrintLabelIndex = cmd.PrintLabelIndex; 
+            await _setParametersModal!.Show();
+        }
+        else
+        {
+            await _setParametersModal!.Close();
+            await ExecuteCommand(new PowderTuningSetParametersCommand
+                {
+                    FillPhase = Values.FillPhase,
+                    GridIndex = Values.GridIndex,
+                    PrintLabelIndex = Values.PrintLabelIndex,
+                }, "Setting parameters");
+        }
+    }
+
+    private async Task BeginLayer(bool fromModal = false)
+    {
+        if (!fromModal)
+        {
+            await _beginLayerModal!.Show();
+        }
+        else if (Values.LayerThickness >= 0)
+        {
+            await _beginLayerModal!.Close();
+            await ExecuteCommand(new BeginLayerSetup
+                {
+                    LayerThickness = (double)Values.LayerThickness,
+                }, "Adding layer");
+        }
+    }
+
+    private void OnTimer(object? state)
+        => TryInvokeStateHasChanged();
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _printingCancelSource?.Cancel();
+    }
+
+    private IInputValueTraits? GetTraits(StorageValue value)
+    {
+        return null;
+    }
+
+
+    private RenderFragment RenderValues(
+        (object profile, object profileDefault, string path, Func<Task>? ValueEntered)[] pathsSource,
+        bool hideTopLine = true)
+    {
+        return builder =>
+        {
+            var seq = 1;
+
+            void RenderColumn(object profile, object profileDefault, string path, EventCallback valueEntered, bool hasPath)
+            {
+                var value = StorageValue.Create(profile, path);
+                var valueDefault = profileDefault != profile ? StorageValue.Create(profileDefault, path) : null;
+                var visibility = hasPath ? "" : "invisible";
+                IInputValueTraits? traits = GetTraits(value);
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-6 property-name {visibility}");
+                builder.AddContent(seq++, value.Name.Name);
+                builder.CloseElement();
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, CssScope);
+                builder.AddAttribute(seq++, "class", $"col-6 property-value pr-4 {visibility}");
+                builder.AddContent(seq++, value.RenderValueEditor(valueDefault, profile, valueEntered: valueEntered, cssScope: CssScope, traits: traits));
+                builder.CloseElement();
+            }
+
+            int row = 0;
+            foreach (var path in pathsSource)
+            {
+                builder.OpenElement(seq++, "tr");
+                builder.AddAttribute(seq++, CssScope);
+                if (row == 0 && hideTopLine)
+                    builder.AddAttribute(seq++, "class", "hide-top-line");
+                RenderColumn(path.profile, path.profileDefault, path.path, new EventCallback(null, path.ValueEntered), true);
+                builder.CloseElement();
+                row++;
+            }
+        };
+    }
+}

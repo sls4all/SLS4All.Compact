@@ -30,6 +30,7 @@ using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using SLS4All.Compact.Printer;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace SLS4All.Compact.McuClient.Pins
 {
@@ -143,11 +144,11 @@ namespace SLS4All.Compact.McuClient.Pins
         private McuCommand _endstopStateResponse = McuCommand.PlaceholderCommand;
         private (McuCommand Cmd, int Clock, int ClockHi) _verifyNextStepWaketimeCmd = (McuCommand.PlaceholderCommand, 0, 0);
 
-#if DEBUG
-        private static readonly long[] _verSentCount = new long[5];
-#endif
+        private readonly long[] _verSentCount = new long[5];
+        private long _attemptSentCount;
+
         private readonly PrimitiveList<byte> _cmdStepBuffer;
-        private readonly PrimitiveList<StepMoveV1> _cmdSteps;
+        private readonly PrimitiveList<(StepMoveV1 Move, long MinClock, long ReqClock)> _cmdSteps;
         private readonly IMcu _mcu;
         [ThreadStatic]
         private static HashSet<McuSendResult>? _homingStepCommandIds;
@@ -262,20 +263,31 @@ namespace SLS4All.Compact.McuClient.Pins
             return timestamp + maxDistance / _maxVelocity;
         }
 
-        public McuTimestamp DacReset(McuTimestamp timestamp, double maxDistance)
+        public McuTimestamp DacResetAndHome(McuTimestamp timestamp, double position, double maxDistance)
         {
+            var count = (long)Math.Round(position / MicrostepDistance);
             lock (_queueStepLock)
             {
                 var options = _options.Value;
                 var now = SystemTimestamp.Now;
-                timestamp = ResetInner(timestamp, McuStepperResetFlags.None, out _, null, now, false, 0, TimeSpan.Zero);
-                EnsureEnabledInner(timestamp);
+                if (timestamp.IsEmpty || timestamp.ToSystem() < now) // special case when the queue is empty
+                    timestamp = McuTimestamp.FromSystem(_mcu, now, _intervalPrecision);
                 timestamp = AddDacSafetyDelay(timestamp, maxDistance);
                 lock (_resetDacCmd)
                 {
-                    var occasion = new McuOccasion((timestamp - _sendAheadDuration).Clock, timestamp.Clock);
+                    var occasion = new McuOccasion(timestamp.Clock, timestamp.Clock, ignoreLate: true);
                     _mcu.Send(
                         _resetDacCmd,
+                        McuCommandPriority.Printing,
+                        occasion);
+                }
+                timestamp = AddDacSafetyDelay(timestamp, maxDistance);
+                lock (_updateDacCmd.Cmd)
+                {
+                    _updateDacCmd.Cmd[_updateDacCmd.Value] = count;
+                    var occasion = new McuOccasion(timestamp.Clock, timestamp.Clock, ignoreLate: true);
+                    _mcu.Send(
+                        _updateDacCmd.Cmd,
                         McuCommandPriority.Printing,
                         occasion);
                 }
@@ -290,13 +302,15 @@ namespace SLS4All.Compact.McuClient.Pins
             lock (_queueStepLock)
             {
                 var now = SystemTimestamp.Now;
-                timestamp = ResetInner(timestamp, McuStepperResetFlags.None, out _, null, now, false, 0, TimeSpan.Zero);
+                if (timestamp.IsEmpty || timestamp.ToSystem() < now) // special case when the queue is empty
+                    timestamp = McuTimestamp.FromSystem(_mcu, now, _intervalPrecision);
+                timestamp = ResetInner(timestamp, McuStepperResetFlags.None, out _, now, false, 0, TimeSpan.Zero);
                 EnsureEnabledInner(timestamp);
                 timestamp = AddDacSafetyDelay(timestamp, maxDistance);
                 lock (_updateDacCmd.Cmd)
                 {
                     _updateDacCmd.Cmd[_updateDacCmd.Value] = count;
-                    var occasion = new McuOccasion((timestamp - _sendAheadDuration).Clock, timestamp.Clock);
+                    var occasion = new McuOccasion(timestamp.Clock, timestamp.Clock, ignoreLate: true);
                     _mcu.Send(
                         _updateDacCmd.Cmd,
                         McuCommandPriority.Printing,
@@ -415,10 +429,22 @@ namespace SLS4All.Compact.McuClient.Pins
             return EndstopMove(
                 sensitivity,
                 velocity,
-                (timestamp) => QueueStep(positive, pinterval, count, 0, timestamp, true, default, default, false),
+                (timestamp) => QueueStep(positive, pinterval, count, 0, timestamp, true, default, false),
                 clearanceSteps,
                 expectedEndstopState,
                 cancel);
+        }
+
+        public void OnAfterStopMovement()
+        {
+            lock (_queueStepLock)
+            {
+                TraceCounts(nameof(OnAfterStopMovement));
+                _lastClock = default;
+                _cmdValuesSentCount = 0;
+                _cmdSteps.Clear();
+                _cmdValuesId = default;
+            }
         }
 
         private void SetLastClockInner(in McuTimestamp timestamp)
@@ -469,7 +495,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 var maxInterval = Math.Min(_maxInterval32, StepMoveV4.MaxInterval);
                 for (var i = 0; i < steps.Length; i++)
                 {
-                    ref var item = ref steps[i];
+                    ref var item = ref steps[i].Move;
                     var type = item.Type;
                     if (type == StepMoveType.Dwell)
                     {
@@ -526,9 +552,9 @@ namespace SLS4All.Compact.McuClient.Pins
             for (int i = 0; i < consumedItems; i++)
             {
                 ref var item = ref steps[i];
-                var type = item.Type;
+                var type = item.Move.Type;
                 if (type is StepMoveType.Move &&
-                    item.Add != 0)
+                    item.Move.Add != 0)
                 {
                     if (i >= MaxStepMovesInV1Cmd)
                     {
@@ -541,8 +567,8 @@ namespace SLS4All.Compact.McuClient.Pins
                     break;
                 }
                 if (ver == 3 &&
-                    item.Type is StepMoveType.Move or StepMoveType.Dwell &&
-                    item.Interval >= ushort.MaxValue)
+                    item.Move.Type is StepMoveType.Move or StepMoveType.Dwell &&
+                    item.Move.Interval >= ushort.MaxValue)
                 {
                     if (i >= MaxStepMovesInV2Cmd)
                     {
@@ -561,21 +587,23 @@ namespace SLS4All.Compact.McuClient.Pins
             {
                 case 1:
                     buffer.Count = Unsafe.SizeOf<StepMoveV1>() * consumedItems;
-                    MemoryMarshal.AsBytes(steps.Slice(0, consumedItems)).CopyTo(buffer.Span);
+                    var v1 = MemoryMarshal.Cast<byte, StepMoveV1>(buffer.Span);
+                    for (int i = 0; i < consumedItems; i++)
+                        v1[i] = steps[i].Move;
                     _queueStepsV1Cmd[1] = buffer.Segment;
                     return _queueStepsV1Cmd;
                 case 2:
                     buffer.Count = Unsafe.SizeOf<StepMoveV2>() * consumedItems;
                     var v2 = MemoryMarshal.Cast<byte, StepMoveV2>(buffer.Span);
                     for (int i = 0; i < consumedItems; i++)
-                        v2[i] = StepMoveV2.Create(steps[i]);
+                        v2[i] = StepMoveV2.Create(steps[i].Move);
                     _queueStepsV2Cmd[1] = buffer.Segment;
                     return _queueStepsV2Cmd;
                 case 3:
                     buffer.Count = Unsafe.SizeOf<StepMoveV3>() * consumedItems;
                     var v3 = MemoryMarshal.Cast<byte, StepMoveV3>(buffer.Span);
                     for (int i = 0; i < consumedItems; i++)
-                        v3[i] = StepMoveV3.Create(steps[i]);
+                        v3[i] = StepMoveV3.Create(steps[i].Move);
                     _queueStepsV3Cmd[1] = buffer.Segment;
                     return _queueStepsV3Cmd;
                 default:
@@ -583,7 +611,7 @@ namespace SLS4All.Compact.McuClient.Pins
             }
         }
 
-        private void FlushStepsInner(in McuOccasion occasion)
+        private void FlushStepsInner()
         {
             var usedStepCommandsIds = _homingStepCommandIds;
             while (true)
@@ -591,18 +619,40 @@ namespace SLS4All.Compact.McuClient.Pins
                 if (_cmdSteps.Count == 0)
                     return;
                 var cmd = PrepareCommand(out var consumedItems, out var isFull, out var ver);
-                if (_cmdValuesSentCount == 0 || !_mcu.TryReplace(_cmdValuesId, cmd))
+                ref var firstItem = ref _cmdSteps[0];
+                var minClockMinPrec = firstItem.MinClock << _intervalPrecision;
+                var reqClockMinPrec = firstItem.ReqClock << _intervalPrecision;
+                var reqClockMaxPrec = reqClockMinPrec;
+                for (int i = 0; i < consumedItems; i++)
                 {
+                    ref var item = ref _cmdSteps[i];
 #if DEBUG
-                    Interlocked.Increment(ref _verSentCount[_cmdValuesVer]);
+                    Debug.Assert((item.MinClock << _intervalPrecision) >= minClockMinPrec);
+                    Debug.Assert((item.ReqClock << _intervalPrecision) >= reqClockMinPrec);
+                    if (i > 0)
+                    {
+                        ref var prev = ref _cmdSteps[i - 1];
+                        Debug.Assert(item.MinClock >= prev.MinClock);
+                        Debug.Assert(item.ReqClock >= prev.ReqClock);
+                    }
 #endif
+                    reqClockMaxPrec += item.Move.Duration;
+                }
+                var occasion = new McuOccasion(
+                    minClockMinPrec >> _intervalPrecision,
+                    reqClockMinPrec >> _intervalPrecision,
+                    (reqClockMaxPrec + _intervalPrecisionMul - 1) >> _intervalPrecision,
+                    ignoreLate: false);
+                if (_cmdValuesSentCount == 0 || !_mcu.TryReplace(_cmdValuesId, occasion, cmd))
+                {
                     if (_cmdValuesSentCount != 0) // remove previously sent moves from buffer
                     {
+                        Interlocked.Increment(ref _verSentCount[_cmdValuesVer]);
                         _cmdSteps.RemoveFromBeginning(_cmdValuesSentCount);
                         _cmdValuesSentCount = 0;
                         continue;
                     }
-
+                    Interlocked.Increment(ref _attemptSentCount);
                     _cmdValuesId = _mcu.Send(cmd, McuCommandPriority.Printing, occasion);
                     usedStepCommandsIds?.Add(_cmdValuesId);
                 }
@@ -610,6 +660,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 Debug.Assert(_cmdSteps.Count <= 100 /* sane value */);
                 if (isFull || consumedItems < _cmdSteps.Count) // we cant cram anything else in there or we have still some steps left
                 {
+                    Interlocked.Increment(ref _verSentCount[ver]);
                     _cmdSteps.RemoveFromBeginning(consumedItems);
                     _cmdValuesSentCount = 0;
                     _cmdValuesVer = ver;
@@ -628,9 +679,7 @@ namespace SLS4All.Compact.McuClient.Pins
         {
             if (_cmdValuesSentCount > 0)
             {
-#if DEBUG
                 Interlocked.Increment(ref _verSentCount[_cmdValuesVer]);
-#endif
                 _cmdSteps.RemoveFromBeginning(_cmdValuesSentCount);
                 _cmdValuesSentCount = 0;
             }
@@ -640,10 +689,11 @@ namespace SLS4All.Compact.McuClient.Pins
 
         private void SendStepInner(in StepMoveV1 move, in McuOccasion occasion)
         {
+            Debug.Assert(occasion.ReqClock == occasion.MaxClock); // single step
             if (_dumpWriter != null)
                 _dumpWriter.Write(MemoryMarshal.AsBytes(new ReadOnlySpan<StepMoveV1>(in move)));
-            _cmdSteps.Add() = move;
-            FlushStepsInner(occasion);
+            _cmdSteps.Add() = (move, occasion.MinClock, occasion.ReqClock);
+            FlushStepsInner();
         }
 
         private void EnsureEnabledInner(McuTimestamp timestamp, bool enabled = true)
@@ -662,11 +712,28 @@ namespace SLS4All.Compact.McuClient.Pins
         {
             lock (_queueStepLock)
             {
-                return ResetInner(timestamp, flags, out hasReset, null, now, false, advance, minQueueAheadDuration);
+                return ResetInner(timestamp, flags, out hasReset, now, false, advance, minQueueAheadDuration);
             }
         }
 
-        private McuTimestamp ResetInner(McuTimestamp timestamp, McuStepperResetFlags flags, out bool hasReset, McuMinClockFunc? minClock, SystemTimestamp now, bool dryRun, double advance, TimeSpan minQueueAheadDuration)
+        public bool GetResetNeccessary(McuTimestamp timestamp, SystemTimestamp now = default)
+        {
+            Debug.Assert(_queueStepLock.IsHeldByCurrentThread);
+            if (now.IsEmpty)
+                now = SystemTimestamp.Now;
+            if (timestamp.IsEmpty || timestamp.Precision != _intervalPrecision)
+                return true;
+            else
+                timestamp = timestamp.WithPrecision(_intervalPrecision);
+            Debug.Assert(_lastClock.IsEmpty || _lastClock.Precision == _intervalPrecision);
+
+            if (!_lastClock.IsEmpty && !timestamp.IsEmpty && _lastClock.ToSystem() >= now + _underflowDuration)
+                return false;
+            else
+                return true;
+        }
+
+        private McuTimestamp ResetInner(McuTimestamp timestamp, McuStepperResetFlags flags, out bool hasReset, SystemTimestamp now, bool dryRun, double advance, TimeSpan minQueueAheadDuration)
         {
             Debug.Assert(_queueStepLock.IsHeldByCurrentThread);
             if (advance < 0)
@@ -692,7 +759,6 @@ namespace SLS4All.Compact.McuClient.Pins
                     timestamp = QueueDwell(
                         timestamp.GetClockWithPrecision(_intervalPrecision) - _lastClock.GetClockWithPrecision(_intervalPrecision),
                         _lastClock,
-                        minClock: minClock,
                         dryRun: dryRun);
                 }
                 hasReset = false;
@@ -734,13 +800,11 @@ namespace SLS4All.Compact.McuClient.Pins
                 }
 
                 // send
-                if (minClock != null)
-                    throw new InvalidOperationException($"Cannot use minClock while resetting stepper {this}");
-
                 QueueFlushInner();
+                TraceCounts(nameof(ResetInner));
                 _resetCmd.Cmd[_resetCmd.Clock] = (uint)timestamp.ClockPrecise;
                 _resetCmd.Cmd[_resetCmd.ClockHi] = (uint)(timestamp.ClockPrecise >> 32);
-                _mcu.Send(_resetCmd.Cmd, McuCommandPriority.Printing, new McuOccasion((timestamp - _sendAheadDuration).Clock, timestamp.Clock));
+                _mcu.Send(_resetCmd.Cmd, McuCommandPriority.Printing, GetOccasion(timestamp));
                 SetLastClockInner(timestamp);
                 hasReset = true;
             }
@@ -770,14 +834,8 @@ namespace SLS4All.Compact.McuClient.Pins
             return timestamp;
         }
 
-        private McuOccasion GetOrUpdateQueueOccasion(McuMinClockFunc? minClock, in McuTimestamp timestamp)
-        {
-            var minClockSuggested = (timestamp - _sendAheadDuration).Clock;
-            if (minClock == null)
-                return new McuOccasion(minClockSuggested, timestamp.Clock);
-            else
-                return new McuOccasion(minClock(minClockSuggested, timestamp.Clock), timestamp.Clock);
-        }
+        private McuOccasion GetOccasion(in McuTimestamp timestamp)
+            => new McuOccasion((timestamp - _sendAheadDuration).Clock, timestamp.Clock);
 
         public override McuTimestamp QueueStep(
             bool positive,
@@ -785,10 +843,9 @@ namespace SLS4All.Compact.McuClient.Pins
             long count,
             long add,
             McuTimestamp timestamp,
-            McuMinClockFunc? minClock = null,
             SystemTimestamp now = default,
             bool dryRun = false)
-            => QueueStep(positive, precisionInterval, count, add, timestamp, true, minClock, now, dryRun);
+            => QueueStep(positive, precisionInterval, count, add, timestamp, true, now, dryRun);
 
         private McuTimestamp QueueStep(
             bool positive,
@@ -797,7 +854,6 @@ namespace SLS4All.Compact.McuClient.Pins
             long add,
             McuTimestamp timestamp,
             bool throwIfResetNecessary,
-            McuMinClockFunc? minClock,
             SystemTimestamp now,
             bool dryRun)
         {
@@ -814,14 +870,14 @@ namespace SLS4All.Compact.McuClient.Pins
 
             lock (_queueStepLock)
             {
-                timestamp = ResetInner(timestamp, (throwIfResetNecessary ? McuStepperResetFlags.ThrowIfResetNecessary : 0), out _, minClock, now, dryRun, 0, TimeSpan.Zero);
+                timestamp = ResetInner(timestamp, (throwIfResetNecessary ? McuStepperResetFlags.ThrowIfResetNecessary : 0), out _, now, dryRun, 0, TimeSpan.Zero);
                 if (!dryRun)
                     EnsureEnabledInner(timestamp);
 
                 if (count > 0)
                 {
                     var maxIntervalV1 = Math.Min(_maxInterval32, StepMoveV1.MaxInterval);
-                    var occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                    var occasion = GetOccasion(timestamp);
 
                     if (precisionInterval <= maxIntervalV1 && add == 0) // simplest case, short time no acceleration
                     {
@@ -834,7 +890,7 @@ namespace SLS4All.Compact.McuClient.Pins
                                 SendStepInner(StepMoveV1.Move(checked((uint)precisionInterval), checked((short)(positive ? steps : -steps)), 0), occasion);
 
                             timestamp = AdvancePrecise(timestamp, steps * precisionInterval);
-                            occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                            occasion = GetOccasion(timestamp);
                         }
                     }
                     else if (precisionInterval <= maxIntervalV1) // more complex case, solvable even with accelleration
@@ -854,7 +910,7 @@ namespace SLS4All.Compact.McuClient.Pins
 
                             remainder -= steps;
                             timestamp = AdvancePrecise(timestamp, pticks);
-                            occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                            occasion = GetOccasion(timestamp);
                         }
                         while (remainder > 0);
                     }
@@ -880,7 +936,7 @@ namespace SLS4All.Compact.McuClient.Pins
                                 }
 
                                 timestamp = AdvancePrecise(timestamp, pticks);
-                                occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                                occasion = GetOccasion(timestamp);
                             }
 
                             remainder--;
@@ -900,14 +956,14 @@ namespace SLS4All.Compact.McuClient.Pins
             return new McuTimestamp(timestamp.Mcu, timestamp.ClockPrecise + pticks, _intervalPrecision);
         }
 
-        public McuTimestamp QueueDwell(long precisionInterval, McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false)
+        public McuTimestamp QueueDwell(long precisionInterval, McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false)
         {
             if (precisionInterval < 0)
                 throw new ArgumentException($"{nameof(precisionInterval)} must not be negative.", nameof(precisionInterval));
 
             lock (_queueStepLock)
             {
-                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, minClock, now, dryRun, 0, TimeSpan.Zero);
+                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, now, dryRun, 0, TimeSpan.Zero);
                 if (!dryRun)
                     EnsureEnabledInner(timestamp);
 
@@ -924,7 +980,7 @@ namespace SLS4All.Compact.McuClient.Pins
                     for (int i = 0; i < innerSteps; i++)
                     {
                         var pticks = (int)(precisionInterval * (i + 1) / innerSteps - precisionInterval * i / innerSteps);
-                        var occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                        var occasion = GetOccasion(timestamp);
                         if (!dryRun)
                             SendStepInner(StepMoveV1.Dwell((uint)pticks), occasion);
 
@@ -937,7 +993,7 @@ namespace SLS4All.Compact.McuClient.Pins
             }
         }
 
-        public McuTimestamp QueuePwm(float value, McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false)
+        public McuTimestamp QueuePwm(float value, McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false)
         {
             var pwm = (McuHardPwmPin?)_pwmPin;
             if (pwm == null)
@@ -945,11 +1001,11 @@ namespace SLS4All.Compact.McuClient.Pins
 
             lock (_queueStepLock)
             {
-                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, minClock, now, dryRun, 0, TimeSpan.Zero);
+                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, now, dryRun, 0, TimeSpan.Zero);
                 if (!dryRun)
                     EnsureEnabledInner(timestamp);
 
-                var occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                var occasion = GetOccasion(timestamp);
                 if (!dryRun)
                     SendStepInner(StepMoveV1.Pwm(checked((ushort)Math.Clamp(MathF.Round(value * pwm.PwmMax), 0, pwm.PwmMax))), occasion);
 
@@ -958,15 +1014,15 @@ namespace SLS4All.Compact.McuClient.Pins
             }
         }
 
-        public McuTimestamp QueueNextStepWaketimeVerify(McuTimestamp timestamp, McuMinClockFunc? minClock = null, SystemTimestamp now = default, bool dryRun = false)
+        public McuTimestamp QueueNextStepWaketimeVerify(McuTimestamp timestamp, SystemTimestamp now = default, bool dryRun = false)
         {
             lock (_queueStepLock)
             {
-                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, minClock, now, dryRun, 0, TimeSpan.Zero);
+                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, now, dryRun, 0, TimeSpan.Zero);
                 if (!dryRun)
                     EnsureEnabledInner(timestamp);
 
-                var occasion = GetOrUpdateQueueOccasion(minClock, timestamp);
+                var occasion = GetOccasion(timestamp);
                 if (!dryRun)
                 {
                     _verifyNextStepWaketimeCmd.Cmd[_verifyNextStepWaketimeCmd.Clock] = (uint)timestamp.ClockPrecise;
@@ -991,7 +1047,7 @@ namespace SLS4All.Compact.McuClient.Pins
         {
             lock (_queueStepLock)
             {
-                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, null, default, false, 0, TimeSpan.Zero);
+                timestamp = ResetInner(timestamp, McuStepperResetFlags.ThrowIfResetNecessary, out _, default, false, 0, TimeSpan.Zero);
                 EnsureEnabledInner(timestamp, enabled);
             }
             return timestamp;
@@ -1048,21 +1104,27 @@ namespace SLS4All.Compact.McuClient.Pins
             _queueStepsV1Cmd = _mcu.LookupCommand("queue_steps_v1 oid=%c steps=%*s")
                 .Bind("oid", _stepperOid);
             _queueStepsV1Cmd.IsTimingCritical = true;
+            _queueStepsV1Cmd.IsMovement = true;
             _queueStepsV2Cmd = _mcu.LookupCommand("queue_steps_v2 oid=%c steps=%*s")
                 .Bind("oid", _stepperOid);
             _queueStepsV2Cmd.IsTimingCritical = true;
+            _queueStepsV2Cmd.IsMovement = true;
             _queueStepsV3Cmd = _mcu.LookupCommand("queue_steps_v3 oid=%c steps=%*s")
                 .Bind("oid", _stepperOid);
             _queueStepsV3Cmd.IsTimingCritical = true;
+            _queueStepsV3Cmd.IsMovement = true;
             _queueStepsV4Cmd = _mcu.LookupCommand("queue_steps_v4 oid=%c steps=%*s")
                 .Bind("oid", _stepperOid);
             _queueStepsV4Cmd.IsTimingCritical = true;
+            _queueStepsV4Cmd.IsMovement = true;
 
             _resetDacCmd = _mcu.LookupCommand("reset_stepper_dac oid=%c").Bind(
                 _stepperOid);
+            _resetDacCmd.IsMovement = true;
             _updateDacCmd.Cmd = _mcu.LookupCommand("update_stepper_dac oid=%c value=%u").Bind(
                 _stepperOid,
                 0);
+            _updateDacCmd.Cmd.IsMovement = true;
             _updateDacCmd.Value = _updateDacCmd.Cmd.GetArgumentIndex("value");
 
             _resetCmd.Cmd = _mcu.LookupCommand("reset_step_clock oid=%c clock=%u clockhi=%u").Bind(
@@ -1070,6 +1132,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 0,
                 0);
             _resetCmd.Cmd.IsTimingCritical = true;
+            _resetCmd.Cmd.IsMovement = true;
             _resetCmd.Clock = _resetCmd.Cmd.GetArgumentIndex("clock");
             _resetCmd.ClockHi = _resetCmd.Cmd.GetArgumentIndex("clockhi");
 
@@ -1078,6 +1141,7 @@ namespace SLS4All.Compact.McuClient.Pins
                 _homeCmd = _mcu.LookupCommand("endstop_home oid=%c clock=%u sample_ticks=%u sample_count=%c rest_ticks=%u pin_value=%c")
                     .Bind("oid", _endstopOid.Value);
                 _homeCmd.IsTimingCritical = true;
+                _homeCmd.IsMovement = true;
                 _endstopQueryCmd = _mcu.LookupCommand("endstop_query_state oid=%c")
                     .Bind("oid", _endstopOid.Value);
             }
@@ -1086,6 +1150,7 @@ namespace SLS4All.Compact.McuClient.Pins
             _verifyNextStepWaketimeCmd.Cmd = _mcu.LookupCommand("verify_next_step_waketime oid=%c clock=%u clockhi=%u")
                     .Bind("oid", _stepperOid);
             _verifyNextStepWaketimeCmd.Cmd.IsTimingCritical = true;
+            _verifyNextStepWaketimeCmd.Cmd.IsMovement = true;
             _verifyNextStepWaketimeCmd.Clock = _verifyNextStepWaketimeCmd.Cmd.GetArgumentIndex("clock");
             _verifyNextStepWaketimeCmd.ClockHi = _verifyNextStepWaketimeCmd.Cmd.GetArgumentIndex("clockhi");
 
@@ -1111,6 +1176,9 @@ namespace SLS4All.Compact.McuClient.Pins
             var response = await task;
             return response["pin_value"].Boolean;
         }
+
+        private void TraceCounts(string name)
+            => _logger.LogTrace($"{name}: Stepper={this}, AttemptSentCount={Interlocked.Read(ref _attemptSentCount)}, VerSentCount1={Interlocked.Read(ref _verSentCount[0])}, VerSentCount2={Interlocked.Read(ref _verSentCount[1])}, VerSentCount3={Interlocked.Read(ref _verSentCount[2])}, VerSentCount4={Interlocked.Read(ref _verSentCount[3])}, VerSentCount5={Interlocked.Read(ref _verSentCount[4])}");
 
         public override string ToString()
             => $"{_name} (pin={(_stepPinDesc?.Key.ToString() ?? _pwmPin?.Pin.Key.ToString())!})";

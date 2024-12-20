@@ -1,102 +1,133 @@
+@using Microsoft.AspNetCore.Components.Endpoints
+@using SLS4All.Compact.Security
+@using System.Collections.Concurrent
+@using System.Text.Json
+@inject NavigationManager NavigationManager
+
+@{
+    var excludeCommonHead = ExcludeFromCommonHeadHelper.ExcludeFromCommonHead(HttpContext);
+}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>SLS4All Compact</title>
-    <base href="/" />
 
+    <base id="sls4all_base" href="/" />
+    <script type="text/javascript">
+        var internalUri = @((MarkupString)JsonSerializer.Serialize(new Uri(NavigationManager.Uri).AbsolutePath));
+        var currentUri = window.location.pathname + window.location.search;
+        var pos = currentUri.lastIndexOf(internalUri);
+        var base = currentUri.substring(0, pos);
+        document.getElementById("sls4all_base").setAttribute("href", base + "/");
+    </script>
+ 
     <!-- favicon -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="manifest" href="/site.webmanifest">
-    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="mask-icon" href="safari-pinned-tab.svg" color="#5bbad5">
     <meta name="msapplication-TileColor" content="#da532c">
 
-    <!-- Vendor styles -->
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/zwicon/zwicon.min.css">
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/animate.css/animate.min.css">
+    @if (!excludeCommonHead)
+    {
+        <!-- Vendor styles -->
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/zwicon/zwicon.min.css">
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/animate.css/animate.min.css">
 
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/bootstrap-icons/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/bootstrap-select/dist/css/bootstrap-select.min.css">
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/bootstrap-icons/font/bootstrap-icons.css">
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/vendors/bootstrap-select/dist/css/bootstrap-select.min.css">
 
-    <!-- App styles -->
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/bundles/bundle.css" />
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app.css">
-    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app-custom.css">
+        <!-- App styles -->
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/bundles/bundle.css" />
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app.css">
+        <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app-custom.css">
+    }
+    <link rel="stylesheet" href="_content/SLS4All.Compact.AppCore/css/app-themes.css">
     <link rel="stylesheet" href="SLS4All.Compact.PrinterApp.styles.css" />
 
     <ImportMap />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <script src="_content/SLS4All.Compact.AppCore/bundles/bundle.js"></script>
+    @if (!excludeCommonHead)
+    {
+        <script src="_content/SLS4All.Compact.AppCore/bundles/bundle.js"></script>
+    }
 
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="PageRenderMode" />
 
-    <div id="components-reconnect-modal">
-        <div class="main-overlay-message">
-            <div class="reconnect-ellipsis">
-                <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
-            </div>
-            <div class="main-overlay-message-notification reconnect-notification-failed">
-                <p>
-                    <span class="badge badge-dark text-wrap">
-                        <i class="bi bi-exclamation-triangle"></i> Automatic reconnection to the printer has failed, probably due to a network failure.
-                    </span>
-                </p>
-                <p>
-                    <a class="btn btn-danger" onclick="window.Blazor.reconnect()">Try again</a>
-                </p>
-            </div>
-            <div class="main-overlay-message-notification reconnect-notification-rejected">
-                <p>
-                    <span class="badge badge-dark text-wrap">
-                        <i class="bi bi-exclamation-triangle"></i> Automatic reconnection to the printer has failed, printer has rejected the attempt.
-                    </span>
-                </p>
-                <p>
-                    <a class="btn btn-danger" onclick="AppHelpersInvoke('reloadPage')">Try again</a>
-                </p>
+    @if (!excludeCommonHead)
+    {
+        <div id="components-reconnect-modal">
+            <div class="main-overlay-message">
+                <div class="reconnect-ellipsis">
+                    <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+                </div>
+                <div class="main-overlay-message-notification reconnect-notification-failed">
+                    <p>
+                        <span class="badge badge-dark text-wrap">
+                            <i class="bi bi-exclamation-triangle"></i> Automatic reconnection to the printer has failed, probably due to a network failure.
+                        </span>
+                    </p>
+                    <p>
+                        <a class="btn btn-danger" onclick="window.Blazor.reconnect()">Try again</a>
+                    </p>
+                </div>
+                <div class="main-overlay-message-notification reconnect-notification-rejected">
+                    <p>
+                        <span class="badge badge-dark text-wrap">
+                            <i class="bi bi-exclamation-triangle"></i> Automatic reconnection to the printer has failed, printer has rejected the attempt.
+                        </span>
+                    </p>
+                    <p>
+                        <a class="btn btn-danger" onclick="AppHelpersInvoke('reloadPage')">Try again</a>
+                    </p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="blazor-error-ui" style="display: none">
-        <div class="main-overlay-message">
-            <div class="main-overlay-message-notification">
-                <p>
-                    <span class="badge badge-dark text-wrap">
-                        <i class="bi bi-exclamation-triangle"></i> An error has occurred. Application will not respond until reloaded. Background processes may still continue to work.
-                    </span>
-                </p>
-                <p>
-                    <a class="btn btn-danger" onclick="AppHelpersInvoke('reloadPage')">Reload window</a>
-                </p>
-                <p>
-                    <a class="btn btn-secondary" onclick="document.getElementById('blazor-error-ui').style.display = 'none'">Close this message</a>
-                </p>
+        <div id="blazor-error-ui" style="display: none">
+            <div class="main-overlay-message">
+                <div class="main-overlay-message-notification">
+                    <p>
+                        <span class="badge badge-dark text-wrap">
+                            <i class="bi bi-exclamation-triangle"></i> An error has occurred. Application will not respond until reloaded. Background processes may still continue to work.
+                        </span>
+                    </p>
+                    <p>
+                        <a class="btn btn-danger" onclick="AppHelpersInvoke('reloadPage')">Reload window</a>
+                    </p>
+                    <p>
+                        <a class="btn btn-secondary" onclick="document.getElementById('blazor-error-ui').style.display = 'none'">Close this message</a>
+                    </p>
+                </div>
             </div>
         </div>
-    </div>
+    }
 
     <!-- Javascript -->
-    <!-- Vendors -->
-    <script src="_content/SLS4All.Compact.AppCore/vendors/jquery/jquery.min.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/popper.js/popper.min.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/bootstrap/js/bootstrap.min.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/bootstrap-select/dist/js/bootstrap-select.min.js"></script>
+    @if (!excludeCommonHead)
+    {
+        <!-- Vendors -->
+        <script src="_content/SLS4All.Compact.AppCore/vendors/jquery/jquery.min.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/popper.js/popper.min.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/bootstrap/js/bootstrap.min.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/bootstrap-select/dist/js/bootstrap-select.min.js"></script>
 
-    <script src="_content/SLS4All.Compact.AppCore/vendors/flot/jquery.flot.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/flot/jquery.flot.resize.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/flot/flot.curvedlines/curvedLines.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/peity/jquery.peity.min.js"></script>
-    <script src="_content/SLS4All.Compact.AppCore/vendors/panzoom/panzoom.min.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/flot/jquery.flot.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/flot/jquery.flot.resize.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/flot/flot.curvedlines/curvedLines.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/peity/jquery.peity.min.js"></script>
+        <script src="_content/SLS4All.Compact.AppCore/vendors/panzoom/panzoom.min.js"></script>
 
-    <!-- App functions and actions -->
-    <script src="_content/SLS4All.Compact.AppCore/js/template.js"></script>
+        <!-- App functions and actions -->
+        <script src="_content/SLS4All.Compact.AppCore/js/template.js"></script>
+    }
 
     <!-- Libraries -->
     <script src="_framework/blazor.web.js"></script>
@@ -104,8 +135,9 @@
 </html>
 
 @code {
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-    }
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
 }

@@ -19,6 +19,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Channels;
@@ -32,6 +33,7 @@ namespace SLS4All.Compact.Movement
         public TimeSpan ContinuousMoveStep { get; set; } = TimeSpan.FromSeconds(0.1);
         public TimeSpan ContinuousMoveSkip { get; set; } = TimeSpan.FromSeconds(0.1);
         public double ZToMmFactor { get; set; } = 0.001;
+        public TimeSpan MicroDwellDuration { get; set; } = TimeSpan.FromSeconds(0.025);
 
         public override void CopyFrom(MovementConfigOptions config)
         {
@@ -69,6 +71,8 @@ namespace SLS4All.Compact.Movement
         public AsyncEvent<Position> PositionChangedLowFrequency { get; } = new();
         public AsyncEvent<PositionHighFrequency> PositionChangedHighFrequency { get; } = new();
 
+        public TimeSpan MicroDwellDuration => _options.CurrentValue.MicroDwellDuration;
+
         public MovementClientBase(
             ILogger logger,
             IOptionsMonitor<MovementClientBaseOptions> options)
@@ -79,10 +83,10 @@ namespace SLS4All.Compact.Movement
 
             _positionLowFrequency = new Position(0, 0, 0, 0, 0);
             _dwellFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
-                Dwell(TimeSpan.FromSeconds(cmd.Arg1), hidden, context: context, cancel: cancel),
+                Dwell(TimeSpan.FromSeconds(cmd.Arg1), false, hidden, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"DWELL SEC={cmd.Arg1}"));
             _moveXYFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
-                MoveXY(cmd.Arg1, cmd.Arg2, cmd.Arg3 != 0, cmd.Arg4Nullable, hidden, context: context, cancel: cancel),
+                MoveXY(cmd.Arg1, cmd.Arg2, cmd.Arg3 != 0, cmd.Arg4Nullable, hidden: hidden, context: context, cancel: cancel),
                 cmd => string.Create(CultureInfo.InvariantCulture, $"MOVE_XY X={cmd.Arg1} Y={cmd.Arg2} RELATIVE={cmd.Arg3} SPEED={cmd.Arg4Nullable}"),
                 _moveXYFormatterTag);
             _moveRFormatter = new DelegatedCodeFormatter((cmd, hidden, context, cancel) =>
@@ -136,12 +140,14 @@ namespace SLS4All.Compact.Movement
             }
         }
 
-        public abstract ValueTask Dwell(TimeSpan delay, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        public abstract ValueTask Dwell(TimeSpan delay, bool includeAux, bool hidden, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public ValueTask DwellCode(ChannelWriter<CodeCommand> channel, TimeSpan delay, CancellationToken cancel = default)
             => channel.WriteAsync(_dwellFormatter.Create((float)delay.TotalSeconds), cancel);
 
         public abstract Task FinishMovement(bool performMajorCleanup = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+
+        public abstract Task StopAndFinishMovement(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public abstract ValueTask HomeAux(MovementAxis axis, EndstopSensitivity sensitivity, double maxDistance, double? speed = null, bool noExtraMoves = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
@@ -175,7 +181,7 @@ namespace SLS4All.Compact.Movement
         public async ValueTask MoveContinuous(MovementAxis axis, bool positive, double speed, IPrinterClientCommandContext? context = null, CancellationToken cancel = default)
         {
             var options = _options.CurrentValue;
-            var step = options.ContinuousMoveStep.TotalSeconds * speed;
+            var step = options.ContinuousMoveStep.TotalSeconds * (axis is MovementAxis.X or MovementAxis.Y ? speed / 60 : speed);
             if (!positive)
                 step = -step;
             var stopwatch = Stopwatch.StartNew();
@@ -187,11 +193,12 @@ namespace SLS4All.Compact.Movement
                     await MoveXY(
                         axis == MovementAxis.X ? step : 0,
                         axis == MovementAxis.Y ? step : 0,
-                        true,
+                        relative: true,
                         speed,
-                        true,
-                        context,
-                        cancel);
+                        clamp: true,
+                        hidden: true,
+                        context: context,
+                        cancel: cancel);
                 else
                     await MoveAux(
                         axis,
@@ -208,7 +215,7 @@ namespace SLS4All.Compact.Movement
 
         public abstract TimeSpan GetMoveXYTime(double rx, double ry, double? speed = null, bool? laserOn = null, IPrinterClientCommandContext ? context = null);
 
-        public abstract ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        public abstract ValueTask MoveXY(double x, double y, bool relative, double? speed = null, bool clamp = false, bool hidden = false, IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public ValueTask MoveXYCode(ChannelWriter<CodeCommand> channel, double x, double y, bool relative, double? speed = null, CancellationToken cancel = default)
         {
@@ -278,7 +285,7 @@ namespace SLS4All.Compact.Movement
             }
         }
 
-        public abstract ValueTask<(TimeSpan Duration, SystemTimestamp Timestamp)> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
+        public abstract ValueTask<RemainingPrintTime> GetRemainingPrintTime(IPrinterClientCommandContext? context = null, CancellationToken cancel = default);
 
         public abstract double? TryGetMinLaserPwmCycleTime(IPrinterClientCommandContext? context = null);
 

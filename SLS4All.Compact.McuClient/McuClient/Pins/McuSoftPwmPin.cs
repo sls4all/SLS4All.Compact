@@ -27,8 +27,8 @@ namespace SLS4All.Compact.McuClient.Pins
         private float _startValue;
         private float _shutdownValue;
         private TimeSpan _maxDuration;
-        private (McuCommand cmd, int clockIndex, int onTicksIndex, int offTicksIndex) _set = (McuCommand.PlaceholderCommand, 0, 0, 0);
-        private (McuCommand cmd, int onTicksIndex, int offTicksIndex) _update = (McuCommand.PlaceholderCommand, 0, 0);
+        private (McuCommand Cmd, McuCommandArgument Clock, McuCommandArgument OnTicks, McuCommandArgument OffTicks) _set = (McuCommand.PlaceholderCommand, default, default, default);
+        private (McuCommand Cmd, McuCommandArgument OnTicks, McuCommandArgument OffTicks) _update = (McuCommand.PlaceholderCommand, default, default);
         private long _lastClock;
         private McuSendResult? _updateResult;
 
@@ -85,25 +85,25 @@ namespace SLS4All.Compact.McuClient.Pins
             _currentValue = value.Single;
             if (clock == 0)
             {
-                lock (_update.cmd)
+                lock (_update.Cmd)
                 {
                     var occasion = new McuOccasion(clock, clock);
                     _lastClock = clock;
-                    _update.cmd[_update.onTicksIndex] = intValue;
-                    _update.cmd[_update.offTicksIndex] = _cycleTicks - intValue;
-                    _updateResult = Mcu.Send(_update.cmd, priority, occasion, cancelFirst: _updateResult);
+                    _update.OnTicks.Value = intValue;
+                    _update.OffTicks.Value = _cycleTicks - intValue;
+                    _updateResult = Mcu.Send(_update.Cmd, priority, occasion, cancelFirst: _updateResult);
                 }
             }
             else
             {
-                lock (_set.cmd)
+                lock (_set.Cmd)
                 {
                     var occasion = new McuOccasion(_lastClock, clock);
                     _lastClock = clock;
-                    _set.cmd[_set.clockIndex] = clock;
-                    _set.cmd[_set.onTicksIndex] = intValue;
-                    _set.cmd[_set.offTicksIndex] = _cycleTicks - intValue;
-                    Mcu.Send(_set.cmd, priority, occasion);
+                    _set.Clock.Value = clock;
+                    _set.OnTicks.Value = intValue;
+                    _set.OffTicks.Value = _cycleTicks - intValue;
+                    Mcu.Send(_set.Cmd, priority, occasion);
                 }
             }
         }
@@ -130,20 +130,15 @@ namespace SLS4All.Compact.McuClient.Pins
                     checked((int)Mcu.ClockSync.GetClockDuration(_maxDuration))));
                 var svalue = (int)MathF.Round(_startValue * _pwmMax);
 
-                _update.cmd = Mcu.LookupCommand("update_soft_pwm_out oid=%c on_ticks=%u off_ticks=%u")
+                _update = Mcu.LookupCommand("update_soft_pwm_out oid=%c on_ticks=%u off_ticks=%u", "on_ticks", "off_ticks")
                     .Bind("oid", _oid)
                     .Bind("on_ticks", svalue)
                     .Bind("off_ticks", _cycleTicks - svalue);
-                _update.onTicksIndex = _update.cmd.GetArgumentIndex("on_ticks");
-                _update.offTicksIndex = _update.cmd.GetArgumentIndex("off_ticks");
 
-                commands.Add(_update.cmd.Clone(), onInit: true);
+                commands.Add(_update.Cmd.Clone(), onInit: true);
 
-                _set.cmd = Mcu.LookupCommand("schedule_soft_pwm_out oid=%c clock=%u on_ticks=%u off_ticks=%u")
+                _set = Mcu.LookupCommand("schedule_soft_pwm_out oid=%c clock=%u on_ticks=%u off_ticks=%u", "clock", "on_ticks", "off_ticks")
                     .Bind("oid", _oid);
-                _set.clockIndex = _set.cmd.GetArgumentIndex("clock");
-                _set.onTicksIndex = _set.cmd.GetArgumentIndex("on_ticks");
-                _set.offTicksIndex = _set.cmd.GetArgumentIndex("off_ticks");
             }
             return ValueTask.CompletedTask;
         }

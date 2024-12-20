@@ -71,11 +71,11 @@
                 <hr class="my-3">
                 <p>
                     Please select whether you want to backup or restore printer data. This includes current application version (binaries) and all <b>profiles</b>, <b>jobs</b>, <b>objects</b> and <b>configuration</b>.
-                    It does not backup any previous complemed backups and any data in the rest of the system and any executables.
+                    It does not backup any previous completed backups and any data in the rest of the operating system.
                 </p>
                 <p>
                     Purpose for this feature is if the system image of the printer is reset to factory state,
-                    you can use it to get the 3D printing features back to the state you made the backup.
+                    you can use this to get the 3D printing features back to the state when you made the backup.
                 </p>
                 <hr class="my-3">
                 <p class="lead">
@@ -165,7 +165,7 @@
         RestoreCompleted,
     }
 
-    public const string SelfPath = "/backups";
+    public const string SelfPath = "backups";
     private const string CssScope = "b-backups";
     private static readonly TimeSpan _progressRefreshDelay = TimeSpan.FromSeconds(0.25);
 

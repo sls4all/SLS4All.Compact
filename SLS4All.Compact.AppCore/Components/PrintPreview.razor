@@ -85,12 +85,14 @@
             <a class="btn btn-theme btn--icon-text @(isRunning ? "disabled" : "")" @onclick="() => DoPlot()">
                 <i class="bi bi-pencil" /> Plot
             </a>
+            <text> </text>
             @if (!MainLayout.IsLocalSession)
             {
                 <a class="btn btn-theme btn--icon-text" href="@PanZoom.SelfPath?image=@Uri.EscapeDataString(LayerUrl)" target="_blank">
                     <i class="bi bi-fullscreen" /> Open tab
                 </a>
             }
+            <text> </text>
             <a class="btn btn-theme btn--icon-text" @onclick="() => Printing.BackgroundTask.Cancel()">
                 <i class="bi bi-x" /> Cancel
             </a>
@@ -109,7 +111,7 @@
     private PrintingServiceLayerStats? _previewStats;
     private LayerWeight[]? _layerWeights;
 
-    private string LayerUrl => $"/api/SlicingImageScoped/{Printing.Id}/{Printing.PreviewVersion}/{PreviewLayerIndex - 1}";
+    private string LayerUrl => $"api/SlicingImageScoped/{Printing.Id}/{Printing.PreviewVersion}/{PreviewLayerIndex - 1}";
     [Parameter]
     public INestingService? Nesting { get; set; } = null!;
     [Parameter]

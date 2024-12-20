@@ -189,79 +189,67 @@ namespace SLS4All.Compact.Threading
         }
 
         private async Task ProcessCollapseTask(
-            Delegate task,
-            bool updateState,
-            CancellationToken cancelFirst,
-            CancellationToken cancelRest)
-        { 
-            var startedTimestamp = Stopwatch.GetTimestamp();
-            try
-            {
-                if (!_noStatus)
-                {
-                    var status = new BackgroundTaskStatus<TStatus>(startedTimestamp, TimeSpan.Zero, 0, null, null, null);
-                    s_asyncStatus.Value = status;
-                    _status = status;
-                }
-
-                if (task is Func<CancellationToken, Task> funcTask)
-                    await funcTask(cancelFirst);
-                else if (task is Func<CancellationToken, ValueTask> funcValueTask)
-                    await funcValueTask(cancelFirst);
-                else
-                    throw new InvalidOperationException("Invalid delegate passed");
-
-                if (!_noStatus)
-                    _status = new BackgroundTaskStatus<TStatus>(null, Stopwatch.GetElapsedTime(startedTimestamp), 100, null, null, null);
-            }
-            catch (Exception ex)
-            {
-                Logger?.LogError(ex, $"Unhandled exception in collapse task");
-                await OnException(ex);
-                if (!_noStatus)
-                    _status = new BackgroundTaskStatus<TStatus>(null, Stopwatch.GetElapsedTime(startedTimestamp), 100, null, null, ex);
-            }
-            finally
-            {
-                if (!_noStatus)
-                    s_asyncStatus.Value = null;
-            }
-
-            lock (_syncRoot)
-            {
-                if (_collapseTasks.Count != 0)
-                {
-                    var next = _collapseTasks[0];
-                    _collapseTasks.RemoveAt(0);
-                    _collapseTaskRunning = ProcessCollapseTask(next.factory, true, cancelRest, cancelRest);
-                }
-                else
-                    _collapseTaskRunning = Task.CompletedTask;
-            }
-            if (updateState)
-                await OnStateChanged();
-        }
-
-        private Task ProcessCollapseTask(
-            bool updateState,
+            Delegate? taskFactory,
             CancellationToken cancelFirst,
             CancellationToken cancelRest)
         {
-            lock (_syncRoot)
+            do
             {
-                if (_collapseTasks.Count != 0)
+                var hadTask = taskFactory != null;
+                if (hadTask)
                 {
-                    var next = _collapseTasks[0];
-                    _collapseTasks.RemoveAt(0);
-                    _collapseTaskRunning = ProcessCollapseTask(next.factory, true, cancelRest, cancelRest);
+                    var startedTimestamp = Stopwatch.GetTimestamp();
+                    try
+                    {
+                        if (!_noStatus)
+                        {
+                            var status = new BackgroundTaskStatus<TStatus>(startedTimestamp, TimeSpan.Zero, 0, null, null, null);
+                            s_asyncStatus.Value = status;
+                            _status = status;
+                        }
+
+                        if (taskFactory is Func<CancellationToken, Task> funcTask)
+                            await funcTask(cancelFirst);
+                        else if (taskFactory is Func<CancellationToken, ValueTask> funcValueTask)
+                            await funcValueTask(cancelFirst);
+                        else
+                            throw new InvalidOperationException("Invalid delegate passed");
+
+                        if (!_noStatus)
+                            _status = new BackgroundTaskStatus<TStatus>(null, Stopwatch.GetElapsedTime(startedTimestamp), 100, null, null, null);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.LogError(ex, $"Unhandled exception in collapse task");
+                        await OnException(ex);
+                        if (!_noStatus)
+                            _status = new BackgroundTaskStatus<TStatus>(null, Stopwatch.GetElapsedTime(startedTimestamp), 100, null, null, ex);
+                    }
+                    finally
+                    {
+                        if (!_noStatus)
+                            s_asyncStatus.Value = null;
+                    }
                 }
-                else
-                    _collapseTaskRunning = Task.CompletedTask;
+
+                lock (_syncRoot)
+                {
+                    if (_collapseTasks.Count != 0)
+                    {
+                        var next = _collapseTasks[0];
+                        _collapseTasks.RemoveAt(0);
+                        taskFactory = next.factory;
+                    }
+                    else
+                    {
+                        _collapseTaskRunning = Task.CompletedTask;
+                        taskFactory = null;
+                    }
+                }
+                if (hadTask)
+                    await OnStateChanged();
             }
-            if (updateState)
-                return OnStateChanged();
-            else
-                return Task.CompletedTask;
+            while (taskFactory != null);
         }
 
         private Task OnException(Exception ex)
@@ -347,12 +335,12 @@ namespace SLS4All.Compact.Threading
                         ? cancelRest
                         : CancellationTokenSource.CreateLinkedTokenSource(cancelRest, externalCancel).Token;
                     completedTask = _collapseTaskRunning;
-                    _ = ProcessCollapseTask(false, cancelFirst, cancelRest); // will complete synchronously with these params
+                    _collapseTaskRunning = ProcessCollapseTask(null, cancelFirst, cancelRest); // will complete synchronously with these params
                 }
             }
             if (completedTask == null)
                 return Task.CompletedTask;
-            else if (StateChanged is null or { HasHandlers: true }) // NOTE: null for internal tasks
+            else if (StateChanged == null || !StateChanged.HasHandlers) // NOTE: null for internal tasks
                 return completedTask;
             else
                 return CompleteInternal(completedTask, cancelRest);

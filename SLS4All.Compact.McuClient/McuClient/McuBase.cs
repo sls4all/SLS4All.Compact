@@ -76,7 +76,7 @@ namespace SLS4All.Compact.McuClient
         private readonly ConcurrentDictionary<McuBusKey, AsyncLock> _busLocks;
         private readonly TaskCompletionSource _lostCommunicationTaskSource;
 
-        private readonly Lock _shutdownLock = new();
+        private readonly AsyncLock _shutdownLock = new();
         private volatile string? _shutdownReason;
         private volatile bool _hasLostCommunication;
         protected volatile bool _isUpdatingFirmware;
@@ -87,7 +87,6 @@ namespace SLS4All.Compact.McuClient
 
         private volatile McuConfig _config = new McuConfig
         {
-            IsDefault = true,
             Commands =
             {
                 { "identify offset=%u count=%c", 1 },
@@ -111,6 +110,7 @@ namespace SLS4All.Compact.McuClient
         public string? ShutdownReason => _shutdownReason;
         public abstract bool HasTimingCriticalCommandsScheduled { get; }
         public virtual Exception? CurrentError => _currentError;
+        public abstract bool IsFake { get; }
 
         public McuBase(
             ILoggerFactory loggerFactory,
@@ -169,22 +169,28 @@ namespace SLS4All.Compact.McuClient
             return ValueTask.CompletedTask;
         }
 
-        protected virtual ValueTask OnMcuShutdown(Exception? exception, McuCommand? command, CancellationToken cancel)
+        protected virtual async ValueTask OnMcuShutdown(Exception? exception, McuCommand? command, CancellationToken cancel)
         {
             if (command != null)
             {
-                string reason;
-                lock (_shutdownLock)
+                var reason = command.TryGetArgumentString("static_string_id", _config) ?? "N/A";
+                if (!_wasReady)
                 {
-                    if (_shutdownReason != null)
-                        return ValueTask.CompletedTask;
-                    _shutdownReason = reason = command.TryGetArgumentString("static_string_id", _config) ?? "N/A";
+                    _logger.LogError($"Got MCU {_name} shutdown. Reason: {reason}. Since the MCU {this} was not ready yet, ignoring for now.");
                 }
-                _logger.LogError($"Got MCU {_name} shutdown. Reason: {_shutdownReason}. Shutting down manager.");
-                PrinterGC.LogCollectionCount(_logger);
-                _manager.Shutdown(new McuShutdownMessage { Mcu = this, Reason = reason });
+                else
+                {
+                    using (await _shutdownLock.LockAsync(cancel))
+                    {
+                        if (_shutdownReason != null)
+                            return;
+                        _shutdownReason = reason;
+                    }
+                    _logger.LogError($"Got MCU {_name} shutdown. Reason: {reason}. Shutting down manager.");
+                    PrinterGC.LogCollectionCount(_logger);
+                    _manager.Shutdown(new McuShutdownMessage { Mcu = this, Reason = reason });
+                }
             }
-            return ValueTask.CompletedTask;
         }
 
         public AsyncLock GetLock(McuBusKey key)
@@ -272,8 +278,6 @@ namespace SLS4All.Compact.McuClient
         {
             try
             {
-                var canTryRecover = true;
-
                 _wasReady = false;
                 _initialExceptionSupressionStopwatch.Restart();
 
@@ -299,17 +303,24 @@ namespace SLS4All.Compact.McuClient
                                 var initSeq = await SynchronizeDevice(device, cancel);
                                 (readTask, writeTask) = CreateReadWriteTask(device, initSeq, inflightItems, _runScheduler, readWriteCancel);
 
-                                await IdentifyDevice(cancel);
+                                _config = await IdentifyDevice(device, cancel);
 
-                                if (canTryRecover)
+                                async Task LocalCheckForShutdown()
                                 {
-                                    if (await CheckForShutdown(cancel))
+                                    if (!_wasReady)
                                     {
-                                        throw new McuAutomatedRestartException(
-                                            $"Automated MCU {_name} restart after {nameof(CheckForShutdown)}.{(_shutdownReason is not null and not "N/A" ? $" Reason = {_shutdownReason}" : "")}",
-                                            reason: McuAutomatedRestartReason.Shutdown);
+                                        // NOTE: do not modify _shutdownReason field, so the shutdown at initialize will not alert the callers/users
+                                        var reason = await CheckForShutdown(cancel);
+                                        if (reason != null)
+                                        {
+                                            throw new McuAutomatedRestartException(
+                                                $"Automated MCU {_name} restart after {nameof(CheckForShutdown)}.{(reason is not null and not "N/A" ? $" Reason = {reason}" : "")}",
+                                                reason: McuAutomatedRestartReason.Shutdown);
+                                        }
                                     }
                                 }
+
+                                await LocalCheckForShutdown();
                                 if (!_hasTriedToUpdateFirmware)
                                     await CheckFirmwareUpdate(device, cancel);
 
@@ -324,8 +335,11 @@ namespace SLS4All.Compact.McuClient
                                     var wasReady = await SendConfigCommands(cancel);
 
                                     // notify ready
-                                    canTryRecover = false;
-                                    _wasReady = wasReady;
+                                    using (await _shutdownLock.LockAsync(cancel))
+                                    {
+                                        await LocalCheckForShutdown();
+                                        _wasReady = wasReady;
+                                    }
                                     _currentError = null;
                                     _logger.LogInformation($"MCU {_name} is ready");
                                     await AfterReadyEvent.Invoke(cancel);
@@ -357,7 +371,7 @@ namespace SLS4All.Compact.McuClient
                                 inflightItems.Clear(); // stop any retransmissions
                                 foreach (var sub in shutdownSubs)
                                     sub.Dispose();
-                                if (!await CheckForShutdown(cancel))
+                                if (await CheckForShutdown(cancel) == null) // if not yet shutdown, do shutdown
                                 {
                                     Send(this.LookupCommand("emergency_stop"), McuCommandPriority.Shutdown, McuOccasion.Now);
                                     await Task.Delay(_restartDelay, cancel);
@@ -482,11 +496,13 @@ namespace SLS4All.Compact.McuClient
 
         public abstract void SendCancel(IEnumerable<McuSendResult> sendIds);
 
+        public abstract McuTimestamp MovementCancel();
+
         public abstract Task SendWait(McuCommand command, int priority, McuOccasion clock, CancellationToken cancel = default);
 
         public abstract McuSendResult Send(McuCommand command, int priority, McuOccasion clock, McuSendResult? cancelFirst = default);
 
-        public abstract bool TryReplace(McuSendResult id, McuCommand command);
+        public abstract bool TryReplace(McuSendResult id, McuOccasion occasion, McuCommand command);
 
         public async Task<McuCommand> SendWithResponse(McuCommand request, McuCommand response, Func<McuCommand, bool>? responseFilter, int priority, McuOccasion clock, TimeSpan? timeout = default, CancellationToken cancel = default)
         {
@@ -501,8 +517,11 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
-        private async Task<bool> CheckForShutdown(CancellationToken cancel)
+        protected virtual async Task<string?> CheckForShutdown(CancellationToken cancel)
         {
+            var existingReason = _shutdownReason;
+            if (existingReason != null)
+                return existingReason;
             var priority = McuCommandPriority.Initialize;
             var cmdGetConfig = this.LookupCommand("get_config");
             if (!TryLookupCommand("config is_config=%c crc=%u move_count=%hu is_shutdown=%c static_string_id=%hu", out var cmdGetConfigResponse))
@@ -514,30 +533,33 @@ namespace SLS4All.Compact.McuClient
                 priority,
                 McuOccasion.Now,
                 cancel: cancel);
-
             if (response["is_shutdown"].Boolean)
             {
                 var reason = response.TryGetArgumentString("static_string_id", _config) ?? "N/A";
-                return true;
+                return reason;
             }
-            return false;
+            return null;
         }
 
         protected abstract Task<bool> SendConfigCommands(CancellationToken cancel);
 
-        protected async Task SendConfigCommands(McuConfigCommands commands, CancellationToken cancel)
+        protected async Task SendConfigCommands(McuConfigCommands commands, bool ignoreCrc, CancellationToken cancel)
         {
-            var result = await TrySendConfigCommands(commands, cancel);
+            var result = await TrySendConfigCommands(commands, ignoreCrc, cancel);
             if (result != ConfigCommandResult.Succeeded)
+            {
+                var shutdownReason = await CheckForShutdown(cancel);
                 throw new McuAutomatedRestartException(
-                    $"Failed to initialize MCU {_name}, result = {result}.{(ShutdownReason is not null and not "N/A" ? $" Reason = {ShutdownReason}" : "")}",
-                    reason: result switch { 
+                    $"Failed to initialize MCU {_name}, result = {result}.{(shutdownReason is not null and not "N/A" ? $" Reason = {shutdownReason}" : "")}",
+                    reason: result switch
+                    {
                         ConfigCommandResult.CrcMismatch => McuAutomatedRestartReason.CrcMismatch,
                         _ => McuAutomatedRestartReason.Shutdown,
                     });
+            }
         }
 
-        protected async Task<ConfigCommandResult> TrySendConfigCommands(McuConfigCommands commands, CancellationToken cancel)
+        protected async Task<ConfigCommandResult> TrySendConfigCommands(McuConfigCommands commands, bool ignoreCrc, CancellationToken cancel)
         {
             var options = _options.Value;
             var priority = McuCommandPriority.Initialize;
@@ -552,21 +574,11 @@ namespace SLS4All.Compact.McuClient
                 McuOccasion.Now,
                 cancel: cancel);
 
-            bool HandleIsShutdown()
-            {
-                if (response["is_shutdown"].Boolean)
-                {
-                    TrySetShutdownReason(response.TryGetArgumentString("static_string_id", Config) ?? "N/A");
-                    return true;
-                }
-                return false;
-            }
-
-            if (HandleIsShutdown())
+            if (response["is_shutdown"].Boolean)
                 return ConfigCommandResult.Shutdown;
             int? prevCrc = response["is_config"].Boolean ? response["crc"].Int32 : null;
             var requestedMoveCount = _options.Value.RequestedMoveCount;
-            if (!await commands.TryInitializeAndSend(_logger, this, priority, prevCrc, requestedMoveCount, cancel))
+            if (!await commands.TryInitializeAndSend(_logger, this, priority, prevCrc, requestedMoveCount, cancel) && !ignoreCrc)
                 return ConfigCommandResult.CrcMismatch;
             response = await SendWithResponse(
                 cmdGetConfig,
@@ -575,7 +587,6 @@ namespace SLS4All.Compact.McuClient
                 priority,
                 McuOccasion.Now,
                 cancel: cancel);
-            HandleIsShutdown();
             if (!response["is_config"].Boolean || response["is_shutdown"].Boolean)
                 return ConfigCommandResult.Shutdown;
             var availableMoveCount = response["move_count"].Int32;
@@ -586,7 +597,7 @@ namespace SLS4All.Compact.McuClient
             return ConfigCommandResult.Succeeded;
         }
 
-        private async Task IdentifyDevice(CancellationToken cancel)
+        protected virtual async Task<McuConfig> IdentifyDevice(IDisposable device, CancellationToken cancel)
         {
             var identifyCmd = this.LookupCommand("identify offset=%u count=%c");
             var identifyResponse = this.LookupCommand("identify_response offset=%u data=%.*s");
@@ -616,11 +627,13 @@ namespace SLS4All.Compact.McuClient
                 }
             }
             ms.Position = 2; // ZLIB header
+            McuConfig config;
             using (var gzip = new DeflateStream(ms, CompressionMode.Decompress, true))
             {
-                _config = McuConfig.Parse(_name, gzip);
+                config = McuConfig.Parse(_name, gzip);
             }
             _logger.LogInformation($"Got identify config from MCU {_name} in {batchCount} batches");
+            return config;
         }
 
         protected abstract ValueTask<ulong> SynchronizeDevice(IDisposable device, CancellationToken cancel);
@@ -648,7 +661,7 @@ namespace SLS4All.Compact.McuClient
 
         protected void TrySetShutdownReason(string reason)
         {
-            lock (_shutdownLock)
+            using (_shutdownLock.Lock())
             {
                 if (_shutdownReason == null)
                     _shutdownReason = reason;

@@ -53,10 +53,34 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
                 backdrop: false
             });
         }
-        public static async setImageSrcById(id: string, src: string) {
+        public static async setStyle1ById(id: string, key1: string, value1: any) {
             var element = document.getElementById(id) as HTMLImageElement;
             if (element) {
-                element.src = src;
+                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+            }
+        }
+        public static async setStyle2ById(id: string, key1: string, value1: any, key2: string, value2: any) {
+            var element = document.getElementById(id) as HTMLImageElement;
+            if (element) {
+                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                element.style.setProperty(key2, value2 == null ? null : String(value2), "important");
+            }
+        }
+        public static async setStyle3ById(id: string, key1: string, value1: any, key2: string, value2: any, key3: string, value3: any) {
+            var element = document.getElementById(id) as HTMLImageElement;
+            if (element) {
+                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                element.style.setProperty(key2, value2 == null ? null : String(value2), "important");
+                element.style.setProperty(key3, value3 == null ? null : String(value3), "important");
+            }
+        }
+        public static async setStyle4ById(id: string, key1: string, value1: any, key2: string, value2: any, key3: string, value3: any, key4: string, value4: any) {
+            var element = document.getElementById(id) as HTMLImageElement;
+            if (element) {
+                element.style.setProperty(key1, value1 == null ? null : String(value1), "important");
+                element.style.setProperty(key2, value2 == null ? null : String(value2), "important");
+                element.style.setProperty(key3, value3 == null ? null : String(value3), "important");
+                element.style.setProperty(key4, value4 == null ? null : String(value4), "important");
             }
         }
         public static async setImageSrcByIdIfLoaded(id: string, src: string) {
@@ -94,27 +118,6 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
                     else {
                         elementAny.dataSrcToLoad = src;
                     }
-                }
-            }
-        }
-        public static async streamImageSrcById(id: string, contentType: string, streamRef: any): Promise<void> {
-            var element = document.getElementById(id) as HTMLImageElement;
-            if (element) {
-                var array: Uint8Array;
-                try {
-                    array = (await streamRef.arrayBuffer()) as Uint8Array;
-                }
-                catch {
-                    return;
-                }
-                if (array.length != 0) {
-                    var blob = new Blob([array], { type: contentType });
-                    var oldSrc = element.src;
-                    element.src = URL.createObjectURL(blob);
-                    try {
-                        URL.revokeObjectURL(oldSrc);
-                    }
-                    catch { }
                 }
             }
         }
@@ -325,6 +328,9 @@ namespace SLS4All.Compact.PrinterApp.Scripts {
             }, 1000);
         }
 
+        public static getBaseUri(): string {
+            return document.getElementById("sls4all_base")!.getAttribute("href")!;
+        }
         public static setReloadUri(uri: string): void {
              Helpers._reloadUri = uri;
         }

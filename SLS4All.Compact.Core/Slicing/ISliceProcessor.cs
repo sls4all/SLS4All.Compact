@@ -97,6 +97,9 @@ namespace SLS4All.Compact.Slicing
         public required double OffLength { get; set; }
     }
 
+    /// <remarks>
+    /// Class MUST be serializable!
+    /// </remarks>
     public struct SliceProcessResult
     {
         public required int OutlineEdgeCount { get; set; }

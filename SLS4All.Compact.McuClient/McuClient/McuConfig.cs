@@ -34,7 +34,6 @@ namespace SLS4All.Compact.McuClient
         public IDictionary<string, int> PinToId { get; set; } = new Dictionary<string, int>();
         public IDictionary<string, int> BusToId { get; set; } = new Dictionary<string, int>();
         public IDictionary<string, int> ThermocoupleTypeToId { get; set; } = new Dictionary<string, int>();
-        public bool IsDefault { get; set; }
 
         public static McuConfig Parse(string mcuAlias, Stream stream)
         {

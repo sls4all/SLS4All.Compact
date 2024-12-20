@@ -29,9 +29,11 @@ namespace SLS4All.Compact.Printing
 
         public required string Name { get; set; }
         public required PrintProfileReference PrintProfile { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
 
         public bool NeedsLaser => false;
         public bool DryPrintEnabled => false;
+        public bool PreviewEnabled => false;
 
         public IStorageObject Clone()
             => (AnalyseJob)MemberwiseClone();

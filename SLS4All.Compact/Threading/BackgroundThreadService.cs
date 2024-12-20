@@ -23,6 +23,8 @@ namespace SLS4All.Compact.Threading
         private readonly ILogger _logger;
         private readonly TaskScheduler _scheduler;
 
+        protected TaskScheduler Scheduler => _scheduler;
+
         public BackgroundThreadService(
             ILogger logger,
             TaskScheduler? scheduler = null)

@@ -1,14 +1,26 @@
 ﻿[MjpegDeviceCamera] # [monitored]
 CaptureBinary = "/usr/bin/libcamera-vid"
-CaptureArgs = "-t 0 -o - --width 600 --height 650 --codec mjpeg --saturation 0.5 --awbgains 1,1 --ev 0 --awb auto --analoggain 1 --sharpness 4 --framerate 10 --roi 0.18,0.0575,0.57,0.85 --exposure sport --nopreview --brightness {{brightness}} --contrast {{contrast}}"
+CaptureArgs = "-t 0 -o - --width 600 --height 650 --codec mjpeg --saturation 0.5 --awbgains 1,1 --ev 0 --awb auto --analoggain 1 --sharpness 4 --framerate 12 --roi 0.18,0.0575,0.57,0.85 --exposure sport --nopreview --brightness {{brightness}} --contrast {{contrast}}"
 Rotation = 1
 MostlyEmptyPixelValueThreshold = 64
+Width = 650 # rotated!
+Height = 600 # rotated!
+
+    [MjpegDeviceCamera.SafeWorkingArea]
+    MinX = 105
+    MinY = 113
+    MaxX = 545
+    MaxY = 547
 
     [MjpegDeviceCamera.DefaultParams]
     brightness = "0"
     contrast = "1"
 
     [MjpegDeviceCamera.PrintingParams]
+    brightness = "0"
+    contrast = "1"
+
+    [MjpegDeviceCamera.AutoTuningParams]
     brightness = "0"
     contrast = "1"
 

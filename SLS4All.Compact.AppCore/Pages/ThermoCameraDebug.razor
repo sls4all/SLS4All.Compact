@@ -10,7 +10,7 @@
 @inject ImageStreamingHelper ImageStreamingHelper
 @inject IJSRuntime JSRuntime
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-thermo-camera.png" IsFullPage="true" />
 
 <div style="width:100%; height:100%; position:relative; z-index:1">
     <img id="@_id" @key="_streamKey" src="@StreamUri" style="position: relative; width:100%; height:100%; object-fit: contain" />
@@ -39,7 +39,7 @@
 </div>
 
 @code{
-    public const string SelfPath = "/thermocameradebug";
+    public const string SelfPath = "thermocameradebug";
     private readonly object _streamKey = new object();
     private string _id = Guid.NewGuid().ToString();
     private decimal? _avgDuration;
@@ -81,9 +81,9 @@
         get
         {
             if (_avgDuration == null || _avgDuration <= 0)
-                return string.Create(CultureInfo.InvariantCulture, $"/api/bedmatrix/image/{_id}?c={_streamCounter}");
+                return string.Create(CultureInfo.InvariantCulture, $"api/bedmatrix/image/{_id}?c={_streamCounter}");
             else
-                return string.Create(CultureInfo.InvariantCulture, $"/api/bedmatrix/average/{_id}/{_avgDuration}?c={_streamCounter}");
+                return string.Create(CultureInfo.InvariantCulture, $"api/bedmatrix/average/{_id}/{_avgDuration}?c={_streamCounter}");
         }
     }
 

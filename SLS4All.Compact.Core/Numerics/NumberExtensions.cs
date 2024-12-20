@@ -20,6 +20,15 @@ namespace SLS4All.Compact.Numerics
 {
     public static class NumberExtensions
     {
+        public static decimal? NullIfZeroOrLess(decimal? value)
+            => value > 0 ? value : null;
+
+        public static double? NullIfZeroOrLess(double? value)
+            => value > 0 ? value : null;
+
+        public static float? NullIfZeroOrLess(float? value)
+            => value > 0 ? value : null;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float Square(float x)
             => x * x;
@@ -55,11 +64,13 @@ namespace SLS4All.Compact.Numerics
                 return -diff;
         }
 
-        private static decimal RoundToDecimalInternal(decimal value, int decimals, bool exactDecimals = false)
+        private static decimal RoundToDecimalInternal(decimal value, int decimals, decimal multipleOf = 1, bool zeroes = false)
         {
-            if (exactDecimals)
+            if (multipleOf != 1)
+                value = Math.Round(value / multipleOf) * multipleOf;
+            if (zeroes)
             {
-                var zeroes = decimals switch
+                var zeroesValue = decimals switch
                 {
                     0 => 0M,
                     1 => 0.0M,
@@ -70,7 +81,7 @@ namespace SLS4All.Compact.Numerics
                     6 => 0.000000M,
                     _ => throw new ArgumentOutOfRangeException(nameof(decimals)),
                 };
-                return Math.Round(value + zeroes, decimals);
+                return Math.Round(value + zeroesValue, decimals);
             }
             else
             {
@@ -85,14 +96,14 @@ namespace SLS4All.Compact.Numerics
             }
         }
 
-        public static decimal RoundToDecimal(this double value, int decimals, bool exactDecimals = false)
-            => RoundToDecimalInternal((decimal)value, decimals, exactDecimals);
+        public static decimal RoundToDecimal(this double value, int decimals, decimal multipleOf = 1, bool zeroes = false)
+            => RoundToDecimalInternal((decimal)value, decimals, multipleOf: multipleOf, zeroes: zeroes);
 
-        public static decimal RoundToDecimal(this float value, int decimals, bool exactDecimals = false)
-            => RoundToDecimalInternal((decimal)value, decimals, exactDecimals);
+        public static decimal RoundToDecimal(this float value, int decimals, decimal multipleOf = 1, bool zeroes = false)
+            => RoundToDecimalInternal((decimal)value, decimals, multipleOf: multipleOf, zeroes: zeroes);
 
-        public static decimal RoundToDecimal(this decimal value, int decimals, bool exactDecimals = false)
-            => RoundToDecimalInternal(value, decimals, exactDecimals);
+        public static decimal RoundToDecimal(this decimal value, int decimals, decimal multipleOf = 1, bool zeroes = false)
+            => RoundToDecimalInternal(value, decimals, multipleOf: multipleOf, zeroes: zeroes);
 
         /// <summary>
         /// https://forum.unity.com/threads/line-intersection.17384/#post-4442284

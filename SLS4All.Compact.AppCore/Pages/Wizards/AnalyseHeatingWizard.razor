@@ -36,7 +36,7 @@
     base.BuildRenderTree(__builder);
 }
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
 
 <ModalWrapper @ref="_analyseHeatingModal" class="fade app-modal" Context="modal">
     <div class="modal-content">
@@ -55,7 +55,7 @@
                     var profile = __profile;
                     <a class="list-group-item list-group-item-action print-profile"
                     @onclick="() => DoAnalyseHeating(profile)">
-                        <img src="/_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" width="40" height="40" />
+                        <img src="_content/SLS4All.Compact.AppCore/ui/img/print-profile.png" width="40" height="40" />
                         @profile.Name
                     </a>
                 }
@@ -108,7 +108,7 @@
         Introduction,
     }
 
-    public const string SelfPath = "/wizard/analyse-heating";
+    public const string SelfPath = "wizard/analyse-heating";
     private const string CssScope = "b-analyse-heating-wizard";
 
     private string _analyseHeatingJobName = "";

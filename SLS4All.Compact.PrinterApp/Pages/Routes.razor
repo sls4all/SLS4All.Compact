@@ -1,6 +1,11 @@
-<Router AppAssembly="@typeof(StartupBase).Assembly">
+<Router AppAssembly="@typeof(StartupBase).Assembly" AdditionalAssemblies="[typeof(Program).Assembly]">
     <Found Context="routeData">
-        <RedirectingRouteView RouteData="@routeData" OriginalRouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <RedirectingAuthorizingRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+        </RedirectingAuthorizingRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector=".route-focus" />
     </Found>
 </Router>
 

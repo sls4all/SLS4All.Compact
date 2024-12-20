@@ -257,12 +257,12 @@ namespace SLS4All.Compact.Pages
                     if (obj.TransformState == null || !obj.IsEnabled)
                     {
                         var fakeTransform = new MeshTransform(Vector3.Zero, Quaternion.Identity, Vector3.Zero);
-                        objects.Add(new SyncObject(obj.Name, file.Hash, 1, 0.0f, 0.0f, path, objEntry, default, fakeTransform));
+                        objects.Add(new SyncObject(obj.Name, file.Hash, null, 1, 0.0f, 0.0f, path, objEntry, default, fakeTransform));
                     }
                     else
                     {
                         var scale = (float)(obj.Scale / 100) * obj.Units.GetScale();
-                        objects.Add(new SyncObject(obj.Name, file.Hash, 1, scale, 0.0f, path, objEntry, default, (MeshTransform)obj.TransformState));
+                        objects.Add(new SyncObject(obj.Name, file.Hash, null, 1, scale, 0.0f, path, objEntry, default, (MeshTransform)obj.TransformState));
                     }
                 }
             }

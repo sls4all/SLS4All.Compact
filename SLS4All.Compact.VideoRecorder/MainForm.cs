@@ -11,8 +11,12 @@ using SkiaSharp;
 using System.Diagnostics;
 using System.Drawing.Imaging;
 using System.IO.Compression;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Channels;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace SLS4All.Compact.VideoRecorder
 {
@@ -24,36 +28,6 @@ namespace SLS4All.Compact.VideoRecorder
         public MainForm()
         {
             InitializeComponent();
-        }
-
-        private void DrawWrapLines(string text, float width, SKCanvas canvas, SKPaint paint, float x, float y)
-        {
-            var wrappedLines = new List<string>();
-            var lineLength = 0f;
-            var line = "";
-            foreach (var word in text.Split(','))
-            {
-                var wordWithSpace = word + ",";
-                var wordWithSpaceLength = paint.MeasureText(wordWithSpace);
-                if (lineLength + wordWithSpaceLength > width)
-                {
-                    wrappedLines.Add(line);
-                    line = wordWithSpace;
-                    lineLength = wordWithSpaceLength;
-                }
-                else
-                {
-                    line += wordWithSpace;
-                    lineLength += wordWithSpaceLength;
-                }
-            }
-            if (line.Length != 0)
-                wrappedLines.Add(line);
-            foreach (var wrappedLine in wrappedLines)
-            {
-                canvas.DrawText(wrappedLine, x, y, paint);
-                y += paint.FontSpacing;
-            }
         }
 
         private IEnumerable<IVideoFrame> CreateFrames(ChannelReader<(DateTime Time, long Iteration, TimeSpan Elapsed, byte[] Thermo, byte[] Video, string Status)> input)
@@ -72,8 +46,11 @@ namespace SLS4All.Compact.VideoRecorder
 
             foreach (var item in input.ReadAllAsync().ToBlockingEnumerable())
             {
-                using var thermoBitmap = DecodeFixRotation(item.Thermo);
-                using var videoBitmap = DecodeFixRotation(item.Video);
+                using var thermoBitmap = SkiaHelpers.TryDecodeBitmap(item.Thermo, applyExifOrientation: true);
+                using var videoBitmap = SkiaHelpers.TryDecodeBitmap(item.Video, applyExifOrientation: true);
+                if (thermoBitmap == null ||
+                    videoBitmap == null)
+                    continue;
 
                 var height = 512;
                 var thermoWidth = thermoBitmap.Width * height / thermoBitmap.Height;
@@ -86,105 +63,12 @@ namespace SLS4All.Compact.VideoRecorder
                 canvas.DrawBitmap(videoBitmap, SKRect.Create(0, 0, videoBitmap.Width, videoBitmap.Height), SKRect.Create(thermoWidth, 0, videoWidth, height));
                 canvas.DrawText($"{item.Time} ({item.Elapsed.TotalSeconds:0.000}s)", thermoWidth + 1, height, textPaint);
                 canvas.DrawText($"{item.Time} ({item.Elapsed.TotalSeconds:0.000}s)", thermoWidth + 0, height - 1, textPaint2);
-                DrawWrapLines(item.Status, videoWidth, canvas, textPaint, thermoWidth + 1, textPaint.TextSize + 1);
-                DrawWrapLines(item.Status, videoWidth, canvas, textPaint2, thermoWidth + 0, textPaint2.TextSize);
+                SkiaHelpers.DrawWrapLines(item.Status, videoWidth, canvas, textPaint, thermoWidth + 1, textPaint.TextSize + 1);
+                SkiaHelpers.DrawWrapLines(item.Status, videoWidth, canvas, textPaint2, thermoWidth + 0, textPaint2.TextSize);
                 canvas.Flush();
 
                 using var videoFrame = new SKBitmapFrame(frame);
                 yield return videoFrame;
-            }
-        }
-
-        private SKBitmap DecodeFixRotation(byte[] video)
-        {
-            using (var inputStream = new MemoryStream(video))
-            {
-                using (var codec = SKCodec.Create(inputStream))
-                {
-                    using (var original = SKBitmap.Decode(codec))
-                    {
-                        var useWidth = original.Width;
-                        var useHeight = original.Height;
-                        Action<SKCanvas> transform = canvas => { };
-                        switch (codec.EncodedOrigin)
-                        {
-                            case SKEncodedOrigin.TopLeft:
-                                break;
-                            case SKEncodedOrigin.TopRight:
-                                // flip along the x-axis
-                                transform = canvas => canvas.Scale(-1, 1, useWidth / 2, useHeight / 2);
-                                break;
-                            case SKEncodedOrigin.BottomRight:
-                                transform = canvas => canvas.RotateDegrees(180, useWidth / 2, useHeight / 2);
-                                break;
-                            case SKEncodedOrigin.BottomLeft:
-                                // flip along the y-axis
-                                transform = canvas => canvas.Scale(1, -1, useWidth / 2, useHeight / 2);
-                                break;
-                            case SKEncodedOrigin.LeftTop:
-                                useWidth = original.Height;
-                                useHeight = original.Width;
-                                transform = canvas =>
-                                {
-                                    // Rotate 90
-                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
-                                    canvas.Scale(useHeight * 1.0f / useWidth, -useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
-                                };
-                                break;
-                            case SKEncodedOrigin.RightTop:
-                                useWidth = original.Height;
-                                useHeight = original.Width;
-                                transform = canvas =>
-                                {
-                                    // Rotate 90
-                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
-                                    canvas.Scale(useHeight * 1.0f / useWidth, useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
-                                };
-                                break;
-                            case SKEncodedOrigin.RightBottom:
-                                useWidth = original.Height;
-                                useHeight = original.Width;
-                                transform = canvas =>
-                                {
-                                    // Rotate 90
-                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
-                                    canvas.Scale(-useHeight * 1.0f / useWidth, useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
-                                };
-                                break;
-                            case SKEncodedOrigin.LeftBottom:
-                                useWidth = original.Height;
-                                useHeight = original.Width;
-                                transform = canvas =>
-                                {
-                                    // Rotate 90
-                                    canvas.RotateDegrees(90, useWidth / 2, useHeight / 2);
-                                    canvas.Scale(-useHeight * 1.0f / useWidth, -useWidth * 1.0f / useHeight, useWidth / 2, useHeight / 2);
-                                };
-                                break;
-                            default:
-                                break;
-                        }
-                        var target = new SKBitmap(useWidth, useHeight, original.ColorType, original.AlphaType);
-                        using (var canvas = new SKCanvas(target))
-                        {
-                            using (var paint = new SKPaint())
-                            {
-                                // high quality with antialiasing
-                                paint.IsAntialias = true;
-                                paint.FilterQuality = SKFilterQuality.High;
-
-                                // rotate according to origin
-                                transform.Invoke(canvas);
-
-                                // draw the bitmap to fill the surface
-                                canvas.DrawBitmap(original, 0, 0, paint);
-                                canvas.Flush();
-
-                                return target;
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -210,6 +94,7 @@ namespace SLS4All.Compact.VideoRecorder
                 {
                     FrameRate = fps,
                 };
+                var password = _passwordBox.Text;
                 var stopwatch = Stopwatch.StartNew();
                 var videoTask = Task.Run(() => FFMpegArguments
                     .FromPipeInput(videoFramesSource, options => options
@@ -231,6 +116,14 @@ namespace SLS4All.Compact.VideoRecorder
                         var client = new HttpClient();
                         var timer = new PeriodicTimer(TimeSpan.FromSeconds(1) / fps);
                         var counter = 0L;
+
+                        var serverNonce = await client.GetStringAsync(new Uri(baseAddress, $"api/login/nonce/server"), cancel);
+                        var clientNonce = await client.GetStringAsync(new Uri(baseAddress, $"api/login/nonce/client"), cancel);
+                        var hash = GetPasswordHash(clientNonce, GetPasswordHash(serverNonce, password));
+                        var res = await client.GetStringAsync(new Uri(baseAddress, $"api/login/validate/{clientNonce}/{hash}"), cancel);
+                        if (!res.Equals("true", StringComparison.OrdinalIgnoreCase))
+                            throw new ApplicationException("Failed to login");
+
                         do
                         {
                             try
@@ -348,6 +241,9 @@ namespace SLS4All.Compact.VideoRecorder
                 }
             }
         }
+
+        private static string GetPasswordHash(string salt, string? password)
+            => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}:{password}")));
 
         private void _startStopButton_Click(object sender, EventArgs e)
         {

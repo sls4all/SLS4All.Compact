@@ -8,7 +8,7 @@
 @inject ISafeShutdownManager SafeShutdown
 @inject IEmergencyHelper EmergencyHelper
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-shutdown.png" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-shutdown.png" />
 
 <Modal @ref="_scheduleModal" class="fade app-modal" Context="modal">
     <div class="modal-content">
@@ -46,7 +46,7 @@
                 <button @onclick="() => Apply(_modalMode, false)" class="btn btn-danger">@(Capitalize(ModalModeName)) now!</button>
             }
             <button @onclick="() => ScheduleShutdown(_modalMode)" class="btn btn-primary">Schedule when ready</button>
-            <button @onclick="() => modal.Close()" class="btn btn-secondary">I have changed my mind</button>
+            <button @onclick="() => modal.Close()" class="btn btn-secondary">Go back</button>
         </div>
     </div>
 </Modal>
@@ -132,7 +132,7 @@
 </div>
 
 @code {
-    public const string SelfPath = "/shutdown";
+    public const string SelfPath = "shutdown";
 
     private static readonly TimeSpan _updatePeriod = TimeSpan.FromSeconds(1);
     private Modal? _scheduleModal;

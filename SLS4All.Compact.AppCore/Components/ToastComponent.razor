@@ -219,7 +219,7 @@
         {
             state.Message.Dismissed = ToastDismissReason.UserClosed;
             if (state.Message.TargetUri != null)
-                NavigationManager.NavigateTo(state.Message.TargetUri, state.Message.TargetUriForceReload);
+                NavigationManager.NavigateTo(MainLayout!.GetReloadUri(state.Message.TargetUriForceReload, state.Message.TargetUri), state.Message.TargetUriForceReload);
         }
     }
 

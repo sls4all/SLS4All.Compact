@@ -22,6 +22,7 @@ namespace SLS4All.Compact.Nesting
         public RgbaF Color { get; set; }
         public bool IsOverlapping { get; set; }
         public float Inset { get; set; }
+        public int? NestingPriority { get; set; }
     }
 
     public delegate Task<MeshTransform> GetNestingTransform(NestingInstance mesh);

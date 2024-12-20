@@ -67,3 +67,14 @@
 .my-border-right {
     border-right: solid 1px #fff1;
 }
+/*
+.move-xy-corners {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    border-spacing: 1px;
+}
+
+    .move-xy-corners .btn {
+        display: table-cell;
+    }*/

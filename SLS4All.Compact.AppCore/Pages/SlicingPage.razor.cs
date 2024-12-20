@@ -29,6 +29,7 @@ using SLS4All.Compact.Components;
 using SLS4All.Compact.Configuration;
 using SLS4All.Compact.Printing;
 using SLS4All.Compact.Nesting;
+using SLS4All.Compact.PrintSessions;
 
 namespace SLS4All.Compact.Pages
 {
@@ -72,7 +73,7 @@ namespace SLS4All.Compact.Pages
         private int? _layerCount;
         private PrintProfile[] _profiles = [];
 
-        public const string SelfPath = "/slicing";
+        public const string SelfPath = "slicing";
         [Inject]
         public INestingService Nesting { get; set; } = default!;
         [Inject]

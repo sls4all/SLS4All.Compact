@@ -447,7 +447,7 @@
             }
             catch (Exception ex)
             {
-                await EmergencyHelper.CreateAndCall(x => x.EmergencyPowerOffLaser());
+                await EmergencyHelper.CreateAndCall(x => x.EmergencyPowerOffLaser(stopMovement: true));
                 _stats = watch?.Elapsed.ToString();
                 ToastProvider.Show(new ToastMessage
                 {

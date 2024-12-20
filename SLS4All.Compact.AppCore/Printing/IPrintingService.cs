@@ -6,10 +6,13 @@
 
 using SLS4All.Compact.Collections;
 using SLS4All.Compact.Nesting;
+using SLS4All.Compact.PrintSessions;
 using SLS4All.Compact.Slicing;
+using SLS4All.Compact.Storage;
 using SLS4All.Compact.Storage.PrinterSettings;
 using SLS4All.Compact.Storage.PrintJobs;
 using SLS4All.Compact.Storage.PrintProfiles;
+using SLS4All.Compact.Storage.PrintSessions;
 using SLS4All.Compact.Threading;
 using System.Collections.Concurrent;
 
@@ -26,6 +29,36 @@ namespace SLS4All.Compact.Printing
 
     public record class LastStreamingLayerInfo(int Index, int Count);
 
+    public enum PrintingMode
+    {
+        NotSet = 0,
+        Other,
+        PrintLayers,
+        AnalyseHeating,
+        PowderTuning,
+    }
+
+    public class PowderTuningSetParametersCommand
+    {
+        public int? FillPhase { get; set; }
+        public int? GridIndex { get; set; }
+        public int? PrintLabelIndex { get; set; }
+    }
+
+    public class PowderTuningPrintCommand
+    {
+        public PrintSetup? PrintSetupSource { get; set; }
+        public PrintSetup? PrintSetupResult { get; set; }
+        public Func<PrintSetup, CancellationToken, ValueTask<PrintSetup?>> SetupFunc { get; set; } 
+            = (x, y) => ValueTask.FromResult<PrintSetup?>(null);
+        public bool PrintNumberEnabled { get; set; }
+    }
+
+    public class PowderTuningSetSurfaceCommand
+    {
+        public double? SurfaceTemperature { get; set; }
+    }
+
     public interface IPrintingService
     {
         public static WeakConcurrentDictionary<string, IPrintingService> Services { get; } = new();
@@ -34,11 +67,18 @@ namespace SLS4All.Compact.Printing
         long PreviewVersion { get; }
         LastStreamingLayerInfo? LastStreamingLayer { get; }
         bool IsPrinting { get; }
+        PrintingMode PrintingMode { get; }
+        PrintingPhase PrintingPhase { get; }
         int PreviewLayerFinalCount { get; }
         PrintedLayer[] PreviewLayers { get; }
         PrintingSoftCancelMode SoftCancelMode { get; }
+        PrintingSoftCancelMode[] SoftCancelAllowedModes { get; }
+        PrintSetupOverrides SetupOverrides { get; set; }
+        PrintSetupOverrides SetupOverridesDefaults { get; }
 
         void Clear();
+        Task PowderTuning(PrintSetup setup, string jobName, CancellationToken cancel);
+        Task<object?> ExecutePowderTuningCommand(object command, StatusUpdater? statusUpdater, CancellationToken cancel);
         Task AnalyseHeating(PrintSetup setup, string jobName, CancellationToken cancel);
         Task<PrintSetup> CreateSetup(IPrintJob? job, PrintProfile profile, PrinterPowerSettings powerSettings);
         PrintingServiceLayerStats GetLayerStats(PrintingParameters parameters);
@@ -52,7 +92,7 @@ namespace SLS4All.Compact.Printing
             INestingService? nesting, 
             IReadOnlyList<PrintingObject>? instancesOverride,
             LayerWeight[]? previewOverride,
-            Func<PrintSetup> setupFunc, 
+            PrintSetup setup, 
             string jobName,
             PrintingServiceLayerStats? stats,
             Func<CancellationToken, Task>? cleanupBeforePrint,
@@ -72,28 +112,6 @@ namespace SLS4All.Compact.Printing
 
     public static class PrintingServiceExtensions
     {
-        public static Task PrintLayers(
-            this IPrintingService printing,
-            INestingService? nesting,
-            IReadOnlyList<PrintingObject>? instancesOverride,
-            LayerWeight[]? previewOverride,
-            PrintSetup setup,
-            string jobName,
-            PrintingServiceLayerStats? stats,
-            Func<CancellationToken, Task>? cleanupBeforePrint,
-            Func<PrintingServiceLayerStats, Task>? saveStats,
-            CancellationToken hardCancel)
-            => printing.PrintLayers(
-                nesting,
-                instancesOverride,
-                previewOverride,
-                () => setup,
-                jobName,
-                stats,
-                cleanupBeforePrint,
-                saveStats,
-                hardCancel);
-
         public static PrintedLayer? TryGetPreviewLayer(this IPrintingService service, int index)
         {
             var layers = service.PreviewLayers;

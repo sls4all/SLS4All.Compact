@@ -13,6 +13,7 @@
         public const int ClockSync = 0_800;
         public const int Initialize = 0_900;
         public const int Identify = 1_000;
-        public const int Shutdown = 1_100;
+        public const int KeepAlive = 1_100;
+        public const int Shutdown = 1_200;
     }
 }

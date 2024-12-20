@@ -261,10 +261,16 @@ namespace SLS4All.Compact.Validation
             var res = new Dictionary<ValidationKey, ValidationValue>();
             foreach (var group in ValidationErrors.GroupBy(x => new ValidationKey(x.obj, x.valueName)))
             {
-                var message = string.Join(Environment.NewLine, group.Select(x => x.valueName != "" && x.prependValueName ? $"value {x.message}" : x.message));
+                var message = string.Join(Environment.NewLine, group.Select(x => x.valueName != "" && x.prependValueName ? $"value ({x.valueName}) {x.message}" : x.message));
                 res.Add(group.Key, new ValidationValue(message, group.ToArray()));
             }
             return res;
+        }
+
+        public override string ToString()
+        {
+            var dict = ToDictionary();
+            return string.Join(Environment.NewLine, dict.Values.Select(x => x.Message));
         }
     }
 }

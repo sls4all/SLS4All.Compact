@@ -18,6 +18,6 @@ namespace SLS4All.Compact.Temperature
         string LastTargetInfo { get; }
 
         Task Start(PrinterPath? filename, byte[]? data, Func<byte[], CancellationToken, Task>? loaded, Action<Exception>? errorHandler);
-        Task Stop();
+        Task Stop(CancellationToken cancel = default);
     }
 }

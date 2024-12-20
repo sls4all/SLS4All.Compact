@@ -29,7 +29,7 @@
     private long _streamCounter;
 
     private string StreamUri
-        => string.Create(CultureInfo.InvariantCulture, $"/api/PlottedImage/{_id}?c={_streamCounter}");
+        => string.Create(CultureInfo.InvariantCulture, $"api/PlottedImage/{_id}?c={_streamCounter}");
 
     public PlotterView()
     {

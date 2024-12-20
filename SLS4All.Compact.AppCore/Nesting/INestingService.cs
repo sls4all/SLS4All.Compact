@@ -34,13 +34,13 @@ namespace SLS4All.Compact.Nesting
         NestingInstance[] GetInstances();
         NestingMeshWithLod[] GetMeshes(out int actualTriangles, bool isLocalSession);
         (NestingMeshWithLod[] meshes, NestingInstance[] instances) GetMeshesAndInstances(bool isLocalSession);
-        Task LoadInstances(Stream stream, int quanity, float scale, NestedRotationConstraints constraintsAroundZ, float inset, MeshTransform? transform, Vector3? position, object? userData, bool stateChanged = true, CancellationToken cancel = default);
-        Task LoadInstances(string fileHash, Func<CancellationToken, Task<Stream>> streamFactory, int quantity, float scale, NestedRotationConstraints constraintsAroundZ, float inset, Vector3? position, MeshTransform? transform, object? userData, bool stateChanged = true, CancellationToken cancel = default);
+        Task LoadInstances(Stream stream, int quanity, int? nestingPriority, float scale, NestedRotationConstraints constraintsAroundZ, float inset, MeshTransform? transform, Vector3? position, object? userData, bool stateChanged = true, CancellationToken cancel = default);
+        Task LoadInstances(string fileHash, Func<CancellationToken, Task<Stream>> streamFactory, int quantity, int? nestingPriority, float scale, NestedRotationConstraints constraintsAroundZ, float inset, Vector3? position, MeshTransform? transform, object? userData, bool stateChanged = true, CancellationToken cancel = default);
         Task<bool> RemoveInstance(long index, bool stateChanged = true);
         void RemoveUnreferencedMeshes();
         Task<NestingStats> RunCheckCollision(NestingServiceContext context, GetNestingTransform getState, bool recalculateValues = false, CancellationToken cancel = default);
         Task<NestingStats> RunNesting(NestingServiceContext context, NestingFlags flags, GetNestingTransform getState, CancellationToken cancel = default);
-        Task SyncInstances(IEnumerable<(string fileHash, Func<CancellationToken, Task<Stream>> streamFactory, int count, float scale, float inset, object? userData, NestedRotationConstraints constraintsAroundZ, NestingTransformState? transformState)> instances, Func<string[], Exception, Task> loadError, bool removeUnreferencedMeshes, bool doNotKeepTransform, bool stateChanged = true, CancellationToken cancel = default);
+        Task SyncInstances(IEnumerable<(string fileHash, Func<CancellationToken, Task<Stream>> streamFactory, int? nestingPriority, int count, float scale, float inset, object? userData, NestedRotationConstraints constraintsAroundZ, NestingTransformState? transformState)> instances, Func<string[], Exception, Task> loadError, bool removeUnreferencedMeshes, bool doNotKeepTransform, bool stateChanged = true, CancellationToken cancel = default);
         bool TryGetInstance(long index, [MaybeNullWhen(false)] out NestingInstance instance);
         Mesh? TryGetMeshData(string hash);
         NestingMeshWithLod? TryGetMeshForSingleDisplay(string hash, bool isLocalSession);

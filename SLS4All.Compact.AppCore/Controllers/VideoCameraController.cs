@@ -24,13 +24,21 @@ using SLS4All.Compact.Helpers;
 using SLS4All.Compact.Camera;
 using SLS4All.Compact.Threading;
 using SLS4All.Compact.Temperature;
+using SkiaSharp;
+using Lexical.FileProvider.Package;
+using SLS4All.Compact.IO;
+using SLS4All.Compact.Graphics;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SLS4All.Compact.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class VideoCameraController : ControllerBase
     {
+        private static readonly ConcurrentDictionary<(int, int, BoundaryRectangle), MimeData> _workingAreaBitmaps = new();
+
         private readonly ICameraClient _client;
         private readonly ILogger<VideoCameraController> _logger;
         private readonly ImageStreamingHelper _streamingHelper;
@@ -49,11 +57,43 @@ namespace SLS4All.Compact.Controllers
         [HttpGet("image/{id}")]
         public Task Image(string id, CancellationToken cancel)
         {
-            return _streamingHelper.PullImage(
+            return _streamingHelper.Pull(
                 id,
                 _client,
                 Response,
                 cancel);
+        }
+
+        [HttpGet("workingarea/{id}")]
+        public Task WorkingArea(string id, CancellationToken cancel)
+        {
+            var workingAreaNullable = _client.WorkingArea;
+            if (workingAreaNullable == null)
+                return _streamingHelper.Write(MimeData.TransparentPng, Response, cancel).AsTask();
+            var workingArea = workingAreaNullable.Value;
+            if (!_workingAreaBitmaps.TryGetValue(workingArea, out var mime))
+            {
+                using SKBitmap bitmap = new SKBitmap(workingArea.Width, workingArea.Height, false);
+                using SKCanvas canvas = new SKCanvas(bitmap);
+                canvas.Clear();
+                using var pathEffect = SKPathEffect.CreateDash([ 5.0f, 5.0f ], 0f);
+                using var paint = new SKPaint
+                {
+                    IsStroke = true,
+                    StrokeWidth = 1,
+                    Color = SKColors.Purple.WithAlpha(128),
+                    PathEffect = pathEffect,
+                };
+                canvas.DrawRect(
+                    new SKRect(workingArea.Working.MinX, workingArea.Working.MinY, workingArea.Working.MaxX, workingArea.Working.MaxY),
+                    paint);
+                canvas.Flush();
+                using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+                mime = new MimeData("image/png", data.ToArray());
+                if (!_workingAreaBitmaps.TryAdd(workingArea, mime))
+                    mime = _workingAreaBitmaps[workingArea];
+            }
+            return _streamingHelper.Write(mime, Response, cancel).AsTask();
         }
     }
 }

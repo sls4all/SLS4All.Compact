@@ -298,7 +298,7 @@ else if (tabIndex == TabIndex.Attributes && selectedObject != null)
                         <i class="bi bi-x-circle-fill" /> Cancel check
                     </button>
                     <div class="nesting-progress" style="background: linear-gradient(to right, rgba(128,255,255,0.15) @progressInt%, rgba(128,255,255,0.05) @progressInt%)">
-                        @(progress.RoundToDecimal(0, true))%
+                        @(progress.RoundToDecimal(0, zeroes: true))%
                     </div>
                 }
             </div>

@@ -13,6 +13,7 @@
         }
 
     .camera-view .video-image-container {
+        position: relative;
         height: 0px;
         flex-grow: 1;
         background-color: black;
@@ -28,3 +29,9 @@
             object-fit: contain;
             height: 100%;
         }
+
+            .camera-view .video-image-container .video-image.video-image-overlay {
+                position: absolute;
+                top: 0px;
+                left: 0px;
+            }

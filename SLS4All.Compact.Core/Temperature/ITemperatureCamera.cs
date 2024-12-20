@@ -4,7 +4,8 @@
 // under the terms of the License Agreement as described in the LICENSE.txt
 // file located in the root directory of the repository.
 
-﻿using SLS4All.Compact.Threading;
+using SLS4All.Compact.Graphics;
+using SLS4All.Compact.Threading;
 using System;
 
 namespace SLS4All.Compact.Temperature
@@ -16,7 +17,7 @@ namespace SLS4All.Compact.Temperature
         long Version { get; }
         float[] CurrentPixels { get; }
         AsyncEvent CurrentPixelsChanged { get; }
-        TemperatureBox MainBox { get; }
+        BoundaryRectangle MainBox { get; }
 
         TemperatureMatrix GetBedMatrix();
     }

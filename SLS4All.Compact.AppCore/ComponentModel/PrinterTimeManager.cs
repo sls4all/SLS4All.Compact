@@ -177,7 +177,7 @@ namespace SLS4All.Compact.ComponentModel
             {
                 if (!string.IsNullOrWhiteSpace(options.TimeScript.ExecutablePlatform))
                 {
-                    var runner = new ScriptRunner(_logger, _logger, TransformOptionsMonitor.Create(_options, x => x.TimeScript), _appDataWriter);
+                    var runner = new ScriptRunner(_logger, _logger, _options.Transform(x => x.TimeScript), _appDataWriter);
                     var res = await runner.Run(time, cancel);
                     if (res == 0)
                         return true;

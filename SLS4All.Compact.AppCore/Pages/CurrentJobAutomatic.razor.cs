@@ -153,7 +153,7 @@ namespace SLS4All.Compact.Pages
                     constraintsAroundZ = new NestedRotationConstraints(obj.Constraints.Select(x => jobs.ConstraintToNested(x)).ToArray());
                 // restore nested state
                 var remaining = obj.InstanceCount;
-                var prototype = new SyncObject(obj.Name, file.Hash, 1, scale, (float)obj.Inset, path, objEntry, constraintsAroundZ, null);
+                var prototype = new SyncObject(obj.Name, file.Hash, obj.NestingPriority, 1, scale, (float)obj.Inset, path, objEntry, constraintsAroundZ, null);
                 while (remaining > 0 && remainingNestedInstances.Count > 0)
                 {
                     var instance = remainingNestedInstances.FirstOrDefault(x =>

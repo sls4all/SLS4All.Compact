@@ -88,6 +88,7 @@ namespace SLS4All.Compact.McuClient
         }
         public virtual int CreatedArenas => _commandQueueNeedsLock.Arena.CreatedArenas;
         public virtual long CreatedCommands => 0;
+        public override bool IsFake => false;
 
         public McuAbstract(
             ILoggerFactory loggerFactory,
@@ -110,29 +111,39 @@ namespace SLS4All.Compact.McuClient
             _configCommands = new();
         }
 
-        protected override async Task CheckFirmwareUpdate(IDisposable device_, CancellationToken cancel)
+        protected virtual IMcuFirmwareUpdater? CreateFirmwareUpdater()
         {
-            var device = (IMcuDevice)device_;
             var options = _options.Value;
             if (options.FirmwareUpdate == null)
-                return;
+                return null;
             var firmwareUpdater = new McuFirmwareUpdater(
                 _loggerFactory,
                 ConstantOptionsMonitor.Create(options.FirmwareUpdate),
                 _appDataWriter,
                 this);
-            try
+            return firmwareUpdater;
+        }
+
+        protected override async Task CheckFirmwareUpdate(IDisposable device_, CancellationToken cancel)
+        {
+            var device = (IMcuDevice)device_;
+            var firmwareUpdater = CreateFirmwareUpdater();
+            if (firmwareUpdater != null)
             {
-                firmwareUpdater.PreUpdateEvent.AddHandler(PreUpdateHanlder);
-                await firmwareUpdater.CheckFirmwareUpdate(device, cancel);
-            }
-            finally
-            {
-                _isUpdatingFirmware = false;
+                try
+                {
+                    firmwareUpdater.PreUpdateEvent.AddHandler(PreUpdateHanlder);
+                    await firmwareUpdater.CheckFirmwareUpdate(device, cancel);
+                }
+                finally
+                {
+                    _isUpdatingFirmware = false;
+                    (firmwareUpdater as IDisposable)?.Dispose();
+                }
             }
         }
 
-        private async ValueTask PreUpdateHanlder(CancellationToken cancel)
+        protected virtual async ValueTask PreUpdateHanlder(CancellationToken cancel)
         {
             await PreUpdatingEvent.Invoke(cancel);
             _isUpdatingFirmware = true;
@@ -156,6 +167,14 @@ namespace SLS4All.Compact.McuClient
             }
         }
 
+        public override McuTimestamp MovementCancel()
+        {
+            lock (_commandQueueNeedsLock)
+            {
+                return _commandQueueNeedsLock.RemoveMovement();
+            }
+        }
+
         public override async Task SendWait(McuCommand command, int priority, McuOccasion clock, CancellationToken cancel = default)
         {
             ArgumentNullException.ThrowIfNull(command);
@@ -173,7 +192,7 @@ namespace SLS4All.Compact.McuClient
                     _commandQueueNeedsLock.AckedIdEvent += handler;
                     lock (_commandQueueNeedsLock)
                     {
-                        Volatile.Write(ref id, _commandQueueNeedsLock.Enqueue(command, priority, clock.MinClock, clock.ReqClock).Id);
+                        Volatile.Write(ref id, _commandQueueNeedsLock.Enqueue(command, priority, clock.MinClock, clock.ReqClock, clock.MaxClock, ignoreLate: false).Id);
                     }
                     await source.Task.WaitAsync(_responseTimeout, cancel);
                 }
@@ -191,22 +210,22 @@ namespace SLS4All.Compact.McuClient
             {
                 if (cancelFirst != null)
                     _commandQueueNeedsLock.Remove(cancelFirst.Value);
-                return _commandQueueNeedsLock.Enqueue(command, priority, clock.MinClock, clock.ReqClock);
+                return _commandQueueNeedsLock.Enqueue(command, priority, clock.MinClock, clock.ReqClock, clock.MaxClock, clock.IgnoreLate);
             }
         }
 
-        public override bool TryReplace(McuSendResult id, McuCommand command)
+        public override bool TryReplace(McuSendResult id, McuOccasion occasion, McuCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             lock (_commandQueueNeedsLock)
             {
-                return _commandQueueNeedsLock.TryReplace(id, command);
+                return _commandQueueNeedsLock.TryReplace(id, occasion, command);
             }
         }
 
         protected override async Task<bool> SendConfigCommands(CancellationToken cancel)
         {
-            await SendConfigCommands(_configCommands, cancel);
+            await SendConfigCommands(_configCommands, ignoreCrc: false, cancel);
             return true; // true -> set WasReady
         }
 
@@ -403,9 +422,9 @@ namespace SLS4All.Compact.McuClient
                         // read response
                         var response = responseTemplate.Clone();
                         response.ReceiveTimestamp = timestamp;
-                        for (int i = 0; i < response.Arguments.Length; i++)
+                        for (int i = 0; i < response.ArgumentInfos.Length; i++)
                         {
-                            var arg = response.Arguments[i];
+                            var arg = response.ArgumentInfos[i];
                             switch (arg.Type)
                             {
                                 case McuCommandArgumentType.Number:

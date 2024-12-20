@@ -17,6 +17,9 @@ namespace SLS4All.Compact.IO
     {
         public bool IsEmpty => ContentType == null;
 
+        public static MimeData TransparentPng { get; }
+            = new MimeData("image/png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="));
+
         public static MimeData BlackPng { get; } 
             = new MimeData("image/png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAA1JREFUGFdjYGBg+A8AAQQBAHAgZQsAAAAASUVORK5CYII="));
 

@@ -44,7 +44,7 @@ namespace SLS4All.Compact.Components
                 Type = ToastMessageType.Error,
                 HeaderText = "Unhandled UI error",
                 BodyText = $"UI error occurred: {exception.Message}\nClick to reload the page.",
-                TargetUri = MainLayout!.GetReloadUri(),
+                TargetUri = MainLayout!.GetReloadUri(true),
                 TargetUriForceReload = true,
                 OnlyForLayoutOwner = MainLayout,
                 Key = this,

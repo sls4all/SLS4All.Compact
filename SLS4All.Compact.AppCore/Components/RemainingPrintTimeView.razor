@@ -1,0 +1,66 @@
+﻿@inherits AppComponent
+@using SLS4All.Compact.Camera;
+@using SLS4All.Compact.ComponentModel
+@using SLS4All.Compact.IO
+@using SLS4All.Compact.Printing
+@using SLS4All.Compact.Slicing;
+@using SLS4All.Compact.Temperature;
+@using SLS4All.Compact.Threading
+@using System.Diagnostics
+@inject RemainingPrintTimeStreamingHelper StreamingHelper
+@inject RemainingPrintTimeStylesGenerator Generator
+@inject IJSRuntime JSRuntime
+
+<div id="@_id" @key="_streamKey" class="@ClassNames invisible" style="@StyleNames" @attributes="@AttributesWithCssScope">
+    <div class="video-style" @attributes="@JustAttributesWithCssScope"></div>
+</div>
+
+@code {
+    public const string CssScope = "b-print-time-view";
+    private readonly object _streamKey = new();
+    private readonly string _id = Guid.NewGuid().ToString();
+    private Timer _timer;
+    private const int _timerPeriod = 500;
+    private StyleStreamingHandle<RemainingPrintTimeStyles>? _streamHandle;
+
+    public RemainingPrintTimeView()
+    {
+        _timer = new Timer(OnTimer);
+    }
+
+    private bool TryRegisterStyleReady()
+    {
+        if (_streamHandle == null)
+            _streamHandle = new StyleStreamingHandle<RemainingPrintTimeStyles>(JSRuntime, StreamingHelper, _id, ["visibility", "--value", "--color", "--transition"], new("hidden", 0, "0, 0, 0", 0));
+        return _streamHandle.TryRegisterStyleReady();
+    }
+
+    private void TryUnregisterStyleReady()
+    {
+        _streamHandle?.TryUnregisterStyleReady();
+    }
+
+    private void OnTimer(object? state)
+    {
+        TryInvokeStateHasChanged(() =>
+        {
+            StreamingHelper.Keepalive(_id, Generator);
+            var res = TryRegisterStyleReady();
+            return ValueTask.FromResult(res);
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+        if (firstRender)
+            _timer.Change(0, _timerPeriod);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        TryUnregisterStyleReady();
+        _timer.Dispose();
+        await base.DisposeAsync();
+    }
+}

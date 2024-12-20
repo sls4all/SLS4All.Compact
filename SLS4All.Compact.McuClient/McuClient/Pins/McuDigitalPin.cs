@@ -25,8 +25,8 @@ namespace SLS4All.Compact.McuClient.Pins
         private bool _startAlreadyInvertedValue;
         private bool _shutdownAlreadyInvertedValue;
         private TimeSpan _maxDuration;
-        private (McuCommand cmd, int clockIndex, int valueIndex) _set = (McuCommand.PlaceholderCommand, 0, 0);
-        private (McuCommand cmd, int valueIndex) _update = (McuCommand.PlaceholderCommand, 0);
+        private (McuCommand Cmd, McuCommandArgument Clock, McuCommandArgument Value) _set = (McuCommand.PlaceholderCommand, default, default);
+        private (McuCommand Cmd, McuCommandArgument Oid, McuCommandArgument Value) _update = (McuCommand.PlaceholderCommand, default, default);
         private McuSendResult? _updateResult;
         private long _lastClock;
         private volatile bool _hasBuiltConfig;
@@ -89,23 +89,23 @@ namespace SLS4All.Compact.McuClient.Pins
             _currentValue = value.Single;
             if (clock == 0)
             {
-                lock (_update.cmd)
+                lock (_update.Cmd)
                 {
                     var occasion = new McuOccasion(clock, clock);
                     _lastClock = clock;
-                    _update.cmd[_update.valueIndex] = value.Get(_invert).IsFuzzyEnabled ? 1 : 0;
-                    _updateResult = Mcu.Send(_update.cmd, priority, occasion, cancelFirst: _updateResult);
+                    _update.Value.Value = value.Get(_invert).IsFuzzyEnabled ? 1 : 0;
+                    _updateResult = Mcu.Send(_update.Cmd, priority, occasion, cancelFirst: _updateResult);
                 }
             }
             else
             {
-                lock (_set.cmd)
+                lock (_set.Cmd)
                 {
                     var occasion = new McuOccasion(_lastClock, clock);
                     _lastClock = clock;
-                    _set.cmd[_set.clockIndex] = clock;
-                    _set.cmd[_set.valueIndex] = value.Get(_invert).IsFuzzyEnabled ? 1 : 0;
-                    Mcu.Send(_set.cmd, priority, occasion);
+                    _set.Clock.Value = clock;
+                    _set.Value.Value = value.Get(_invert).IsFuzzyEnabled ? 1 : 0;
+                    Mcu.Send(_set.Cmd, priority, occasion);
                 }
             }
         }
@@ -129,17 +129,14 @@ namespace SLS4All.Compact.McuClient.Pins
                     _shutdownAlreadyInvertedValue ? 1 : 0,
                     checked((int)Mcu.ClockSync.GetClockDuration(_maxDuration))));
 
-                _update.cmd = Mcu.LookupCommand(_pin.AllowInShutdown ? "update_digital_out_in_shutdown oid=%c value=%c" : "update_digital_out oid=%c value=%c")
+                _update = Mcu.LookupCommand(_pin.AllowInShutdown ? "update_digital_out_in_shutdown oid=%c value=%c" : "update_digital_out oid=%c value=%c", "oid", "value")
                     .Bind("oid", _oid)
                     .Bind("value", _startAlreadyInvertedValue ? 1 : 0);
-                _update.valueIndex = _update.cmd.GetArgumentIndex("value");
 
-                commands.Add(_update.cmd.Clone(), onRestart: true);
+                commands.Add(_update.Cmd.Clone(), onRestart: true);
 
-                _set.cmd = Mcu.LookupCommand("schedule_digital_out oid=%c clock=%u value=%c")
+                _set = Mcu.LookupCommand("schedule_digital_out oid=%c clock=%u value=%c", "clock", "value")
                     .Bind("oid", _oid);
-                _set.clockIndex = _set.cmd.GetArgumentIndex("clock");
-                _set.valueIndex = _set.cmd.GetArgumentIndex("value");
             }
             _hasBuiltConfig = true;
             return ValueTask.CompletedTask;

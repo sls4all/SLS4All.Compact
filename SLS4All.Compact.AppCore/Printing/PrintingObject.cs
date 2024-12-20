@@ -5,6 +5,7 @@
 // file located in the root directory of the repository.
 
 using System.Numerics;
+using SLS4All.Compact.PrintSessions;
 using SLS4All.Compact.Processing.Meshes;
 using SLS4All.Compact.Slicing;
 

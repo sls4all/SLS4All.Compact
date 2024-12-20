@@ -67,22 +67,14 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             if (!bag.TryTake(out var command))
             {
                 Interlocked.Increment(ref s_createdCommandCount);
-                command = _mcu.Config.IdToCommand[id].Clone();
+                command = _mcu.LookupCommand(id);
             }
             return command;
         }
 
         public void ReturnCommand(McuCommand command)
         {
-            for (int i = 0; i < command.ArgumentCount; i++)
-            {
-                var arg = command[i];
-                if (arg.ArenaBuffer.Arena != null)
-                {
-                    arg.ArenaBuffer.DecrementReference();
-                    command[i] = default;
-                }
-            }
+            command.Cleanup();
             var bag = GetBag(command.CommandId);
             bag.Add(command);
         }

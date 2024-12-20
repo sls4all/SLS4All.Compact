@@ -1,0 +1,42 @@
+﻿@page "/Error"
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+@inject AppThemeManager AppTheme
+@using System.Diagnostics
+@using Microsoft.AspNetCore.Http
+@using SLS4All.Compact.ComponentModel
+
+<div class="app-component" data-sa-theme="@_theme">
+    <div class="printing-notification">
+        <h1 class="text-danger">Error.</h1>
+        <h2 class="text-danger">An error occurred while processing your request.</h2>
+
+        @if (ShowRequestId)
+        {
+            <p>
+                <strong>Request ID:</strong> <code>@RequestId</code>
+            </p>
+        }
+
+        <p>
+            Enabling <b>Developer mode</b> in configuration will display more detailed errors.
+        </p>
+    </div>
+</div>
+
+@code {
+    private string _theme = default!;
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized()
+    {
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+        _theme = AppTheme.ThemeIdDefault;
+        base.OnInitialized();
+    }
+}

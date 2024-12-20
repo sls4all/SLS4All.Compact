@@ -1,0 +1,129 @@
+﻿.dummy {
+}
+
+p {
+    font-size: 20px;
+}
+
+.printing-notification {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+}
+
+    .printing-notification .btn {
+        font-size: 17px;
+    }
+
+.validation-notification {
+}
+
+.step-indicator {
+    font-size: 17px;
+}
+
+.table th {
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.table td {
+    font-size: 17px;
+}
+
+.table tr.powder-total-row {
+    background: #fff3;
+}
+
+.lead a {
+    margin-right: 8px;
+}
+
+.video-container {
+    flex-grow: 1;
+    position: relative;
+}
+
+    .video-container .light-control-container {
+        position: absolute;
+        height: 100%;
+    }
+
+    .video-container button {
+        opacity: 75%;
+        white-space: nowrap;
+    }
+
+        .video-container button.last-button {
+            position: absolute;
+            bottom: 0px;
+        }
+
+hr {
+    width: 100%;
+}
+
+.container {
+    height: 100%;
+}
+
+    .container .jumbotron {
+        display: flex;
+        flex-direction: column;
+    }
+
+.property-table {
+    background: #8080801E;
+    border-radius: 10px;
+    position: relative;
+    top: 0px;
+}
+
+    .property-table .hide-top-line td, .property-table .hide-top-line th {
+        border-top: none;
+    }
+
+    .property-table .property-name {
+        white-space: nowrap;
+        color: #ffffff;
+        font-size: 20px;
+        vertical-align: middle;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .property-table .property-value {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: right;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+        .property-table .property-value .property-value-set {
+            /*font-weight: bold;*/
+        }
+
+        .property-table .property-value .property-value-set-parent {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+        .property-table .property-value .property-value-not-set {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+    .property-table .property-suffix {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .property-table .property-separator {
+    }

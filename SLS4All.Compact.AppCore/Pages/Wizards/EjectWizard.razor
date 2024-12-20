@@ -29,7 +29,7 @@
     base.BuildRenderTree(__builder);
 }
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
 
 <ModalWrapper @ref="_ejectConfirm" class="app-modal" Context="modal">
     <div class="modal-content">
@@ -70,14 +70,19 @@
                 @if (PrintSessionStorage.CanEjectCake)
                 {
                     <p class="lead pt-3">
-                        <a class="btn btn-theme btn-lg btn--icon-text" @onclick="() => DoEject()">
+                        <a class="btn btn-primary btn-lg btn--icon-text" @onclick="() => DoEject()">
                             <i class="bi bi-eject" /> Eject the print cake...
                         </a>
                     </p>
                 }
+                <p>
+                    <span class="badge badge-warning text-wrap w-100">
+                        When vacuuming the remaining powder, please ensure the <b>printer is turned off</b> first! Static electricity buildup from the vaccum cleaner can damage the printer components.
+                    </span>
+                </p>
                 <hr class="my-3">
                 <p class="lead">
-                    <a class="btn btn-primary btn-lg btn--icon-text" role="button" @onclick="() => DoStep()">
+                    <a class="btn @(PrintSessionStorage.CanEjectCake ? "btn-secondary" : "btn-primary") btn-lg btn--icon-text" role="button" @onclick="() => DoStep()">
                         <i class="bi bi-clipboard-check" /> Done, the cake was delicious!
                     </a>
                     @if (PrintSessionStorage.CanEjectCake)
@@ -97,7 +102,7 @@
         Eject,
     }
 
-    public const string SelfPath = "/wizard/eject";
+    public const string SelfPath = "wizard/eject";
     private const string CssScope = "b-eject-wizard";
 
     private ModalWrapper? _ejectConfirm;

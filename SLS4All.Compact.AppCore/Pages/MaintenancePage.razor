@@ -20,7 +20,7 @@
 @inject IToastProvider ToastProvider
 @inject IPrinterTimeManager TimeManager
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-maintenance.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-maintenance.png" IsFullPage="true" />
 
 <ModalWrapper @ref="_halogenModal" class="app-modal" Closed="OnResetModalClosed" Context="modal">
     <div class="modal-content">
@@ -352,7 +352,7 @@
         }
     }
 
-    public const string SelfPath = "/maintenance";
+    public const string SelfPath = "maintenance";
     private const string CssScope = "b-maintenance";
     private Dictionary<ValidationKey, ValidationValue> _validationErrors = new();
     private TabIndex _tabIndex = TabIndex.Maintenance;

@@ -1,0 +1,54 @@
+﻿@using SLS4All.Compact.Movement
+@inject IMovementClient MovementClient
+@implements IDisposable
+
+@_remaining.TotalSeconds.ToString("000.0") sec
+<i class="bi bi-crosshair @(_flags.HasFlag(RemainingPrintTimeFlags.XYL) ? "" : "inactive")" />
+<i class="bi bi-arrows-move @(_flags.HasFlag(RemainingPrintTimeFlags.Motors) ? "" : "inactive")" />
+
+@code {
+    private readonly static TimeSpan _period = TimeSpan.FromSeconds(0.333);
+
+    private TimeSpan _remaining;
+    private RemainingPrintTimeFlags _flags;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var value = await MovementClient.GetRemainingPrintTime();
+        _remaining = value.Duration;
+        _timer = new Timer(OnTimer);
+        _timer.Change(_period, _period);
+        await base.OnInitializedAsync();
+    }
+
+    private void OnTimer(object? state)
+    {
+        try
+        {
+            InvokeAsync(async () =>
+            {
+                try
+                {
+                    var value = await MovementClient.GetRemainingPrintTime();
+                    _remaining = value.Duration;
+                    _flags = value.Flags;
+                    StateHasChanged();
+                }
+                catch (Exception)
+                {
+                    _timer?.Dispose();
+                }
+            });
+        }
+        catch (Exception)
+        {
+            _timer?.Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

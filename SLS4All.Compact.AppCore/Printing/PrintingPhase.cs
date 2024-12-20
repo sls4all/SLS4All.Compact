@@ -14,7 +14,7 @@ namespace SLS4All.Compact.Printing
         NotSet = 0,
         Init,
         Heating,
-        Heating2,
+        HeatingBedPreparation,
         BedPreparation,
         Heating3,
         Layers,
@@ -22,5 +22,7 @@ namespace SLS4All.Compact.Printing
         Cooling,
         AnalyseHeating,
         Done,
+        PowderTuning,
+        Custom,
     }
 }

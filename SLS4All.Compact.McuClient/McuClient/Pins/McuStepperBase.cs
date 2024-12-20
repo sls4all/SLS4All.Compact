@@ -208,7 +208,6 @@ namespace SLS4All.Compact.McuClient.Pins
             long count,
             long add,
             McuTimestamp timestamp,
-            McuMinClockFunc? minClock = null,
             SystemTimestamp now = default,
             bool dryRun = false);
     }

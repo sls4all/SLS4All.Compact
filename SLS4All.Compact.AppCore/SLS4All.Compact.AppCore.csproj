@@ -18,9 +18,15 @@
 		<StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
 		<StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
 		<EnableDefaultCompressedItems>false</EnableDefaultCompressedItems>
+
+		<PrepareForBuildDependsOn>
+			CompileTypeScriptWithTSConfig;
+			GetTypeScriptOutputForPublishing;$(PrepareForBuildDependsOn)
+		</PrepareForBuildDependsOn>
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Markdig" Version="0.39.1" />
 		<PackageReference Include="Microsoft.Diagnostics.Runtime" Version="4.0.0-beta.24360.3" />
 		<PackageReference Include="Microsoft.TypeScript.MSBuild" Version="5.6.2">
 			<PrivateAssets>all</PrivateAssets>
@@ -34,9 +40,9 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SLS4All.Compact.Core\SLS4All.Compact.Core.csproj" />
-		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.191.0.608"/>
-		<PackageReference Include="SLS4All.Compact.Processing" Version="1.191.0.608"/>
-		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.191.0.608"/>
+		<PackageReference Include="SLS4All.Compact.Nesting" Version="1.195.0.768"/>
+		<PackageReference Include="SLS4All.Compact.Processing" Version="1.195.0.768"/>
+		<PackageReference Include="SLS4All.Compact.Slicing" Version="1.195.0.768"/>
 		<PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="9.0.0" />
 	</ItemGroup>
 
@@ -46,10 +52,15 @@
 
 	<ItemGroup>
 		<TypeScriptCompile Remove="node_modules\**" />
+		<None Update="Pages\RemainingPrintTimeView.razor.css" CssScope="b-print-time-view" />
 		<None Update="Pages\MovementPage.razor.css" CssScope="b-movement" />
 		<None Update="Pages\BackupsPage.razor.css" CssScope="b-backups" />
 		<None Update="Pages\MaintenancePage.razor.css" CssScope="b-maintenance" />
+		<None Update="Pages\PrintTuningPage.razor.css" CssScope="b-print-tuning" />
+		<None Update="Pages\PrintTuningReportPage.razor.css" CssScope="b-print-tuning-report" />
 		<None Update="Pages\Test2D.razor.css" CssScope="b-test2d" />
+		<None Update="Pages\Wizards\PowderTuningWizard.razor.css" CssScope="b-powder-tuning-wizard" />
+		<None Update="Pages\PowderTuningPage.razor.css" CssScope="b-powder-tuning" />
 		<None Update="Pages\Wizards\AnalyseHeatingWizard.razor.css" CssScope="b-analyse-heating-wizard" />
 		<None Update="Pages\Wizards\GalvoCalibrationWizard.razor.css" CssScope="b-calibration-wizard" />
 		<None Update="Pages\Wizards\ThermoSetupWizard.razor.css" CssScope="b-thermo-setup-wizard" />
@@ -65,18 +76,18 @@
 		<None Update="Components\Modal.razor.css" CssScope="b-modal" />
 		<None Update="Pages\MainLayout.razor.css" CssScope="b-main-layout" />
 		<None Update="Pages\ThermoCamera.razor.css" CssScope="b-thermo-camera" />
-    <None Update="Pages\ThermoCameraCompare.razor.css" CssScope="b-thermo-camera-compare" />
-    <None Update="Pages\Jobs.razor.css" CssScope="b-jobs" />
+		<None Update="Pages\ThermoCameraCompare.razor.css" CssScope="b-thermo-camera-compare" />
+		<None Update="Pages\Jobs.razor.css" CssScope="b-jobs" />
 		<None Update="Pages\CurrentJobAutomatic.razor.css" CssScope="b-jobs" />
 		<None Update="Pages\CurrentJobProfiling.razor.css" CssScope="b-jobs" />
-    <None Update="Pages\Wizards\WizardBase.razor.css" CssScope="b-wizard-base" />
-    <None Update="Pages\Wizards\PrintWizard.razor.css" CssScope="b-print-wizard" />
-    <None Update="Pages\Wizards\EjectWizard.razor.css" CssScope="b-eject-wizard" />
-    <None Update="Pages\Wizards\ChamberHeaterCheckWizard.razor.css" CssScope="b-chamber-heater-check-wizard" />
-    <None Update="Pages\Wizards\OpticalSetupWizard.razor.css" CssScope="b-optical-setup-wizard" />
-    <None Update="Components\CancelModal.razor.css" CssScope="b-cancel-modal" />
-    <None Update="Components\MainLayoutTitleStatus.razor.css" CssScope="b-main-layout-title" />
-  </ItemGroup>
+		<None Update="Pages\Wizards\WizardBase.razor.css" CssScope="b-wizard-base" />
+		<None Update="Pages\Wizards\PrintWizard.razor.css" CssScope="b-print-wizard" />
+		<None Update="Pages\Wizards\EjectWizard.razor.css" CssScope="b-eject-wizard" />
+		<None Update="Pages\Wizards\ChamberHeaterCheckWizard.razor.css" CssScope="b-chamber-heater-check-wizard" />
+		<None Update="Pages\Wizards\OpticalSetupWizard.razor.css" CssScope="b-optical-setup-wizard" />
+		<None Update="Components\CancelModal.razor.css" CssScope="b-cancel-modal" />
+		<None Update="Components\MainLayoutTitleStatus.razor.css" CssScope="b-main-layout-title" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<WebPackStamp Include="$(OutputPath)/.npm-install-stamp" />
@@ -97,6 +108,12 @@
 		<Folder Include="wwwroot\bundles\" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Content Update="Pages\PrintTuningReportPage.razor">
+	    <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+	  </Content>
+	</ItemGroup>
+
 	<Target Name="NpmInstall" Inputs="package.json" Outputs="$(OutputPath)/.npm-install-stamp" BeforeTargets="BeforeBuild;BeforePublish">
 		<Message Text="### NPM INSTALL ###" Importance="high" />
 		<Exec Command="npm ci" Condition="'$(RestorePackagesWithLockFile)' == 'true'" />
@@ -104,7 +121,7 @@
 		<MakeDir Directories="$(OutputPath)" />
 		<Touch Files="$(OutputPath)/.npm-install-stamp" AlwaysCreate="true" />
 	</Target>
-
+	
 	<Target Name="NpmBuild" Inputs="@(WebPackSource);@(WebPackStamp)" Outputs="@(WebPackTarget)" BeforeTargets="BeforePublish;ResolveProjectStaticWebAssets" AfterTargets="CompileTypeScriptWithTSConfig" DependsOnTargets="NpmInstall">
 		<Message Text="### NPM RUN BUILD ###" Importance="high" />
 		<Error Condition="!Exists('Scripts/app.js')" Text="Missing TS compiled files!" />

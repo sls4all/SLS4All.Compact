@@ -1,0 +1,127 @@
+﻿.dummy {
+}
+
+p {
+    font-size: 17px;
+}
+
+.property-table {
+    position: relative;
+    top: 0px;
+    width: 100%;
+}
+
+    .property-table .property-name {
+        white-space: nowrap;
+        color: #ffffff;
+        font-size: 20px;
+        vertical-align: middle;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .property-table .property-value {
+        white-space: nowrap;
+        color: #03b4da;
+        font-size: 20px;
+        text-align: right;
+        vertical-align: middle;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+        .property-table .property-value .property-value-set {
+            /*font-weight: bold;*/
+        }
+
+        .property-table .property-value .property-value-set-parent {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+        .property-table .property-value .property-value-not-set {
+            font-style: italic;
+            color: #03b4da7f;
+        }
+
+    .property-table .property-suffix {
+        white-space: nowrap;
+        color: #03b4da;
+        text-align: left;
+        font-size: 75%;
+        vertical-align: middle;
+        opacity: 75%;
+    }
+
+    .property-table .property-separator {
+    }
+
+.hide-top-line td {
+    border-top: none;
+}
+
+.printing-notification {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+}
+
+    .printing-notification .btn {
+        font-size: 17px;
+    }
+
+.badge.badge-danger {
+    font-size: 17px;
+    background-color: rgba(220, 53, 69, 0.4)
+}
+
+.issue {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.5s ease-in-out, margin-bottom 0.5s ease-in-out;
+}
+
+    .issue.issue-inactive {
+        margin-bottom: 0px;
+    }
+
+    .issue.issue-active {
+        max-height: 300px;
+    }
+
+.auto-decrease-offset {
+    width: auto;
+    min-width: 4em;
+    text-align: center;
+}
+
+.auto-detect-sensitivity {
+    width: auto;
+    min-width: 4em;
+    text-align: center;
+}
+
+.root-container {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: 100%;
+    padding: 0px;
+}
+
+    .root-container .container-flex {
+        height: 100%;
+    }
+
+        .root-container .container-flex .row {
+            height: 100%;
+        }
+
+.camera-view .video-image-container {
+    height: auto;
+}
+
+    .camera-view .video-image-container .video-image {
+        width: 100%;
+        height: auto;
+    }

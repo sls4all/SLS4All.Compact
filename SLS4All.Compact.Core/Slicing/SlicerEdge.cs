@@ -78,6 +78,9 @@ namespace SLS4All.Compact.Slicing
 
     public static class SlicerEdgeExtensions
     {
+        public static (float AB, float NAB) GetSignedArea(this Span<SlicerEdge> edges, bool wantsNAB)
+            => GetSignedArea(edges.AsStrideSpan(), wantsNAB);
+
         public static (float AB, float NAB) GetSignedArea(this StrideSpan<SlicerEdge> edges, bool wantsNAB)
         {
             var ab = 0.0;

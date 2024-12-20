@@ -18,6 +18,15 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 {
     public static class PipedMcuCodec
     {
+        [Flags]
+        public enum McuCommandFlags : byte
+        {
+            NotSet = 0,
+            IsTimingCritical = 1,
+            IsMovement = 2,
+        }
+
+
         public enum ExceptionType : byte
         {
             Unspecified = 0,
@@ -47,6 +56,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             CollectGarbageCommand,
             EnterPrintingModeCommand,
             ExitPrintingModeCommand,
+            MovementCancelCommand,
         }
 
         public const int MinMessageLength = 5;
@@ -89,7 +99,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
         }
 
         public static int Measure(in McuOccasion value)
-            => 8 + 8;
+            => 8 + 8 + 8;
 
         public static int Measure(in McuSendResult value)
             => 8 + 4;
@@ -106,7 +116,7 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 
         public static int Measure(McuCommand command)
         {
-            var length = 1 + 8 + 8;
+            var length = 1 + 1 + 8 + 8;
             for (int i = 0; i < command.ArgumentCount; i++)
             {
                 var buffer = command[i].Buffer;
@@ -130,6 +140,9 @@ namespace SLS4All.Compact.McuClient.PipedMcu
                 ?? throw new InvalidOperationException("Mcu or factory must be specified");
             try
             {
+                var flags = (McuCommandFlags)ReadByte(ref span);
+                command.IsTimingCritical = flags.HasFlag(McuCommandFlags.IsTimingCritical);
+                command.IsMovement = flags.HasFlag(McuCommandFlags.IsMovement);
                 command.SentTimestamp = ReadDouble(ref span);
                 command.ReceiveTimestamp = ReadDouble(ref span);
                 for (int i = 0; i < command.ArgumentCount; i++)
@@ -165,7 +178,10 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 
         public static void Write(ref Span<byte> span, McuCommand command)
         {
+            var flags = (command.IsTimingCritical ? McuCommandFlags.IsTimingCritical : 0) 
+                | (command.IsMovement ? McuCommandFlags.IsMovement : 0);
             Write(ref span, (byte)command.CommandId);
+            Write(ref span, (byte)flags);
             Write(ref span, command.SentTimestamp);
             Write(ref span, command.ReceiveTimestamp);
             for (int i = 0; i < command.ArgumentCount; i++)
@@ -270,16 +286,16 @@ namespace SLS4All.Compact.McuClient.PipedMcu
 
         public static void Write(ref Span<byte> span, in McuOccasion value)
         {
-            Debug.Assert(Marshal.SizeOf<McuOccasion>() == 16);
+            Debug.Assert(Marshal.SizeOf<McuOccasion>() == 24);
             MemoryMarshal.Write(span, value);
-            span = span.Slice(16);
+            span = span.Slice(24);
         }
 
         public static McuOccasion ReadMcuOccasion(ref Span<byte> span)
         {
-            Debug.Assert(Marshal.SizeOf<McuOccasion>() == 16);
+            Debug.Assert(Marshal.SizeOf<McuOccasion>() == 24);
             var res = MemoryMarshal.Read<McuOccasion>(span);
-            span = span.Slice(16);
+            span = span.Slice(24);
             return res;
         }
 
@@ -354,6 +370,19 @@ namespace SLS4All.Compact.McuClient.PipedMcu
             span[0] = value;
             span = span.Slice(1);
         }
+
+        public static void Write(ref Span<byte> span, in McuTimestamp value)
+        {
+            Write(ref span, value.Mcu != null);
+            Write(ref span, value.ClockPrecise);
+            Write(ref span, value.Precision);
+        }
+
+        public static McuTimestamp ReadMcuTimestamp(IMcu mcu, ref Span<byte> span)
+            => new McuTimestamp(ReadBoolean(ref span) ? mcu : null, ReadInt64(ref span), ReadInt32(ref span));
+
+        public static int Measure(in McuTimestamp value)
+            => 1 + 8 + 4;
 
         public static McuSendResult ReadMcuSendResult(ref Span<byte> span)
             => new McuSendResult(ReadUInt64(ref span), ReadInt32(ref span));

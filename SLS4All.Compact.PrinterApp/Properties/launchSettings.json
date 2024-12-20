@@ -16,7 +16,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
         //"ASPNETCORE_ENVIRONMENT": "Inova-RockPi"
       },
-      //"commandLineArgs": "--Application:Includes:0 appsettings.Inova-RaspberryPi.json",
+      "commandLineArgs": "--Frontend:LocalSessionKey IS_LOCAL_DUMMY",
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5000",
       "hotReloadProfile": "aspnetcore"

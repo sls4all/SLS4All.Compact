@@ -387,6 +387,7 @@ namespace SLS4All.Compact.Pages
                     await Nesting.LoadInstances(
                         fileStream,
                         Quantity ?? 1,
+                        null,
                         Scale / 100.0f,
                         default,
                         0,

@@ -98,7 +98,7 @@
     </div>
 </ModalWrapper>
 
-<PrinterPageTitle Image="/_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
+<PrinterPageTitle Image="_content/SLS4All.Compact.AppCore/ui/img/main-new-job.png" IsFullPage="true" />
 
 <div class="container">
     <div class="jumbotron pt-4 pb-2">
@@ -268,7 +268,7 @@
         public decimal ProjectionScaleY { get; set; } = 100;
     }
 
-    public const string SelfPath = "/wizard/galvo-calibration";
+    public const string SelfPath = "wizard/galvo-calibration";
     private const string CssScope = "b-calibration-wizard";
     private ModalWrapper? _doPrint, _enterCalibrationDataModal;
     private CancelModal? _printModal;
@@ -492,7 +492,7 @@
                 }
                 catch (Exception ex)
                 {
-                    await EmergencyHelper.CreateAndCall(x => x.EmergencyPowerOffLaser());
+                    await EmergencyHelper.CreateAndCall(x => x.EmergencyPowerOffLaser(stopMovement: true));
                     ToastProvider.Show(new ToastMessage
                         {
                             Type = ToastMessageType.Error,

@@ -27,8 +27,8 @@ namespace SLS4All.Compact.McuClient.Pins
         private float _startValue;
         private float _shutdownValue;
         private TimeSpan _maxDuration;
-        private (McuCommand cmd, int clockIndex, int valueIndex) _set = (McuCommand.PlaceholderCommand, 0, 0);
-        private (McuCommand cmd, int valueIndex) _update = (McuCommand.PlaceholderCommand, 0);
+        private (McuCommand Cmd, McuCommandArgument Clock, McuCommandArgument Value) _set = (McuCommand.PlaceholderCommand, default, default);
+        private (McuCommand Cmd, McuCommandArgument Value) _update = (McuCommand.PlaceholderCommand, default);
         private long _lastClock;
         private McuSendResult? _updateResult;
 
@@ -85,23 +85,23 @@ namespace SLS4All.Compact.McuClient.Pins
             _currentValue = value.Single;
             if (clock == 0)
             {
-                lock (_update.cmd)
+                lock (_update.Cmd)
                 {
                     var occasion = new McuOccasion(clock, clock);
                     _lastClock = clock;
-                    _update.cmd[_update.valueIndex] = intValue;
-                    _updateResult = Mcu.Send(_update.cmd, priority, occasion, cancelFirst: _updateResult);
+                    _update.Value.Value = intValue;
+                    _updateResult = Mcu.Send(_update.Cmd, priority, occasion, cancelFirst: _updateResult);
                 }
             }
             else
             {
-                lock (_set.cmd)
+                lock (_set.Cmd)
                 {
                     var occasion = new McuOccasion(_lastClock, clock);
                     _lastClock = clock;
-                    _set.cmd[_set.clockIndex] = clock;
-                    _set.cmd[_set.valueIndex] = intValue;
-                    Mcu.Send(_set.cmd, priority, occasion);
+                    _set.Clock.Value = clock;
+                    _set.Value.Value = intValue;
+                    Mcu.Send(_set.Cmd, priority, occasion);
                 }
             }
         }
@@ -130,17 +130,14 @@ namespace SLS4All.Compact.McuClient.Pins
                     (int)MathF.Round(_shutdownValue * _pwmMax),
                     checked((int)Mcu.ClockSync.GetClockDuration(_maxDuration))));
 
-                _update.cmd = Mcu.LookupCommand("update_pwm_out oid=%c value=%hu")
+                _update = Mcu.LookupCommand("update_pwm_out oid=%c value=%hu", "value")
                     .Bind("oid", _oid)
                     .Bind("value", (int)MathF.Round(_startValue * _pwmMax));
-                _update.valueIndex = _update.cmd.GetArgumentIndex("value");
 
-                commands.Add(_update.cmd.Clone(), onRestart: true);
+                commands.Add(_update.Cmd, onRestart: true);
 
-                _set.cmd = Mcu.LookupCommand("schedule_pwm_out oid=%c clock=%u value=%hu")
+                _set = Mcu.LookupCommand("schedule_pwm_out oid=%c clock=%u value=%hu", "clock", "value")
                     .Bind("oid", _oid);
-                _set.clockIndex = _set.cmd.GetArgumentIndex("clock");
-                _set.valueIndex = _set.cmd.GetArgumentIndex("value");
             }
             return ValueTask.CompletedTask;
         }

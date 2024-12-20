@@ -396,7 +396,7 @@ namespace SLS4All.Compact.McuClient
         {
             try
             {
-                using (var enablePinsThreadPool = new PriorityScheduler("EnablePinsThread[{0}]", ThreadPriority.Normal, 1))
+                using (var enablePinsThreadPool = new PriorityScheduler("EnablePinsThread[{0}]", ThreadPriority.AboveNormal, 1))
                 {
                     await Task.Factory.StartNew(async () =>
                     {
@@ -410,7 +410,7 @@ namespace SLS4All.Compact.McuClient
                                 {
                                     try
                                     {
-                                        pin.SetImmediate(true, McuCommandPriority.Default);
+                                        pin.SetImmediate(true, McuCommandPriority.KeepAlive);
                                     }
                                     catch (Exception ex)
                                     {
@@ -583,6 +583,31 @@ namespace SLS4All.Compact.McuClient
         {
             //_logger.LogInformation("Exiting GC sustained low latency mode");
             //PrinterGC.ExitSustainedLowLatency();
+        }
+
+        public void RunPeriodicEvent(object name, Func<CancellationToken, ValueTask> eventFunc, TimeSpan period, TimeSpan dueTime)
+        {
+            var cancel = RunningCancel;
+            Task.Run(async () =>
+            {
+                try
+                {
+                    if (dueTime != TimeSpan.Zero)
+                        await Task.Delay(dueTime, cancel);
+                    var timer = new PeriodicTimer(period);
+                    while (true)
+                    {
+                        cancel.ThrowIfCancellationRequested();
+                        await eventFunc(cancel);
+                        await timer.WaitForNextTickAsync(cancel);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (!cancel.IsCancellationRequested)
+                        _logger.LogError(ex, $"Exception in periodic event {name}");
+                }
+            });
         }
     }
 }

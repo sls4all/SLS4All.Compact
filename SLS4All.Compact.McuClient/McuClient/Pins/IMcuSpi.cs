@@ -12,6 +12,7 @@
         Task SetRate(int rate, CancellationToken cancel);
         Task Continuous(Func<CancellationToken, Task> func, CancellationToken cancel);
         void Send(ArraySegment<byte> data, int priority, McuOccasion clock);
+        Task SendWait(ArraySegment<byte> data, int priority, McuOccasion clock, CancellationToken cancel);
         Task<ArraySegment<byte>> Transfer(ArraySegment<byte> data, int priority, McuOccasion clock, CancellationToken cancel = default);
     }
 }

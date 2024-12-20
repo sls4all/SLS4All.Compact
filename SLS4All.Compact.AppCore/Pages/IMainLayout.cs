@@ -22,6 +22,6 @@ namespace SLS4All.Compact.Pages
         bool IsDeveloperMode { get; set; }
 
         Task BrowseFiles();
-        string GetReloadUri(string? relative = null);
+        string GetReloadUri(bool forceReload, string? relative = null);
     }
 }

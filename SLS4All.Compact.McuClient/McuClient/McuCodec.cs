@@ -14,7 +14,12 @@ using System.Threading.Tasks;
 
 namespace SLS4All.Compact.McuClient
 {
-    public sealed class McuCodec
+    public interface IMcuCodecWriter
+    {
+        public bool TryWrite(Span<byte> data);
+    }
+
+    public sealed class McuCodec : IMcuCodecWriter
     {
         public const byte SyncByte = 0x7e;
         public const int DataStart = 2;

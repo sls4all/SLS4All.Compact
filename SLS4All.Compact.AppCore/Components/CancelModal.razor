@@ -121,11 +121,11 @@
         }
         finally
         {
+            await _modal!.Close();
             _titleText = null;
             _bodyText = null;
             _cancelText = null;
             _cancelSource = null;
-            await _modal!.Close();
         }
     }
 
@@ -163,11 +163,11 @@
         }
         finally
         {
+            await _modal!.Close();
             _titleText = null;
             _bodyText = null;
             _cancelText = null;
             _cancelSource = null;
-            await _modal!.Close();
         }
         return defaultResult;
     }
